@@ -153,6 +153,9 @@ const Layout = ({ children }: LayoutProps) => {
             )}
           </div>
           <nav className="nav">
+            <Link to="/" className={`nav-link ${isActive('/')}`}>
+              공연 찾기
+            </Link>
             {(adminStatus !== null ? adminStatus : isAdmin) ? (
               <>
                 <Link to="/admin/dashboard" className={`nav-link ${isActive('/admin/dashboard')}`} onClick={(e) => handleNavClick('/admin/dashboard', e, 'home')}>
