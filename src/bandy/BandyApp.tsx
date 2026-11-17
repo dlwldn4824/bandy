@@ -1,32 +1,32 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { BandyProvider, useBandy } from './store'
-import { HomePage, MapPage } from './pages/Discover'
-import { EventPage } from './pages/EventPage'
+import { EventsPage, HomePage, MapPage } from './pages/Discover'
+import { BookPage, EventPage } from './pages/EventPage'
 import { TicketsPage } from './pages/TicketsPage'
 import { ClubPage, ClubsPage, NewClubPage } from './pages/ClubsPage'
 import { LoginPage, MyPage } from './pages/MyPage'
 import { ManagePage } from './pages/ManagePage'
 import { ScanPage } from './pages/ScanPage'
+import { BottomBar } from './components'
 import './bandy.css'
 
-const TABS = [
-  { to: '/app', label: '홈', end: true },
-  { to: '/app/map', label: '지도' },
-  { to: '/app/tickets', label: '내 티켓' },
-  { to: '/app/clubs', label: '교류' },
-  { to: '/app/my', label: '마이' },
-]
+// 상세·예매·스캔·로그인은 하단 바 없이 화면 아래 고정 버튼을 쓴다(피그마 공연 상세·사전 예매).
+const NO_TABS = [/^\/app\/e\//, /^\/app\/scan\//, /^\/app\/login/]
 
 function Shell() {
   const { toast } = useBandy()
+  const { pathname } = useLocation()
+  const tabs = !NO_TABS.some((r) => r.test(pathname))
   return (
     <div className="b-root">
-      <div className="b-phone">
+      <div className={`b-phone${tabs ? ' with-tabs' : ''}`}>
         <main className="b-main">
           <Routes>
             <Route index element={<HomePage />} />
+            <Route path="events" element={<EventsPage />} />
             <Route path="map" element={<MapPage />} />
             <Route path="e/:eventId" element={<EventPage />} />
+            <Route path="e/:eventId/book" element={<BookPage />} />
             <Route path="tickets" element={<TicketsPage />} />
             <Route path="clubs" element={<ClubsPage />} />
             <Route path="clubs/new" element={<NewClubPage />} />
@@ -38,13 +38,7 @@ function Shell() {
             <Route path="*" element={<Navigate to="/app" replace />} />
           </Routes>
         </main>
-        <nav className="b-tabs" aria-label="하단 메뉴">
-          {TABS.map((t) => (
-            <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => `b-tab${isActive ? ' active' : ''}`}>
-              {t.label}
-            </NavLink>
-          ))}
-        </nav>
+        {tabs && <BottomBar />}
         {toast && <div className="b-toast" role="status">{toast}</div>}
       </div>
     </div>

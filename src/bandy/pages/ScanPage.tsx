@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { Html5Qrcode } from 'html5-qrcode'
 import { useBandy } from '../store'
 import { CheckInResult, checkIn, isEventStaff } from '../repo'
-import { Empty } from '../components'
+import { Empty, PageHeader } from '../components'
 
 const RESULT_TEXT = {
   valid: { title: '입장 완료', tone: 'ok' },
@@ -14,7 +14,6 @@ const RESULT_TEXT = {
 export function ScanPage() {
   const { eventId = '' } = useParams()
   const { db, me, run } = useBandy()
-  const navigate = useNavigate()
   const [code, setCode] = useState('')
   const [last, setLast] = useState<CheckInResult | null>(null)
   const [camera, setCamera] = useState<'off' | 'on' | 'error'>('off')
@@ -60,10 +59,7 @@ export function ScanPage() {
 
   return (
     <div className="b-page">
-      <header className="b-top">
-        <button type="button" className="b-back" onClick={() => navigate(-1)}>뒤로</button>
-        <span className="b-title">QR 입장</span>
-      </header>
+      <PageHeader back title="TICKET SCANNER" />
       <p className="b-sub">{event.title}</p>
       <div className="b-stats"><span><b>{entered}</b>입장</span><span><b>{tickets.length - entered}</b>남음</span><span><b>{tickets.length}</b>발급</span></div>
 

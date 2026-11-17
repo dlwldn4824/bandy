@@ -8,7 +8,7 @@ import { seedDb } from './seed'
 
 export class BandyError extends Error {}
 
-const STORAGE_KEY = 'bandy-prototype-v1'
+const STORAGE_KEY = 'bandy-prototype-v2'
 const BOOKING_HOLD_DAYS = 3 // [미정] 입금 대기 기간. 11/1 기준 팀 결정 전 임시값
 const MAX_QUANTITY = 10 // [미정] 1회 최대 구매 수량
 
@@ -292,7 +292,9 @@ function confirmBookingInternal(db: Db, booking: Booking, confirmedBy: Uuid | nu
   }
   const event = db.events.find((e) => e.id === booking.event_id)!
   notify(db, booking.user_id, event.id, 'BOOKING_CONFIRMED',
-    `${event.title} 입금이 확인돼 티켓 ${item.quantity}장이 발급됐어요.`, `booking-confirmed-${booking.id}`)
+    booking.total_amount_krw === 0
+      ? `${event.title} 신청이 확정돼 티켓 ${item.quantity}장이 발급됐어요.`
+      : `${event.title} 입금이 확인돼 티켓 ${item.quantity}장이 발급됐어요.`, `booking-confirmed-${booking.id}`)
 }
 
 // 주최 동아리 운영진의 '입금 확인'. 두 번 눌러도 티켓이 중복 발급되지 않는다.

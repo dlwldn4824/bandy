@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
 import { cancelBooking, confirmDeposit, createEvent, isClubManager, setEventStatus, updateClub } from '../repo'
-import { Empty } from '../components'
+import { Empty, PageHeader } from '../components'
 import { dateLabel, won } from '../format'
 import { EventCategory } from '../types'
 
@@ -12,8 +12,8 @@ export function ManagePage() {
   const { clubId = '' } = useParams()
   const [params, setParams] = useSearchParams()
   const { db, me, run, showToast } = useBandy()
-  const navigate = useNavigate()
-  const [tab, setTab] = useState<'events' | 'new' | 'profile'>('events')
+  const initialTab = params.get('tab')
+  const [tab, setTab] = useState<'events' | 'new' | 'profile'>(initialTab === 'new' || initialTab === 'profile' ? initialTab : 'events')
   const club = db.clubs.find((c) => c.id === clubId)
 
   if (!club || !isClubManager(db, me?.id ?? null, clubId)) {
@@ -26,10 +26,7 @@ export function ManagePage() {
 
   return (
     <div className="b-page">
-      <header className="b-top">
-        <button type="button" className="b-back" onClick={() => navigate(-1)}>뒤로</button>
-        <span className="b-title">{club.name} 관리</span>
-      </header>
+      <PageHeader back title={`${club.name} 관리`} />
       {club.status !== 'ACTIVE' && (
         <p className="b-warn">{club.status === 'PENDING' ? '운영자 승인 대기 중이에요. 승인되면 공연을 올리고 교류를 신청할 수 있어요.' : '승인이 거절됐어요.'}</p>
       )}

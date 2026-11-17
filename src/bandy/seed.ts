@@ -122,5 +122,12 @@ export function seedDb(): Db {
     ],
   }
   for (const e of db.events) e.account_holder = db.clubs.find((c) => c.id === e.club_id)?.name ?? ''
+  // 저장소에 있는 기존 공연 이미지를 시연용 포스터로 쓴다
+  const posters: Record<string, string> = {
+    'ev-rexa': '/assets/배경/연합공연_최종포스터.jpeg',
+    'ev-sound': '/assets/배경/밴드_포스터_벽.jpeg',
+    'ev-jazz': '/assets/배경/포스터 시안.png',
+  }
+  for (const e of db.events) e.poster_path = posters[e.id] ?? null
   return db
 }

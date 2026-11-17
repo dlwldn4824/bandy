@@ -4,7 +4,7 @@ import { useBandy } from '../store'
 import {
   canSeeOpenChat, cancelExchange, createClub, managerClubIds, publicClubs, publicEvents, requestExchange, respondExchange,
 } from '../repo'
-import { Empty, EventCard, NeedLogin } from '../components'
+import { Empty, EventCard, NeedLogin, PageHeader } from '../components'
 import { Db, EXCHANGE_KIND_LABEL, ExchangeKind } from '../types'
 import { shortDate } from '../format'
 
@@ -13,7 +13,7 @@ export function ClubsPage() {
   const [tab, setTab] = useState<'find' | 'inbox'>('find')
   return (
     <div className="b-page">
-      <header className="b-top"><span className="b-title">교류</span></header>
+      <PageHeader title="동아리 찾기" />
       <div className="b-seg">
         <button type="button" className={tab === 'find' ? 'on' : ''} onClick={() => setTab('find')}>동아리 찾기</button>
         <button type="button" className={tab === 'inbox' ? 'on' : ''} onClick={() => setTab('inbox')}>교류 신청함</button>
@@ -129,7 +129,6 @@ function Inbox() {
 export function ClubPage() {
   const { clubId = '' } = useParams()
   const { db, me, run, showToast } = useBandy()
-  const navigate = useNavigate()
   const mine = managerClubIds(db, me?.id ?? null).filter((id) => id !== clubId && db.clubs.find((c) => c.id === id)?.status === 'ACTIVE')
   const [from, setFrom] = useState(mine[0] ?? '')
   const [kind, setKind] = useState<ExchangeKind>('JOINT_SHOW')
@@ -156,7 +155,7 @@ export function ClubPage() {
 
   return (
     <div className="b-page">
-      <header className="b-top"><button type="button" className="b-back" onClick={() => navigate(-1)}>뒤로</button></header>
+      <PageHeader back />
       <section className="b-club-head">
         <span className="b-avatar big">{club.name.slice(0, 1)}</span>
         <h1>{club.name}</h1>
@@ -228,7 +227,7 @@ export function NewClubPage() {
 
   return (
     <div className="b-page">
-      <header className="b-top"><button type="button" className="b-back" onClick={() => navigate(-1)}>뒤로</button><span className="b-title">동아리 등록</span></header>
+      <PageHeader back title="동아리 등록" />
       <div className="b-card b-pad b-stack">
         <label className="b-field"><span>동아리 이름</span><input value={f.name} onChange={set('name')} /></label>
         <label className="b-field"><span>학교</span><input value={f.school} onChange={set('school')} placeholder="광운대" /></label>

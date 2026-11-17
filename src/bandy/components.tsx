@@ -1,16 +1,41 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { EventRow } from './types'
-import { dateLabel, distanceKm, HERE, won } from './format'
+import { dateLabel, distanceKm, HERE, shortDate, timeOf, won } from './format'
 import { useBandy } from './store'
-import { minPrice } from './repo'
+import { managerClubIds, minPrice } from './repo'
 
 export const APP_NAME = 'BANDY' // 서비스 이름 확정 전(BANDY / RE:CONNECT). 여기만 바꾸면 된다.
+
+// 피그마에서 내려받은 아이콘(src/bandy/icons). 색은 currentColor를 따르도록 마스크로 쓴다.
+const ICONS = import.meta.glob('./icons/*.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>
+
+export function Icon({ name, size = 16, className = '' }: { name: string; size?: number | [number, number]; className?: string }) {
+  const url = ICONS[`./icons/${name}.svg`]
+  const [w, h] = Array.isArray(size) ? size : [size, size]
+  return (
+    <span
+      aria-hidden
+      className={`b-icon ${className}`}
+      style={{ width: w, height: h, WebkitMaskImage: `url("${url}")`, maskImage: `url("${url}")` }}
+    />
+  )
+}
 
 export const CATEGORY_COLOR: Record<string, string> = {
   공연: 'var(--b-red)',
   해커톤: 'var(--b-blue)',
-  학술회: 'var(--b-green)',
+  학술회: 'var(--b-mint)',
   네트워킹: 'var(--b-amber)',
+}
+
+// 포스터가 없으면 분류 색 그라데이션
+export function Poster({ event, className = '' }: { event: EventRow; className?: string }) {
+  return (
+    <div className={`b-poster-img ${className}`} style={{ ['--accent' as string]: CATEGORY_COLOR[event.category ?? '공연'] }}>
+      {event.poster_path ? <img src={event.poster_path} alt="" loading="lazy" /> : <span className="b-poster-fallback">{event.category}</span>}
+    </div>
+  )
 }
 
 const BOUNDS = { latMin: 37.605, latMax: 37.64, lngMin: 127.045, lngMax: 127.095 }
@@ -54,6 +79,7 @@ export function FakeMap({ events, tall = false }: { events: EventRow[]; tall?: b
   )
 }
 
+// 피그마 「공연 찾기」 카드: 포스터 + 동아리 배지 + 예매중 + 일시·장소 + 티켓 정보
 export function EventCard({ event, connected }: { event: EventRow; connected?: boolean }) {
   const { db } = useBandy()
   const club = db.clubs.find((c) => c.id === event.club_id)
@@ -61,15 +87,42 @@ export function EventCard({ event, connected }: { event: EventRow; connected?: b
   const price = minPrice(db, event.id)
   return (
     <Link to={`/app/e/${event.id}`} className="b-card b-event">
-      <div className="b-event-main">
-        <p className="b-kicker" style={{ color: CATEGORY_COLOR[event.category ?? '공연'] }}>
-          {event.category}{km != null ? ` · ${km}km` : ''}{connected ? ' · 교류 동아리' : ''}
-        </p>
-        <h3>{event.title}</h3>
-        <p className="b-sub">{dateLabel(event.starts_at)} · {event.venue_name}</p>
-        <p className="b-sub">{club?.name} · {won(price)}</p>
+      <div className="b-event-poster">
+        <Poster event={event} />
+        <span className="b-overlay-chip"><i style={{ background: connected ? 'var(--b-mint)' : 'var(--b-red)' }} />{club?.name}</span>
+        {event.status === 'PUBLISHED' && <span className="b-tag-red">{price === 0 ? '신청중' : '예매중'}</span>}
+        <div className="b-event-title">
+          <span className="b-eyebrow">{event.category}{connected ? ' · 교류 동아리' : ''}</span>
+          <h3>{event.title}</h3>
+        </div>
       </div>
-      <span className="b-cta">{price === 0 ? '신청' : '예매'}</span>
+      <div className="b-event-meta">
+        <span className="b-meta-row"><Icon name="calendar" size={[12, 13]} />{dateLabel(event.starts_at)}</span>
+        <span className="b-meta-row"><Icon name="pin" size={[11, 13]} />{event.venue_name}{km != null ? ` · ${km}km` : ''}</span>
+        <span className="b-ticket-strip"><span>티켓 정보</span><b>{price === 0 ? '무료 신청' : `사전예매 ${won(price)}`}</b></span>
+      </div>
+    </Link>
+  )
+}
+
+// 와이어프레임 「실시간 공연 소식」 한 줄
+export function LiveRow({ event }: { event: EventRow }) {
+  const { db } = useBandy()
+  const club = db.clubs.find((c) => c.id === event.club_id)
+  const start = new Date(event.starts_at).getTime()
+  const now = Date.now()
+  const live = now >= start && now < start + 3 * 3600000
+  const today = shortDate(event.starts_at) === shortDate(new Date().toISOString())
+  const badge = live ? '진행 중' : today ? `오늘 ${timeOf(event.starts_at)}` : dateLabel(event.starts_at)
+  return (
+    <Link to={`/app/e/${event.id}`} className="b-live-row">
+      <Poster event={event} className="thumb" />
+      <span className="b-live-body">
+        <span className={`b-live-badge${live ? ' on' : ''}`}>{badge}</span>
+        <strong>{event.title}</strong>
+        <span className="b-sub">{club?.name} · {event.venue_name}</span>
+      </span>
+      <Icon name="chev" size={[7, 12]} className="muted" />
     </Link>
   )
 }
@@ -80,9 +133,75 @@ export function Empty({ children }: { children: React.ReactNode }) {
 
 export function NeedLogin({ what }: { what: string }) {
   return (
-    <div className="b-card b-pad b-center">
+    <div className="b-card b-pad b-center b-stack">
       <p className="b-sub">{what}은(는) 로그인한 뒤에 볼 수 있어요.</p>
-      <Link to="/app/login" className="b-btn">카카오로 시작하기</Link>
+      <Link to="/app/login" className="b-btn">로그인</Link>
     </div>
+  )
+}
+
+export function PageHeader({ title, back = false, right }: { title?: string; back?: boolean; right?: React.ReactNode }) {
+  const navigate = useNavigate()
+  return (
+    <header className="b-top">
+      <span className="b-row">
+        {back
+          ? <button type="button" className="b-icon-btn" aria-label="뒤로 가기" onClick={() => navigate(-1)}><Icon name="back" size={16} /></button>
+          : <i className="b-dot" />}
+        {title && <span className="b-title">{title}</span>}
+      </span>
+      {right}
+    </header>
+  )
+}
+
+// 와이어프레임 v3 하단 바: 홈 / 지도·캘린더 / 가운데(개인=내 티켓, 동아리=+공연 등록) / 동아리 찾기 / 마이페이지
+export function BottomBar() {
+  const { db, me } = useBandy()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const [menu, setMenu] = useState(false)
+  const clubIds = managerClubIds(db, me?.id ?? null)
+  const isClub = clubIds.length > 0
+  const club = isClub ? db.clubs.find((c) => c.id === clubIds[0]) : undefined
+  const tab = (to: string, label: string, icon: string, end = false) => (
+    <NavLink to={to} end={end} className={({ isActive }) => `b-tab${isActive ? ' active' : ''}`} onClick={() => setMenu(false)}>
+      <Icon name={icon} size={18} />
+      <span>{label}</span>
+    </NavLink>
+  )
+  const ticketsActive = pathname.startsWith('/app/tickets')
+
+  return (
+    <>
+      {menu && <div className="b-menu-dim" onClick={() => setMenu(false)} />}
+      {menu && club && (
+        <div className="b-fab-menu" role="menu">
+          <button type="button" role="menuitem" onClick={() => { setMenu(false); navigate(`/app/manage/${club.id}?tab=new`) }}>
+            <Icon name="menu-cal" size={16} />공연 등록
+          </button>
+          <button type="button" role="menuitem" onClick={() => { setMenu(false); navigate(`/app/manage/${club.id}?tab=profile`) }}>
+            <Icon name="menu-useradd" size={16} />동아리 등록·수정
+          </button>
+        </div>
+      )}
+      <nav className="b-tabs" aria-label="하단 메뉴">
+        {tab('/app', '홈', 'tab-home', true)}
+        {tab('/app/map', '지도·캘린더', 'tab-map')}
+        {isClub ? (
+          <button type="button" className={`b-tab b-tab-center club${menu ? ' active' : ''}`} aria-expanded={menu} onClick={() => setMenu(!menu)}>
+            <span className="b-fab">{menu ? <Icon name="tab-x" size={14} /> : <Icon name="plus" size={14} />}</span>
+            <span>공연 등록</span>
+          </button>
+        ) : (
+          <button type="button" className={`b-tab b-tab-center${ticketsActive ? ' active' : ''}`} onClick={() => navigate('/app/tickets')}>
+            <span className="b-fab"><Icon name="tab-qr" size={18} /></span>
+            <span>내 티켓</span>
+          </button>
+        )}
+        {tab('/app/clubs', '동아리 찾기', 'tab-users')}
+        {tab('/app/my', '마이페이지', 'tab-user')}
+      </nav>
+    </>
   )
 }

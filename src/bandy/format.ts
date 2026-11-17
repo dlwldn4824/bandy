@@ -30,3 +30,19 @@ export function distanceKm(lat: number | null, lng: number | null) {
   const a = Math.sin(dLat / 2) ** 2 + Math.cos((HERE.lat * Math.PI) / 180) * Math.cos((lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
   return Math.round(r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10
 }
+
+export function timeOf(iso: string) {
+  const d = new Date(new Date(iso).getTime() + 9 * 3600000)
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
+}
+
+// 서울 기준 YYYY-MM-DD
+export function dayKey(iso: string | Date) {
+  const d = new Date(new Date(iso).getTime() + 9 * 3600000)
+  return d.toISOString().slice(0, 10)
+}
+
+export function dDay(iso: string) {
+  const diff = Math.round((Date.parse(`${dayKey(iso)}T00:00:00Z`) - Date.parse(`${dayKey(new Date())}T00:00:00Z`)) / 86400000)
+  return diff > 0 ? `D-${diff}` : diff === 0 ? 'D-DAY' : '종료'
+}
