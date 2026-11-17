@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useBandy } from '../store'
 import { loginHref } from '../convenience'
 import { device } from '../device'
-import { hasBookingFor, isEventOver, isEventStaff, isPastEvent, publicEvents, remaining, ticketTypesOf, uid } from '../repo'
+import { durationMinutes, eventEnd, hasBookingFor, isEventOver, isEventStaff, isPastEvent, publicEvents, remaining, ticketTypesOf, uid } from '../repo'
 import { Empty, PageHeader, Thumb } from '../components'
 import { dateLabel, won } from '../format'
 
@@ -57,7 +57,7 @@ export function EventPage() {
         </span>
         <h1>{event.title}</h1>
         <dl className="b-info">
-          <dt>일시</dt><dd>{dateLabel(event.starts_at)}</dd>
+          <dt>일시</dt><dd>{dateLabel(event.starts_at)} ~ {dateLabel(eventEnd(event)).slice(-5)} <span className="b-sub">({durationMinutes(event)}분)</span></dd>
           <dt>장소</dt><dd>{event.venue_name}{event.address ? <span className="b-sub"><br />{event.address}</span> : null}</dd>
           <dt>티켓</dt><dd>{types.map((t) => `${t.name} ${won(t.price_krw)}`).join(' / ')} · 남은 {left}석</dd>
           <dt>주최</dt><dd>{club ? <><Link className="b-link" to={`/app/c/${club.id}`}>{club.name}</Link> <span className="b-sub">{club.school}</span></> : event.account_holder}</dd>

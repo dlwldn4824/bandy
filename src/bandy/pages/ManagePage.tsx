@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
-import { isClubManager, isOverdue, isPastEvent } from '../repo'
+import { durationMinutes, eventEnd, isClubManager, isEventOver, isOverdue, isPastEvent } from '../repo'
 import { Backend } from '../backend'
 import { loginHref } from '../convenience'
 import { Empty, ImageInput, PageHeader } from '../components'
@@ -74,6 +74,10 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
   const pending = bookings.filter((b) => b.status === 'PENDING_PAYMENT')
     .sort((a, b) => (notifiedAt(a.id) ? 0 : 1) - (notifiedAt(b.id) ? 0 : 1) || a.created_at.localeCompare(b.created_at))
   const cancelled = event.status === 'CANCELLED'
+  // 환불 요청(공연 취소·일정 변경 후 예매자가 요청)
+  const refundPending = db.bookings.filter((b) => b.event_id === eventId)
+    .map((b) => ({ b, p: db.payments.find((p) => p.booking_id === b.id && p.status === 'REFUND_PENDING') }))
+    .filter((x): x is { b: typeof x.b; p: NonNullable<typeof x.p> } => !!x.p)
   const nameOf = (uid: string) => db.profiles.find((p) => p.id === uid)?.display_name ?? '-'
 
   const act = async (fn: (b: Backend) => Promise<unknown>, ok: string) => {
@@ -89,7 +93,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
           <strong>{event.title}</strong>
           <span className={`b-status${event.status === 'PUBLISHED' ? ' ok' : ''}`}>{STATUS_LABEL[event.status]}</span>
         </div>
-        <p className="b-sub">{dateLabel(event.starts_at)} · {event.venue_name}{isPastEvent(event) ? ' · 지난 공연' : ''}</p>
+        <p className="b-sub">{dateLabel(event.starts_at)} ~ {dateLabel(eventEnd(event)).slice(-5)} · {event.venue_name}{isEventOver(event) ? ' · 지난 공연' : isPastEvent(event) ? ' · 진행 중' : ''}</p>
         <p className="b-sub">입금 대기 {pending.length}건 · 발급 티켓 {tickets.length}장 · 입장 {tickets.filter((t) => t.status === 'CHECKED_IN').length}장</p>
         <div className="b-row">
           <Link className="b-btn small" to={`/app/scan/${event.id}`}>입장 관리 (QR)</Link>
@@ -106,6 +110,19 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
           <Link className="b-link" to={`/app/e/${event.id}`}>공연 페이지</Link>
         </div>
       </section>
+
+      {refundPending.length > 0 && (
+        <section className="b-stack">
+          <h2 className="b-h2">환불 요청 {refundPending.length}</h2>
+          {refundPending.map(({ b, p }) => (
+            <article key={b.id} className="b-card b-pad b-stack b-signal">
+              <div className="b-row between"><strong>{nameOf(b.user_id)} · {won(b.total_amount_krw)}</strong><span className="b-status wait">환불 대기</span></div>
+              <p className="b-sub">환불 계좌: {p.refund_account} · 요청 {p.refund_requested_at ? dateLabel(p.refund_requested_at) : ''}</p>
+              <button type="button" className="b-btn small" onClick={() => { if (window.confirm(`${won(b.total_amount_krw)}을 보냈나요? 환불 완료로 바꾸고 예매자에게 알려요.`)) act((x) => x.markRefunded(b.id), '환불 완료로 바꿨어요.') }}>환불 완료</button>
+            </article>
+          ))}
+        </section>
+      )}
 
       {mode === 'edit' ? <EventForm clubId={event.club_id} event={event} onDone={() => setMode('bookings')} /> : (
         <>
@@ -185,6 +202,7 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
     starts_at: event ? toLocal(event.starts_at) : '', venue_name: event?.venue_name ?? '', address: event?.address ?? '',
     description: event?.description ?? '', price_krw: tt?.price_krw ?? 6000, capacity: tt?.capacity ?? 100,
     bank_name: event?.bank_name ?? '', account_number: event?.account_number ?? '',
+    duration_minutes: event ? durationMinutes(event) : 120,
   })
   const [poster, setPoster] = useState<string | null>(event?.poster_path ?? null)
   const [error, setError] = useState('')
@@ -193,6 +211,7 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
   const save = async (publish: boolean) => {
     const input = {
       ...f, starts_at: f.starts_at ? `${f.starts_at}:00+09:00` : '', price_krw: Number(f.price_krw), capacity: Number(f.capacity),
+      duration_minutes: Number(f.duration_minutes),
       poster_path: poster, publish,
     }
     const r = await call(async (b) => {
@@ -215,7 +234,11 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
           ))}
         </div>
       </div>
-      <label className="b-field"><span>일시</span><input type="datetime-local" value={f.starts_at} onChange={set('starts_at')} /></label>
+      <div className="b-row">
+        <label className="b-field"><span>시작 일시</span><input type="datetime-local" value={f.starts_at} onChange={set('starts_at')} /></label>
+        <label className="b-field"><span>진행 시간 (분)</span><input type="number" min={10} max={1440} step={10} value={f.duration_minutes} onChange={set('duration_minutes')} /></label>
+      </div>
+      {event && <p className="b-note">일시나 장소를 바꾸면 예매자에게 알림이 가고, 예매자는 유지하거나 취소·환불을 요청할 수 있어요.</p>}
       <label className="b-field"><span>장소</span><input value={f.venue_name} onChange={set('venue_name')} /></label>
       <label className="b-field"><span>주소 (지도 위치)</span><input value={f.address} onChange={set('address')} /></label>
       <label className="b-field"><span>공연 소개</span><textarea value={f.description} onChange={set('description')} /></label>

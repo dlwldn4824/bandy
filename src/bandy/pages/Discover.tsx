@@ -229,8 +229,8 @@ export function NotificationsPage() {
       {notes.map((n) => {
         // 알림을 누르면 바로 처리할 화면으로: 티켓 발급 → 내 티켓, 입금했어요 → 공연 관리, 교류 → 신청함, 가입·역할 → 마이페이지
         const ev = n.event_id ? db.events.find((e) => e.id === n.event_id) : undefined
-        const to = n.type === 'BOOKING_CONFIRMED' ? '/app/tickets'
-          : n.type === 'DEPOSIT_SENT' && ev ? `/app/manage/${ev.club_id}?event=${ev.id}`
+        const to = ['BOOKING_CONFIRMED', 'EVENT_CHANGED', 'EVENT_CANCELLED', 'REFUNDED'].includes(n.type) ? '/app/tickets'
+          : ['DEPOSIT_SENT', 'REFUND_REQUESTED', 'BOOKING_CANCELLED_AFTER_DEPOSIT'].includes(n.type) && ev ? `/app/manage/${ev.club_id}?event=${ev.id}`
             : n.type.startsWith('EXCHANGE') ? '/app/clubs?tab=inbox'
               : n.type === 'CLUB_JOIN_REQUESTED' ? '/app/my'
                 : n.event_id ? `/app/e/${n.event_id}` : '/app/my'

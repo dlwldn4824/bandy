@@ -32,11 +32,11 @@ export const device = {
     const fresh = Object.fromEntries(Object.entries(d).filter(([, at]) => Date.now() - at < 7 * 86400000))
     write({ dismissed: { ...fresh, [key]: Date.now() } })
   },
-  // QR 유효시간은 서버 기준 '24시간'과 '공연 시작 + 6시간' 중 긴 쪽(최대 7일). 저장해 둔 것도 그 안에서만 쓴다(1시간 여유를 둠)
-  saveQr(ticketId: string, token: string, eventStartsAt?: string) {
+  // QR 유효시간은 서버 기준 '24시간'과 '공연 끝 시각' 중 긴 쪽(최대 7일). 저장해 둔 것도 그 안에서만 쓴다(1시간 여유를 둠)
+  saveQr(ticketId: string, token: string, eventEndsAt?: string) {
     const now = Date.now()
-    const start = eventStartsAt ? new Date(eventStartsAt).getTime() : 0
-    const until = Math.max(now + 24 * 3600000, Math.min(start + 6 * 3600000, now + 7 * 86400000)) - 3600000
+    const end = eventEndsAt ? new Date(eventEndsAt).getTime() : 0
+    const until = Math.max(now + 24 * 3600000, Math.min(end, now + 7 * 86400000)) - 3600000
     const q = read().qr ?? {}
     const fresh = Object.fromEntries(Object.entries(q).filter(([, v]) => (v.until ?? v.at + 23 * 3600000) > now))
     write({ qr: { ...fresh, [ticketId]: { token, at: now, until } } })

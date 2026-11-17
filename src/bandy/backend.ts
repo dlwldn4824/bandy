@@ -39,6 +39,7 @@ export type CheckResult = {
 export type EventInput = {
   title: string; category: EventRow['category']; starts_at: string; venue_name: string; address: string; description: string
   price_krw: number; capacity: number; bank_name: string; account_number: string; poster_path: string | null; publish?: boolean
+  duration_minutes?: number // 진행 시간(분). 진행 중 판단·QR 유효시간·홈 신호의 기준
 }
 export type ClubInput = {
   name: string; school: string; genre: string; region: string; introduction: string; sns_url: string
@@ -85,6 +86,10 @@ export interface Backend {
   // 모바일 편의: 홈 신호(앱을 열 때 바로 띄울 창), 입금했어요 알림
   homeState(): Promise<HomeState>
   markDepositSent(bookingId: string): Promise<void>
+  // 일정 변경·공연 취소 후: 유지 / 취소·환불 요청, 운영진의 환불 완료
+  ackEventChange(bookingId: string): Promise<void>
+  requestRefund(bookingId: string, refundAccount: string): Promise<void>
+  markRefunded(bookingId: string): Promise<void>
 }
 
 // ───────────────────────── 브라우저 데모 ─────────────────────────
@@ -176,6 +181,9 @@ class LocalBackend implements Backend {
   async removeMember(membershipId: string) { this.mutate((d, u) => repo.removeMember(d, u, membershipId)) }
   async homeState() { return repo.homeState(this.db, this.uid()) }
   async markDepositSent(bookingId: string) { this.mutate((d, u) => repo.markDepositSent(d, u, bookingId)) }
+  async ackEventChange(bookingId: string) { this.mutate((d, u) => repo.ackEventChange(d, u, bookingId)) }
+  async requestRefund(bookingId: string, refundAccount: string) { this.mutate((d, u) => repo.requestRefund(d, u, bookingId, refundAccount)) }
+  async markRefunded(bookingId: string) { this.mutate((d, u) => repo.markRefunded(d, u, bookingId)) }
 }
 
 // ───────────────────────── Supabase ─────────────────────────
@@ -213,7 +221,7 @@ class SupabaseBackend implements Backend {
       ticket_types: t.ticket_types.map((r) => ({ ...r, price_krw: num(r.price_krw) })) as unknown as Db['ticket_types'],
       bookings: t.bookings.map((r) => ({ ...r, total_amount_krw: num(r.total_amount_krw) })) as unknown as Db['bookings'],
       booking_items: t.booking_items.map((r) => ({ ...r, unit_price_krw: num(r.unit_price_krw) })) as unknown as Db['booking_items'],
-      payments: t.payments as unknown as Db['payments'],
+      payments: t.payments as unknown as Db['payments'], // 금액 칸 없음
       tickets: t.tickets as unknown as Db['tickets'],
       qr_credentials: [], // 해시만 있어 앱에서 읽지 않는다. QR은 issueTicketQr로 받는다
       event_staff: t.event_staff as unknown as Db['event_staff'],
@@ -282,9 +290,13 @@ class SupabaseBackend implements Backend {
     const s = await this.rpc<HomeState>('my_home_state', {})
     // bigint 금액은 숫자로
     s.pending_payments = s.pending_payments?.map((p) => ({ ...p, total_amount_krw: Number(p.total_amount_krw) }))
+    s.refund_requests = s.refund_requests?.map((p) => ({ ...p, total_amount_krw: Number(p.total_amount_krw) }))
     return s
   }
   async markDepositSent(bookingId: string) { await this.rpc('mark_deposit_sent', { p_booking_id: bookingId }) }
+  async ackEventChange(bookingId: string) { await this.rpc('ack_event_change', { p_booking_id: bookingId }) }
+  async requestRefund(bookingId: string, refundAccount: string) { await this.rpc('request_refund', { p_booking_id: bookingId, p_refund_account: refundAccount }) }
+  async markRefunded(bookingId: string) { await this.rpc('mark_refunded', { p_booking_id: bookingId }) }
 }
 
 export function createBackend(): Backend {

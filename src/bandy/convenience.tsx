@@ -32,7 +32,9 @@ export function HomeSignals() {
   const navigate = useNavigate()
   const [sheetKey, setSheetKey] = useState<string | null>(null)
 
-  const promptKey = home.prompt === 'TICKET_NOW' ? `ticket-${home.next_ticket?.ticket_id}`
+  const changed = home.changed_bookings ?? []
+  const promptKey = home.prompt === 'EVENT_CHANGED' ? `changed-${changed[0]?.booking_id}-${changed[0]?.schedule_changed_at}`
+    : home.prompt === 'TICKET_NOW' ? `ticket-${home.next_ticket?.ticket_id}`
     : home.prompt === 'STAFF_TODAY' ? `staff-${home.staff_events?.[0]?.event_id}`
       : home.prompt === 'PAYMENT_DUE' ? `pay-${home.pending_payments?.[0]?.booking_id}` : null
 
@@ -58,6 +60,15 @@ export function HomeSignals() {
   const sheet = sheetKey && sheetKey === promptKey && (
     <div className="b-modal" onClick={close}>
       <div className="b-sheet b-stack" role="dialog" aria-label="바로 보기" onClick={(e) => e.stopPropagation()}>
+        {home.prompt === 'EVENT_CHANGED' && changed[0] && (
+          <>
+            <span className="b-status red">공연 일정 변경</span>
+            <h2>{changed[0].title}</h2>
+            <p className="b-sub">바뀐 일정: {dateLabel(changed[0].starts_at)} · {changed[0].venue_name}</p>
+            <p className="b-sub">그대로 유지하거나 취소·환불을 요청할 수 있어요.</p>
+            <button type="button" className="b-btn" onClick={() => { close(); navigate('/app/tickets') }}>내 티켓에서 고르기</button>
+          </>
+        )}
         {home.prompt === 'TICKET_NOW' && t && (
           <>
             <span className="b-status red">{untilLabel(t.starts_at)}</span>
@@ -119,6 +130,18 @@ export function HomeSignals() {
                 : <button type="button" className="b-btn small" onClick={() => sent(p.booking_id)}>입금했어요</button>}
             </div>
           </div>
+        ))}
+        {changed.map((c) => (
+          <Link key={c.booking_id} to="/app/tickets" className="b-card b-pad b-row between b-signal">
+            <span className="b-stack tight"><strong>{c.title}</strong><span className="b-sub">일정이 바뀌었어요 · {dateLabel(c.starts_at)}</span></span>
+            <span className="b-status red">확인</span>
+          </Link>
+        ))}
+        {(home.refund_requests ?? []).map((r) => (
+          <Link key={r.booking_id} to={`/app/manage/${r.club_id}?event=${r.event_id}`} className="b-card b-pad b-row between b-signal">
+            <span className="b-stack tight"><strong>{r.title}</strong><span className="b-sub">환불 요청 · {won(r.total_amount_krw)}</span></span>
+            <span className="b-status wait">환불 처리</span>
+          </Link>
         ))}
         {((home.join_requests ?? 0) > 0 || (home.exchange_requests ?? 0) > 0) && (
           <Link to="/app/my" className="b-card b-pad b-signal">

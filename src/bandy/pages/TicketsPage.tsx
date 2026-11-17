@@ -5,7 +5,7 @@ import { useBandy } from '../store'
 import { Empty, NeedLogin, PageHeader } from '../components'
 import { dateLabel, won } from '../format'
 import { EventRow, Ticket } from '../types'
-import { isEventOver, isOverdue } from '../repo'
+import { eventEnd, isEventOver, isOverdue } from '../repo'
 import { useWakeLock } from '../convenience'
 import { device } from '../device'
 
@@ -13,14 +13,16 @@ const IMMINENT_MS = 24 * 3600000 // [미정] 입장 임박 기준. 지금은 공
 const LEGACY_SERVICE = '/performances' // 기존 서비스(공연 정보 · 셋리스트 · 채팅 · 방명록). 공연별 연결 방식은 미정
 
 // 공연 정보를 못 읽는 경우(권한·삭제 등)에도 화면이 깨지지 않게 쓰는 자리 표시
-const UNKNOWN_EVENT: Pick<EventRow, 'id' | 'title' | 'starts_at' | 'venue_name' | 'status' | 'bank_name' | 'account_number' | 'account_holder'> = {
-  id: '', title: '(공연 정보를 불러오지 못했어요)', starts_at: '9999-12-31T00:00:00Z', venue_name: '', status: 'PUBLISHED',
+const UNKNOWN_EVENT: Pick<EventRow, 'id' | 'title' | 'starts_at' | 'ends_at' | 'venue_name' | 'status' | 'bank_name' | 'account_number' | 'account_holder'> = {
+  id: '', title: '(공연 정보를 불러오지 못했어요)', starts_at: '9999-12-31T00:00:00Z', ends_at: null, venue_name: '', status: 'PUBLISHED',
   bank_name: '', account_number: '', account_holder: '',
 }
 
 // 구조도: 내 티켓 = 입장 예정 → 이후 공연 → 사용 완료 / 티켓 선택 → 티켓 상세·QR (ticketId · qrToken · checkInStatus)
 export function TicketsPage() {
-  const { db, me, call, showToast } = useBandy()
+  const { db, me, home, call, showToast } = useBandy()
+  const [refundFor, setRefundFor] = useState<string | null>(null)
+  const [account, setAccount] = useState('')
   const [open, setOpen] = useState<Ticket | null>(null)
   const [qr, setQr] = useState<{ ticketId: string; token: string; offline?: boolean } | null>(null)
   const [params, setParams] = useSearchParams()
@@ -41,7 +43,7 @@ export function TicketsPage() {
     let alive = true
     call((b) => b.issueTicketQr(open.id), { reload: false }).then((r) => {
       if (!alive) return
-      if (r.ok) { setQr({ ticketId: open.id, token: r.value }); device.saveQr(open.id, r.value, eventOf(open.event_id).starts_at); return }
+      if (r.ok) { setQr({ ticketId: open.id, token: r.value }); device.saveQr(open.id, r.value, eventEnd(eventOf(open.event_id))); return }
       const cached = device.cachedQr(open.id)
       if (cached && /연결하지 못했|인터넷/.test(r.error)) setQr({ ticketId: open.id, token: cached, offline: true })
       else showToast(r.error)
@@ -54,7 +56,7 @@ export function TicketsPage() {
   const eventOf = (id: string) => db.events.find((e) => e.id === id) ?? { ...UNKNOWN_EVENT, id }
   const tickets = db.tickets.filter((t) => t.user_id === me.id && t.status !== 'CANCELLED')
     .sort((a, b) => eventOf(a.event_id).starts_at.localeCompare(eventOf(b.event_id).starts_at) || a.issue_sequence - b.issue_sequence)
-  // 취소된 공연·끝난 공연(시작 + 6시간)의 미사용 티켓은 '지난·취소'로 따로 모은다. 공연 중에 늦게 와도 QR을 열 수 있다
+  // 취소된 공연·끝난 공연(입력한 진행 시간 기준)의 미사용 티켓은 '지난·취소'로 따로 모은다. 공연 중에 늦게 와도 QR을 열 수 있다
   const closed = (t: Ticket) => { const ev = eventOf(t.event_id); return ev.status === 'CANCELLED' || isEventOver(ev) }
   const issued = tickets.filter((t) => t.status === 'ISSUED' && !closed(t))
   const soon = issued.filter((t) => new Date(eventOf(t.event_id).starts_at).getTime() - Date.now() < IMMINENT_MS)
@@ -62,6 +64,33 @@ export function TicketsPage() {
   const used = tickets.filter((t) => t.status === 'CHECKED_IN')
   const missed = tickets.filter((t) => t.status === 'ISSUED' && closed(t))
   const pending = db.bookings.filter((b) => b.user_id === me.id && b.status === 'PENDING_PAYMENT')
+
+  // 확인이 필요한 예매: 일정·장소가 바뀐 예매(서버 신호), 취소된 공연의 확정 예매(환불 요청), 환불 진행 중·완료
+  const changed = home.changed_bookings ?? []
+  const cancelledConfirmed = db.bookings.filter((b) => b.user_id === me.id && b.status === 'CONFIRMED' && eventOf(b.event_id).status === 'CANCELLED')
+  const refunds = db.bookings.filter((b) => b.user_id === me.id)
+    .map((b) => ({ b, p: db.payments.find((p) => p.booking_id === b.id && (p.status === 'REFUND_PENDING' || p.status === 'REFUNDED')) }))
+    .filter((x) => !!x.p)
+  const keep = async (bookingId: string) => {
+    const r = await call((b) => b.ackEventChange(bookingId))
+    showToast(r.ok ? '예매를 그대로 유지해요.' : r.error)
+  }
+  const refund = async (bookingId: string) => {
+    const r = await call((b) => b.requestRefund(bookingId, account))
+    if (!r.ok) { showToast(r.error); return }
+    setRefundFor(null); setAccount('')
+    showToast('환불을 요청했어요. 주최 동아리가 보내면 알려 드려요.')
+  }
+  // 환불 계좌 입력(공통)
+  const refundForm = (bookingId: string, amount: number) => refundFor === bookingId ? (
+    <div className="b-stack">
+      {amount > 0 && <input value={account} onChange={(e) => setAccount(e.target.value)} maxLength={60} placeholder="환불받을 계좌 (예: 카카오뱅크 3333-01-1234567 김관객)" aria-label="환불받을 계좌" />}
+      <div className="b-row">
+        <button type="button" className="b-btn small" onClick={() => refund(bookingId)}>{amount > 0 ? '환불 요청' : '취소하기'}</button>
+        <button type="button" className="b-btn ghost small" onClick={() => setRefundFor(null)}>닫기</button>
+      </div>
+    </div>
+  ) : null
 
   const cancel = async (bookingId: string) => {
     const r = await call((b) => b.cancelBooking(bookingId))
@@ -90,6 +119,38 @@ export function TicketsPage() {
   return (
     <div className="b-page">
       <PageHeader title="내 티켓" right={<span className="b-sub">{me.display_name}</span>} />
+
+      {(changed.length > 0 || cancelledConfirmed.length > 0) && (
+        <section className="b-stack">
+          <h2 className="b-h2">확인이 필요해요</h2>
+          {changed.map((c) => {
+            const b = db.bookings.find((x) => x.id === c.booking_id)
+            return (
+              <article key={c.booking_id} className="b-card b-pad b-stack b-signal">
+                <div className="b-row between"><strong>{c.title}</strong><span className="b-status red">일정 변경</span></div>
+                <p className="b-sub">바뀐 일정: {dateLabel(c.starts_at)} · {c.venue_name}</p>
+                {refundFor !== c.booking_id && (
+                  <div className="b-row">
+                    <button type="button" className="b-btn small" onClick={() => keep(c.booking_id)}>그대로 유지</button>
+                    {c.status === 'CONFIRMED'
+                      ? <button type="button" className="b-btn ghost small" onClick={() => setRefundFor(c.booking_id)}>취소·환불 요청</button>
+                      : <button type="button" className="b-btn ghost small" onClick={() => cancel(c.booking_id)}>예매 취소</button>}
+                  </div>
+                )}
+                {refundForm(c.booking_id, b?.total_amount_krw ?? 0)}
+              </article>
+            )
+          })}
+          {cancelledConfirmed.map((b) => (
+            <article key={b.id} className="b-card b-pad b-stack b-signal">
+              <div className="b-row between"><strong>{eventOf(b.event_id).title}</strong><span className="b-status red">공연 취소</span></div>
+              <p className="b-sub">{won(b.total_amount_krw)} · 환불받을 계좌를 적어 주세요.</p>
+              {refundFor !== b.id && <button type="button" className="b-btn small" onClick={() => setRefundFor(b.id)}>환불 요청</button>}
+              {refundForm(b.id, b.total_amount_krw)}
+            </article>
+          ))}
+        </section>
+      )}
 
       {pending.length > 0 && (
         <section className="b-stack">
@@ -140,6 +201,18 @@ export function TicketsPage() {
         {used.map((t) => row(t, 'used'))}
         {used.length === 0 && <Empty>입장한 티켓이 없어요.</Empty>}
       </section>
+
+      {refunds.length > 0 && (
+        <section className="b-stack">
+          <h2 className="b-h2">환불</h2>
+          {refunds.map(({ b, p }) => (
+            <article key={b.id} className="b-card b-pad b-row between">
+              <span className="b-stack tight"><strong>{eventOf(b.event_id).title}</strong><span className="b-sub">{won(b.total_amount_krw)} · {p!.refund_account}</span></span>
+              <span className={`b-status${p!.status === 'REFUNDED' ? ' ok' : ' wait'}`}>{p!.status === 'REFUNDED' ? '환불 완료' : '환불 대기'}</span>
+            </article>
+          ))}
+        </section>
+      )}
 
       {missed.length > 0 && (
         <section className="b-stack">

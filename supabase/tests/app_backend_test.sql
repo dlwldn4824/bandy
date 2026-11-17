@@ -391,12 +391,60 @@ select public.update_event(:'ev8', jsonb_build_object('starts_at', (now() + inte
 :as_u
 select public.issue_ticket_qr(:'t8') is not null as x \gset
 reset role;
-select test.ok((select expires_at >= (select starts_at from public.events where id = :'ev8') + interval '5 hours' from public.qr_credentials where ticket_id = :'t8' and revoked_at is null), '미리 받은 QR도 공연 시작 6시간 뒤까지 유효');
+select test.ok((select expires_at >= (select ends_at from public.events where id = :'ev8') from public.qr_credentials where ticket_id = :'t8' and revoked_at is null), '미리 받은 QR도 공연이 끝날 때까지 유효');
 :as_u
 select public.mark_deposit_sent(:'bk8b');
 select public.cancel_booking(:'bk8b');
 reset role;
 select test.ok((select count(*) from public.notifications where type = 'BOOKING_CANCELLED_AFTER_DEPOSIT' and event_id = :'ev8') >= 1, '입금했다고 알린 뒤 취소하면 운영진에게 환불 확인 알림');
+
+-- 15. 진행 시간 · 일정 변경 후 유지/환불 요청 · 공연 취소 환불
+:as_o1
+select public.create_event(:'c1', jsonb_build_object('title', '진행 시간', 'starts_at', (now() + interval '2 days')::text, 'duration_minutes', 90, 'venue_name', '홀', 'price_krw', 4000, 'capacity', 10, 'bank_name', 'b', 'account_number', '1', 'publish', true)) as ev9 \gset
+select test.ok((select ends_at - starts_at from public.events where id = :'ev9') = interval '90 minutes', '진행 시간 90분 → 끝 시각');
+select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"x","starts_at":"2026-12-20T19:00+09","capacity":5,"duration_minutes":5}')$$, '진행 시간', '진행 시간 10분 미만 거부');
+select id as tt9 from public.ticket_types where event_id = :'ev9' \gset
+:as_u
+select public.create_booking(:'tt9', 2, '김관객', 'chg-1') as bk9 \gset
+select test.fails_with($$select public.request_refund('$$ || :'bk9' || $$', '카카오 3333-1 김관객')$$, '일정이 바뀐', '일정 변경·공연 취소가 아니면 환불 요청 불가');
+:as_o1
+select public.confirm_deposit(:'bk9');
+select public.update_event(:'ev9', jsonb_build_object('starts_at', (now() + interval '3 days')::text));
+select test.ok((select ends_at - starts_at from public.events where id = :'ev9') = interval '90 minutes', '시작을 옮겨도 진행 시간 유지');
+:as_u
+select test.ok(public.my_home_state() ->> 'prompt' = 'EVENT_CHANGED', '일정 변경 → 유지/환불 선택 신호');
+select test.fails_with($$select public.request_refund('$$ || :'bk9' || $$', '')$$, '환불받을 계좌', '환불 계좌 없이 요청 불가');
+select public.request_refund(:'bk9', '카카오뱅크 3333-01 김관객');
+select test.ok((select status from public.bookings where id = :'bk9') = 'CANCELLED', '환불 요청하면 예매 취소');
+select test.ok((select count(*) from public.tickets where booking_id = :'bk9' and status = 'CANCELLED') = 2, '티켓 무효');
+select test.ok((select status from public.payments where booking_id = :'bk9') = 'REFUND_PENDING', '결제는 환불 대기');
+:as_o1
+select test.ok((select sold_quantity from public.ticket_types where id = :'tt9') = 0, '자리 반환');
+select test.ok((public.my_home_state() -> 'refund_requests' -> 0 ->> 'booking_id')::uuid = :'bk9'::uuid, '운영진 홈에 환불 요청');
+select test.ok((select refund_account from public.payments where booking_id = :'bk9') = '카카오뱅크 3333-01 김관객', '운영진은 환불 계좌 확인');
+:as_v
+select test.fails_with($$select public.mark_refunded('$$ || :'bk9' || $$')$$, '찾지 못', '다른 사람은 환불 완료 불가');
+:as_o1
+select public.mark_refunded(:'bk9');
+:as_u
+select test.ok((select status from public.payments where booking_id = :'bk9') = 'REFUNDED', '환불 완료');
+select test.ok((select count(*) from public.notifications where type = 'REFUNDED') = 1, '환불 완료 알림');
+-- 유지 선택
+:as_v
+select public.create_booking(:'tt9', 1, '이준', 'chg-2') as bk9b \gset
+:as_o1
+select public.update_event(:'ev9', jsonb_build_object('venue_name', '바뀐 홀'));
+:as_v
+select test.ok(public.my_home_state() ->> 'prompt' = 'EVENT_CHANGED', '입금 대기 예매자도 변경 신호');
+select public.ack_event_change(:'bk9b');
+select test.ok(coalesce(public.my_home_state() ->> 'prompt', '') <> 'EVENT_CHANGED', '유지를 고르면 다시 묻지 않음');
+-- 공연 취소 → 확정 예매자 환불 요청
+:as_o1
+select public.confirm_deposit(:'bk9b');
+select public.set_event_status(:'ev9', 'CANCELLED');
+:as_v
+select public.request_refund(:'bk9b', '국민 123-45 이준');
+select test.ok((select status from public.payments where booking_id = :'bk9b') = 'REFUND_PENDING', '공연 취소 후 환불 요청');
 reset role;
 select test.ok((select count(*) from public.audit_logs where action in ('CONFIRM_DEPOSIT', 'CHECK_IN')) >= 2, '입금 확인·입장 감사 기록');
 \echo 'ALL TESTS PASSED'

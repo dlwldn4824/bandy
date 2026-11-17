@@ -68,6 +68,7 @@ export interface EventRow {
   poster_path: string | null
   status: EventStatus
   published_at: Timestamp | null
+  schedule_changed_at?: Timestamp | null // [편의] 일시·장소가 바뀐 시각(이전 예매자는 유지 또는 환불 요청 선택)
   // [11/1 추가] 입금자명 방식 결제 안내
   bank_name: string
   account_number: string
@@ -100,6 +101,7 @@ export interface Booking {
   total_amount_krw: number
   expires_at: Timestamp
   confirmed_at: Timestamp | null
+  change_ack_at?: Timestamp | null // [편의] 일정 변경을 확인하고 '유지'를 고른 시각
   cancelled_at: Timestamp | null
   idempotency_key: string
   request_hash: string
@@ -119,7 +121,7 @@ export interface BookingItem {
   created_at: Timestamp
 }
 
-export type PaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'REFUND_PENDING' // SUCCEEDED·REFUND_PENDING만 문서 확인
+export type PaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'REFUND_PENDING' | 'REFUNDED' // SUCCEEDED·REFUND_PENDING만 문서 확인
 export interface Payment {
   id: Uuid
   booking_id: Uuid
@@ -131,6 +133,9 @@ export interface Payment {
   depositor_name: string // [11/1 추가] 입금자명
   confirmed_by: Uuid | null // [11/1 추가] 입금 확인한 동아리 운영진
   depositor_notified_at?: Timestamp | null // [편의] 예매자가 '입금했어요'를 누른 시각
+  refund_account?: string // [편의] 환불받을 계좌(예매자 입력)
+  refund_requested_at?: Timestamp | null
+  refunded_at?: Timestamp | null
   approved_at: Timestamp | null
   failure_code: string | null
   reconciliation_required: boolean
@@ -222,7 +227,7 @@ export interface Db {
 }
 
 // 앱을 열 때 받는 '홈 신호'(서버 my_home_state와 같은 모양). prompt로 바로 띄울 창을 정한다
-export type HomePrompt = 'TICKET_NOW' | 'STAFF_TODAY' | 'PAYMENT_DUE' | null
+export type HomePrompt = 'EVENT_CHANGED' | 'TICKET_NOW' | 'STAFF_TODAY' | 'PAYMENT_DUE' | null
 export interface HomeState {
   signed_in: boolean
   now?: Timestamp
@@ -236,6 +241,11 @@ export interface HomeState {
     booking_id: Uuid; event_id: Uuid; title: string; total_amount_krw: number; expires_at: Timestamp
     bank_name: string; account_number: string; account_holder: string; depositor_name: string; depositor_notified_at: Timestamp | null
   }>
+  changed_bookings?: Array<{
+    booking_id: Uuid; event_id: Uuid; title: string; starts_at: Timestamp; ends_at: Timestamp | null; venue_name: string | null
+    status: 'PENDING_PAYMENT' | 'CONFIRMED'; schedule_changed_at: Timestamp
+  }>
+  refund_requests?: Array<{ booking_id: Uuid; event_id: Uuid; club_id: Uuid; title: string; total_amount_krw: number; refund_requested_at: Timestamp }>
   unread_notifications?: number
   join_requests?: number
   exchange_requests?: number

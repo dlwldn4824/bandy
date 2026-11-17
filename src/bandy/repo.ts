@@ -95,10 +95,23 @@ export function isOverdue(b: Booking, db?: Db) {
   return !notified
 }
 
-// 공연이 끝났다고 보는 시각: 시작 + 6시간(끝 시각 칸이 없어 임시 기준). 그 전까지는 티켓 QR을 열 수 있다
-export const EVENT_GRACE_MS = 6 * 3600000
-export function isEventOver(e: Pick<EventRow, 'starts_at'>) {
-  return new Date(e.starts_at).getTime() + EVENT_GRACE_MS <= Date.now()
+// 공연이 끝나는 시각: 주최 측이 입력한 진행 시간(ends_at). 비어 있으면 시작 + 2시간(서버 _event_end와 같음)
+export const DEFAULT_DURATION_MIN = 120
+export function eventEnd(e: Pick<EventRow, 'starts_at' | 'ends_at'>) {
+  return e.ends_at ?? new Date(new Date(e.starts_at).getTime() + DEFAULT_DURATION_MIN * 60000).toISOString()
+}
+export function durationMinutes(e: Pick<EventRow, 'starts_at' | 'ends_at'>) {
+  return Math.round((new Date(eventEnd(e)).getTime() - new Date(e.starts_at).getTime()) / 60000)
+}
+// 끝났는가: 끝 시각 전까지는 '진행 중'이라 티켓 QR을 열 수 있다
+export function isEventOver(e: Pick<EventRow, 'starts_at' | 'ends_at'>) {
+  return new Date(eventEnd(e)).getTime() <= Date.now()
+}
+
+function checkDuration(min: number | undefined, fallback: number) {
+  const v = min ?? fallback
+  if (!Number.isFinite(v) || v < 10 || v > 1440) throw new BandyError('진행 시간은 10분 ~ 24시간(1440분) 사이로 입력하세요.')
+  return v
 }
 
 function checkPublishable(venue: string, startsAt: string, price: number, account: string) {
@@ -276,7 +289,7 @@ export function updateClub(db: Db, userId: Uuid | null, clubId: Uuid, patch: Par
 export function createEvent(db: Db, userId: Uuid | null, clubId: Uuid, input: {
   title: string; category: EventRow['category']; starts_at: string; venue_name: string; address: string
   description: string; price_krw: number; capacity: number; account_number: string; bank_name: string
-  publish: boolean; poster_path?: string | null
+  publish: boolean; poster_path?: string | null; duration_minutes?: number
 }): EventRow {
   requireActiveProfile(db, userId)
   requireActiveManager(db, userId, clubId, '동아리 운영진만 공연을 올릴 수 있습니다.')
@@ -290,7 +303,8 @@ export function createEvent(db: Db, userId: Uuid | null, clubId: Uuid, input: {
   // 지도 좌표: 실제로는 카카오 Local로 주소 → 좌표 변환. 프로토타입은 노원구 근처 임의 좌표
   const event: EventRow = {
     id: uid('ev'), club_id: clubId, created_by: userId!, title: input.title.trim(), description: input.description.trim(),
-    category: input.category, starts_at: new Date(input.starts_at).toISOString(), ends_at: null,
+    category: input.category, starts_at: new Date(input.starts_at).toISOString(),
+    ends_at: new Date(new Date(input.starts_at).getTime() + checkDuration(input.duration_minutes, DEFAULT_DURATION_MIN) * 60000).toISOString(),
     admission_starts_at: null, admission_ends_at: null, timezone: 'Asia/Seoul',
     venue_name: input.venue_name.trim(), address: input.address.trim(),
     latitude: 37.615 + Math.random() * 0.03, longitude: 127.055 + Math.random() * 0.03,
@@ -326,7 +340,7 @@ export function setEventStatus(db: Db, userId: Uuid | null, eventId: Uuid, statu
       const wasConfirmed = b.status === 'CONFIRMED'
       if (!wasConfirmed) releaseBooking(db, b, 'CANCELLED', 'EVENT_CANCELLED')
       notify(db, b.user_id, eventId, 'EVENT_CANCELLED', wasConfirmed
-        ? `[${event.title}] 공연이 취소됐어요. 환불은 주최 동아리에 문의해 주세요.`
+        ? `[${event.title}] 공연이 취소됐어요. 내 티켓에서 환불받을 계좌를 적어 환불을 요청해 주세요.`
         : `[${event.title}] 공연이 취소돼 예매도 취소됐어요.`, `event-cancelled-${b.id}`)
     }
   }
@@ -336,7 +350,7 @@ export function setEventStatus(db: Db, userId: Uuid | null, eventId: Uuid, statu
 export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
   title: string; category: EventRow['category']; starts_at: string; venue_name: string; address: string
   description: string; bank_name: string; account_number: string; poster_path: string | null
-  price_krw: number; capacity: number
+  price_krw: number; capacity: number; duration_minutes?: number
 }) {
   requireLogin(db, userId)
   const event = db.events.find((e) => e.id === eventId)
@@ -350,6 +364,8 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
   if (!Number.isFinite(input.price_krw) || input.price_krw < 0) throw new BandyError('가격은 0원 이상이어야 합니다.')
   const tt = db.ticket_types.find((t) => t.event_id === eventId)!
   const before = { starts_at: event.starts_at, venue_name: event.venue_name }
+  // 진행 시간: 보내면 그대로, 안 보내면 기존 진행 시간 유지
+  const duration = checkDuration(input.duration_minutes, durationMinutes(event))
   const hasBookings = db.bookings.some((b) => b.event_id === eventId && b.status !== 'CANCELLED')
   if (hasBookings && input.price_krw !== tt.price_krw) throw new BandyError('예매가 있는 공연은 가격을 바꿀 수 없습니다.')
   if (input.capacity < tt.reserved_quantity + tt.sold_quantity) throw new BandyError('이미 예매된 수량보다 정원을 줄일 수 없습니다.')
@@ -364,8 +380,11 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
     bank_name: input.bank_name.trim(), account_number: input.account_number.trim(), poster_path: input.poster_path,
     updated_at: now(),
   })
+  event.ends_at = new Date(new Date(event.starts_at).getTime() + duration * 60000).toISOString()
   Object.assign(tt, { price_krw: input.price_krw, capacity: input.capacity, sales_ends_at: event.starts_at, updated_at: now() })
   if (event.starts_at !== before.starts_at || event.venue_name !== before.venue_name) {
+    // 이보다 먼저 예매한 사람은 유지 또는 취소·환불 요청을 고를 수 있다
+    if (db.bookings.some((x) => x.event_id === eventId && (x.status === 'PENDING_PAYMENT' || x.status === 'CONFIRMED'))) event.schedule_changed_at = now()
     // 공연을 앞당기면 입금 기한도 새 시작 시각을 넘지 않게, 예매자에게 일정·장소 변경 알림(서버 update_event와 같음)
     for (const b of db.bookings.filter((x) => x.event_id === eventId && x.status === 'PENDING_PAYMENT' && x.expires_at > event.starts_at)) {
       b.expires_at = new Date(Math.max(new Date(event.starts_at).getTime(), new Date(b.created_at).getTime() + 60000)).toISOString()
@@ -376,7 +395,7 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
     ].filter(Boolean).join(', ')
     const users = new Set(db.bookings.filter((x) => x.event_id === eventId && (x.status === 'PENDING_PAYMENT' || x.status === 'CONFIRMED')).map((x) => x.user_id))
     for (const u of users) {
-      notify(db, u, eventId, 'EVENT_CHANGED', `[${event.title}] 공연 ${parts} 바뀌었어요.`, `event-changed-${eventId}-${u}-${event.starts_at}-${event.venue_name}`)
+      notify(db, u, eventId, 'EVENT_CHANGED', `[${event.title}] 공연 ${parts} 바뀌었어요. 내 티켓에서 유지하거나 취소·환불을 요청할 수 있어요.`, `event-changed-${eventId}-${u}-${event.starts_at}-${event.venue_name}`)
     }
   }
 }
@@ -587,9 +606,9 @@ export function issueTicketQr(db: Db, userId: Uuid | null, ticketId: Uuid) {
   const token = `${t.id}.${Math.random().toString(36).slice(2, 12)}`
   db.qr_credentials.push({
     id: uid('qr'), ticket_id: t.id, token, token_hash: fakeHash(token),
-    // 24시간과 '공연 시작 + 6시간' 중 긴 쪽(최대 7일) — 서버와 같음
+    // 24시간과 '공연 끝 시각' 중 긴 쪽(최대 7일) — 서버와 같음
     expires_at: new Date(Math.max(Date.now() + 24 * 3600000,
-      Math.min(new Date(db.events.find((e) => e.id === t.event_id)!.starts_at).getTime() + EVENT_GRACE_MS, Date.now() + 7 * 86400000))).toISOString(),
+      Math.min(new Date(eventEnd(db.events.find((e) => e.id === t.event_id)!)).getTime(), Date.now() + 7 * 86400000))).toISOString(),
     revoked_at: null, created_at: now(),
   })
   return token
@@ -752,6 +771,62 @@ export function markDepositSent(db: Db, userId: Uuid | null, bookingId: Uuid) {
   }
 }
 
+// 일정 변경 확인: '유지'
+export function ackEventChange(db: Db, userId: Uuid | null, bookingId: Uuid) {
+  requireLogin(db, userId)
+  const b = db.bookings.find((x) => x.id === bookingId && x.user_id === userId)
+  if (!b) throw new BandyError('예매를 찾지 못했습니다.')
+  b.change_ack_at = now()
+  b.updated_at = now()
+}
+
+// 확정 예매의 취소·환불 요청: 공연 취소 또는 예매 뒤 일시·장소 변경일 때만(서버 request_refund와 같음)
+export function requestRefund(db: Db, userId: Uuid | null, bookingId: Uuid, refundAccount: string) {
+  requireLogin(db, userId)
+  const b = db.bookings.find((x) => x.id === bookingId)
+  if (!b || b.user_id !== userId) throw new BandyError('예매를 찾지 못했습니다.')
+  const e = db.events.find((x) => x.id === b.event_id)!
+  if (!(e.status === 'CANCELLED' || (e.schedule_changed_at && e.schedule_changed_at > b.created_at))) {
+    throw new BandyError('공연이 취소되거나 일정이 바뀐 경우에만 환불을 요청할 수 있어요. 그 밖에는 주최 동아리에 문의해 주세요.')
+  }
+  if (e.status !== 'CANCELLED' && isPastEvent(e)) throw new BandyError('공연이 이미 시작됐어요.')
+  const acct = refundAccount.trim()
+  if (b.total_amount_krw > 0 && (acct.length < 5 || acct.length > 60)) throw new BandyError('환불받을 계좌(은행 · 계좌번호 · 예금주)를 적어 주세요.')
+  if (b.status !== 'CONFIRMED') throw new BandyError('확정된 예매만 환불을 요청할 수 있어요. 입금 전이면 예매 취소를 눌러 주세요.')
+  const tickets = db.tickets.filter((x) => x.booking_id === b.id)
+  if (tickets.some((x) => x.status === 'CHECKED_IN')) throw new BandyError('이미 입장한 티켓이 있어 환불을 요청할 수 없어요.')
+  const item = db.booking_items.find((i) => i.booking_id === b.id)!
+  const tt = db.ticket_types.find((x) => x.id === item.ticket_type_id)!
+  Object.assign(b, { status: 'CANCELLED', cancelled_at: now(), updated_at: now() })
+  for (const tk of tickets) if (tk.status === 'ISSUED') Object.assign(tk, { status: 'CANCELLED', updated_at: now() })
+  for (const q of db.qr_credentials) if (tickets.some((tk) => tk.id === q.ticket_id) && !q.revoked_at) q.revoked_at = now()
+  tt.sold_quantity -= item.quantity
+  const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'SUCCEEDED')
+  if (pay) {
+    Object.assign(pay, {
+      status: b.total_amount_krw > 0 ? 'REFUND_PENDING' : 'REFUNDED', refund_account: acct, refund_requested_at: now(),
+      refunded_at: b.total_amount_krw > 0 ? null : now(), updated_at: now(),
+    })
+  }
+  if (b.total_amount_krw > 0) {
+    for (const m of clubManagers(db, e.club_id)) {
+      notify(db, m.user_id, e.id, 'REFUND_REQUESTED', `[${e.title}] 환불 요청이 왔어요. ${b.total_amount_krw}원을 보내고 환불 완료를 눌러 주세요.`, `refund-req-${b.id}-${m.user_id}`)
+    }
+  }
+}
+
+// 운영진의 '환불 완료'. 동아리가 정지돼도 환불 처리는 된다
+export function markRefunded(db: Db, userId: Uuid | null, bookingId: Uuid) {
+  requireActiveProfile(db, userId)
+  const b = db.bookings.find((x) => x.id === bookingId)
+  const e = b && db.events.find((x) => x.id === b.event_id)
+  if (!b || !e || !isClubManager(db, userId, e.club_id)) throw new BandyError('예매를 찾지 못했습니다.')
+  const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'REFUND_PENDING')
+  if (!pay) throw new BandyError('환불 대기 중인 예매가 아닙니다.')
+  Object.assign(pay, { status: 'REFUNDED', refunded_at: now(), updated_at: now() })
+  notify(db, b.user_id, e.id, 'REFUNDED', `[${e.title}] 환불이 완료됐어요. 계좌를 확인해 주세요.`, `refunded-${b.id}`)
+}
+
 // 앱을 열 때 받는 '홈 신호' (서버 my_home_state와 같은 규칙)
 export function homeState(db: Db, userId: Uuid | null): HomeState {
   if (!userId) return { signed_in: false }
@@ -760,7 +835,7 @@ export function homeState(db: Db, userId: Uuid | null): HomeState {
   const evOf = (id: Uuid) => db.events.find((e) => e.id === id)
   const mine = db.tickets.filter((x) => x.user_id === userId && x.status === 'ISSUED')
     .map((x) => ({ x, e: evOf(x.event_id) }))
-    .filter(({ e }) => e && e.status !== 'CANCELLED' && new Date(e.starts_at).getTime() >= t - EVENT_GRACE_MS && new Date(e.starts_at).getTime() <= t + 24 * H)
+    .filter(({ e }) => e && e.status !== 'CANCELLED' && !isEventOver(e) && new Date(e.starts_at).getTime() <= t + 24 * H)
     .sort((a, b) => a.e!.starts_at.localeCompare(b.e!.starts_at) || (a.x.entry_number ?? 0) - (b.x.entry_number ?? 0))
   const first = mine[0]
   const nextTicket = first ? {
@@ -769,7 +844,7 @@ export function homeState(db: Db, userId: Uuid | null): HomeState {
   } : null
   const staffEvents = db.events
     .filter((e) => e.status === 'PUBLISHED' && isClubManager(db, userId, e.club_id)
-      && new Date(e.starts_at).getTime() >= t - 6 * H && new Date(e.starts_at).getTime() <= t + 24 * H)
+      && !isEventOver(e) && new Date(e.starts_at).getTime() <= t + 24 * H)
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     .map((e) => ({
       event_id: e.id, title: e.title, starts_at: e.starts_at,
@@ -789,13 +864,31 @@ export function homeState(db: Db, userId: Uuid | null): HomeState {
         depositor_name: p?.depositor_name ?? '', depositor_notified_at: p?.depositor_notified_at ?? null,
       }
     })
-  const prompt = nextTicket && new Date(nextTicket.starts_at).getTime() <= t + 3 * H ? 'TICKET_NOW'
+  // 일정·장소가 바뀐 뒤 아직 '유지'를 고르지 않은 내 예매(공연 시작 전까지)
+  const changedBookings = db.bookings
+    .filter((b) => b.user_id === userId && (b.status === 'PENDING_PAYMENT' || b.status === 'CONFIRMED'))
+    .map((b) => ({ b, e: evOf(b.event_id) }))
+    .filter(({ b, e }) => e && e.status !== 'CANCELLED' && e.schedule_changed_at && e.schedule_changed_at > (b.change_ack_at ?? b.created_at)
+      && new Date(e.starts_at).getTime() > t)
+    .map(({ b, e }) => ({
+      booking_id: b.id, event_id: e!.id, title: e!.title, starts_at: e!.starts_at, ends_at: e!.ends_at, venue_name: e!.venue_name,
+      status: b.status as 'PENDING_PAYMENT' | 'CONFIRMED', schedule_changed_at: e!.schedule_changed_at!,
+    }))
+  const managedClubs = managerClubIds(db, userId)
+  const refundRequests = db.payments.filter((p) => p.status === 'REFUND_PENDING').map((p) => {
+    const b = db.bookings.find((x) => x.id === p.booking_id)!
+    const e = evOf(b.event_id)!
+    return { booking_id: b.id, event_id: e.id, club_id: e.club_id, title: e.title, total_amount_krw: b.total_amount_krw, refund_requested_at: p.refund_requested_at ?? '' }
+  }).filter((r) => managedClubs.includes(r.club_id))
+  const prompt = changedBookings.length > 0 ? 'EVENT_CHANGED'
+    : nextTicket && new Date(nextTicket.starts_at).getTime() <= t + 3 * H ? 'TICKET_NOW'
     : staffEvents.length > 0 ? 'STAFF_TODAY'
       : pendingPayments.some((p) => new Date(p.expires_at).getTime() <= t + 24 * H && !p.depositor_notified_at) ? 'PAYMENT_DUE'
         : null
   const managed = managerClubIds(db, userId)
   return {
     signed_in: true, now: new Date(t).toISOString(), prompt, next_ticket: nextTicket, staff_events: staffEvents, pending_payments: pendingPayments,
+    changed_bookings: changedBookings, refund_requests: refundRequests,
     unread_notifications: db.notifications.filter((n) => n.user_id === userId && !n.read_at).length,
     join_requests: db.club_memberships.filter((m) => m.status === 'PENDING' && managed.includes(m.club_id)).length,
     exchange_requests: db.exchange_requests.filter((r) => r.status === 'PENDING' && managed.includes(r.to_club_id)).length,
