@@ -14,13 +14,14 @@ import './bandy.css'
 const NO_TABS = [/^\/app\/e\//, /^\/app\/scan\//, /^\/app\/login/]
 
 function Shell() {
-  const { toast } = useBandy()
+  const { toast, loading } = useBandy()
   const { pathname } = useLocation()
   const tabs = !NO_TABS.some((r) => r.test(pathname))
   return (
     <div className="b-root">
       <div className={`b-phone${tabs ? ' with-tabs' : ''}`}>
         <main className="b-main">
+          {loading ? <p className="b-empty">불러오는 중…</p> : (
           <Routes>
             <Route index element={<HomePage />} />
             <Route path="events" element={<EventsPage />} />
@@ -38,6 +39,7 @@ function Shell() {
             <Route path="scan/:eventId" element={<ScanPage />} />
             <Route path="*" element={<Navigate to="/app" replace />} />
           </Routes>
+          )}
         </main>
         {tabs && <BottomBar />}
         {toast && <div className="b-toast" role="status">{toast}</div>}

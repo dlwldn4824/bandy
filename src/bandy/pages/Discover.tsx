@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
-import { bookingCount, feedEvents, managerClubIds, markNotificationRead, markNotificationsRead } from '../repo'
+import { bookingCount, feedEvents, managerClubIds } from '../repo'
 import { APP_NAME, Empty, EventItem, MapBox, NeedLogin, PageHeader, Thumb, within } from '../components'
 import { dayKey, distanceKm, shortDate } from '../format'
 import { EventCategory, EventRow } from '../types'
@@ -203,17 +203,17 @@ function CalendarView({ events }: { events: EventRow[] }) {
 
 // 구조도: 알림 목록 (userId)
 export function NotificationsPage() {
-  const { db, me, run } = useBandy()
+  const { db, me, call } = useBandy()
   if (!me) return <div className="b-page"><PageHeader back title="알림" /><NeedLogin what="알림" /></div>
   const notes = db.notifications.filter((n) => n.user_id === me.id).sort((a, b) => b.created_at.localeCompare(a.created_at))
   const unread = notes.filter((n) => !n.read_at).length
   return (
     <div className="b-page">
-      <PageHeader back title="알림" right={unread > 0 && <button type="button" className="b-link" onClick={() => run((d) => markNotificationsRead(d, me.id))}>모두 읽음</button>} />
+      <PageHeader back title="알림" right={unread > 0 && <button type="button" className="b-link" onClick={() => call((b) => b.markNotificationsRead())}>모두 읽음</button>} />
       {notes.map((n) => {
         const to = n.event_id ? `/app/e/${n.event_id}` : n.type.startsWith('EXCHANGE') ? '/app/clubs?tab=inbox' : '/app/my'
         return (
-          <Link key={n.id} to={to} className={`b-card b-pad b-notice${n.read_at ? '' : ' unread'}`} onClick={() => run((d) => markNotificationRead(d, me.id, n.id))}>
+          <Link key={n.id} to={to} className={`b-card b-pad b-notice${n.read_at ? '' : ' unread'}`} onClick={() => call((b) => b.markNotificationsRead(n.id))}>
             <p>{n.message}</p>
             <p className="b-sub">{shortDate(n.created_at)}</p>
           </Link>

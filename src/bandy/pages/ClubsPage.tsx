@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
-import {
-  canSeeOpenChat, cancelExchange, createClub, managerClubIds, publicClubs, publicEvents, requestExchange, respondExchange,
-} from '../repo'
+import { canSeeOpenChat, managerClubIds, publicClubs, publicEvents } from '../repo'
+import { Backend } from '../backend'
 import { Empty, EventItem, ImageInput, NeedLogin, PageHeader, Thumb } from '../components'
-import { Db, EXCHANGE_KIND_LABEL, ExchangeKind } from '../types'
+import { EXCHANGE_KIND_LABEL, ExchangeKind } from '../types'
 import { shortDate } from '../format'
 
 export function ClubsPage() {
@@ -65,7 +64,7 @@ function FindClubs() {
 }
 
 function Inbox() {
-  const { db, me, run, showToast } = useBandy()
+  const { db, me, call, showToast } = useBandy()
   const mine = managerClubIds(db, me!.id)
   if (mine.length === 0) {
     return (
@@ -80,8 +79,8 @@ function Inbox() {
   const sent = db.exchange_requests.filter((r) => mine.includes(r.from_club_id) && r.status === 'PENDING')
   const connected = db.exchange_requests.filter((r) => r.status === 'ACCEPTED' && (mine.includes(r.from_club_id) || mine.includes(r.to_club_id)))
 
-  const act = (fn: (d: Db) => void, ok: string) => {
-    const r = run(fn)
+  const act = async (fn: (b: Backend) => Promise<unknown>, ok: string) => {
+    const r = await call(fn)
     showToast(r.ok ? ok : r.error)
   }
 
@@ -93,8 +92,8 @@ function Inbox() {
           <div className="b-row between"><strong>{clubName(r.from_club_id)}</strong><span className="b-badge">{EXCHANGE_KIND_LABEL[r.kind]}</span></div>
           {r.message && <p className="b-body">“{r.message}”</p>}
           <div className="b-row">
-            <button type="button" className="b-btn small" onClick={() => act((d) => respondExchange(d, me!.id, r.id, true), '수락했어요. 서로 오픈채팅 링크가 보여요.')}>수락</button>
-            <button type="button" className="b-btn ghost small" onClick={() => act((d) => respondExchange(d, me!.id, r.id, false), '거절했어요.')}>거절</button>
+            <button type="button" className="b-btn small" onClick={() => act((b) => b.respondExchange(r.id, true), '수락했어요. 서로 오픈채팅 링크가 보여요.')}>수락</button>
+            <button type="button" className="b-btn ghost small" onClick={() => act((b) => b.respondExchange(r.id, false), '거절했어요.')}>거절</button>
           </div>
         </article>
       ))}
@@ -104,7 +103,7 @@ function Inbox() {
       {sent.map((r) => (
         <article key={r.id} className="b-card b-pad b-row between">
           <span><strong>{clubName(r.to_club_id)}</strong> <span className="b-sub">· {EXCHANGE_KIND_LABEL[r.kind]} · 응답 대기</span></span>
-          <button type="button" className="b-btn ghost small" onClick={() => act((d) => cancelExchange(d, me!.id, r.id), '신청을 취소했어요.')}>취소</button>
+          <button type="button" className="b-btn ghost small" onClick={() => act((b) => b.cancelExchange(r.id), '신청을 취소했어요.')}>취소</button>
         </article>
       ))}
       {sent.length === 0 && <Empty>보낸 신청이 없어요.</Empty>}
@@ -129,7 +128,7 @@ function Inbox() {
 
 export function ClubPage() {
   const { clubId = '' } = useParams()
-  const { db, me, run, showToast } = useBandy()
+  const { db, me, call, showToast } = useBandy()
   const mine = managerClubIds(db, me?.id ?? null).filter((id) => id !== clubId && db.clubs.find((c) => c.id === id)?.status === 'ACTIVE')
   const [from, setFrom] = useState(mine[0] ?? '')
   const [kind, setKind] = useState<ExchangeKind>('JOINT_SHOW')
@@ -143,8 +142,8 @@ export function ClubPage() {
   const showChat = canSeeOpenChat(db, me?.id ?? null, club.id)
   const pendingFromMe = db.exchange_requests.some((r) => r.to_club_id === club.id && mine.includes(r.from_club_id) && r.status === 'PENDING')
 
-  const send = () => {
-    const r = run((d) => requestExchange(d, me?.id ?? null, from || mine[0], club.id, kind, message))
+  const send = async () => {
+    const r = await call((b) => b.requestExchange(from || mine[0], club.id, kind, message))
     if (!r.ok) {
       setError(r.error)
       return
@@ -209,7 +208,7 @@ export function ClubPage() {
 }
 
 export function NewClubPage() {
-  const { me, run, showToast } = useBandy()
+  const { me, call, showToast } = useBandy()
   const navigate = useNavigate()
   const [f, setF] = useState({ name: '', school: '', genre: '밴드', region: '노원구', introduction: '', sns_url: '', open_chat_url: '', exchange_open: true })
   const [image, setImage] = useState<string | null>(null)
@@ -217,18 +216,14 @@ export function NewClubPage() {
   if (!me) return <div className="b-page"><NeedLogin what="동아리 등록" /></div>
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value })
 
-  const submit = () => {
-    const r = run((d) => {
-      const club = createClub(d, me.id, f)
-      club.profile_path = image
-      return club
-    })
+  const submit = async () => {
+    const r = await call((b) => b.createClub({ ...f, profile_path: image }))
     if (!r.ok) {
       setError(r.error)
       return
     }
     showToast('등록했어요. 운영자가 인스타그램을 확인하고 승인하면 공개돼요.')
-    navigate(`/app/manage/${r.value.id}`)
+    navigate(`/app/manage/${r.value}`)
   }
 
   return (

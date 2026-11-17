@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useBandy } from '../store'
-import { Booking } from '../types'
-import { createBooking, isEventStaff, publicEvents, remaining, ticketTypesOf } from '../repo'
+import { isEventStaff, publicEvents, remaining, ticketTypesOf } from '../repo'
 import { Empty, PageHeader, Thumb } from '../components'
 import { dateLabel, won } from '../format'
 
@@ -83,15 +82,18 @@ export function EventPage() {
 // 구조도: 예매 화면 (ticketTypeId · quantity) → 결제 → 예매 완료(bookingId 생성)
 // 결제는 11/1 결정대로 입금자명 + 주최 동아리의 입금 확인
 export function BookPage() {
-  const { db, me, run, showToast } = useBandy()
+  const { db, me, call, showToast } = useBandy()
   const navigate = useNavigate()
   const { event } = useVisibleEvent()
+  // 같은 화면에서 두 번 눌러도 예매가 하나만 생기도록 요청 키를 고정한다
+  const [requestKey] = useState(() => crypto.randomUUID())
+  const [busy, setBusy] = useState(false)
   const types = event ? ticketTypesOf(db, event.id) : []
   const [typeId, setTypeId] = useState(types[0]?.id ?? '')
   const [qty, setQty] = useState(1)
   const [depositor, setDepositor] = useState(me?.display_name ?? '')
   const [error, setError] = useState('')
-  const [done, setDone] = useState<Booking | null>(null)
+  const [doneId, setDoneId] = useState<string | null>(null)
 
   if (!event) return <div className="b-page"><PageHeader back title="예매" /><Empty>예매할 수 없는 공연이에요.</Empty></div>
   if (!me) return <div className="b-page"><PageHeader back title="예매" /><Empty>로그인이 필요해요. <Link to="/app/login">로그인</Link></Empty></div>
@@ -99,8 +101,10 @@ export function BookPage() {
   const selected = types.find((t) => t.id === typeId) ?? types[0]
   const free = selected?.price_krw === 0
 
-  const submit = () => {
-    const r = run((d) => createBooking(d, me.id, selected.id, qty, depositor))
+  const submit = async () => {
+    setBusy(true)
+    const r = await call((b) => b.createBooking(selected.id, qty, depositor, requestKey))
+    setBusy(false)
     if (!r.ok) { setError(r.error); return }
     setError('')
     if (free) {
@@ -108,7 +112,7 @@ export function BookPage() {
       navigate('/app/tickets')
       return
     }
-    setDone(r.value)
+    setDoneId(r.value)
   }
 
   const copy = async () => {
@@ -116,6 +120,7 @@ export function BookPage() {
     showToast('계좌번호를 복사했어요.')
   }
 
+  const done = doneId ? db.bookings.find((b) => b.id === doneId) : undefined
   if (done) {
     return (
       <div className="b-page with-dock">
@@ -167,7 +172,7 @@ export function BookPage() {
         {error && <p className="b-warn">{error}</p>}
       </section>
       <div className="b-dock">
-        <button type="button" className="b-btn" onClick={submit}>{free ? '신청하기' : '예매하기'}</button>
+        <button type="button" className="b-btn" onClick={submit} disabled={busy}>{free ? '신청하기' : '예매하기'}</button>
       </div>
     </div>
   )

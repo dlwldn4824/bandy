@@ -1,6 +1,9 @@
 # BANDY 프로토타입 (`/app`)
 
-기능 흐름을 확인하는 화면 프로토타입입니다. **DB는 아직 연결하지 않았습니다.** 데이터는 브라우저(localStorage)에만 저장됩니다.
+기능 흐름을 확인하는 화면 프로토타입입니다. 두 가지 모드로 돕니다.
+
+- **Supabase 모드:** `.env`에 `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`가 있으면 실제 Supabase DB 함수를 부릅니다. 로그인은 이메일(가입·로그인)과 카카오(Supabase 설정 후). 적용 방법은 `supabase/README.md`.
+- **데모 모드:** 환경변수가 없으면 브라우저(localStorage)에 저장하고, 시연 역할(관객 / 렉사 운영진 / 멜로딕 운영진 / 밴디 운영자)로 로그인합니다.
 
 ```bash
 npm run dev        # http://localhost:5173/app
@@ -39,15 +42,12 @@ npm run dev        # http://localhost:5173/app
 
 | 파일 | 역할 |
 |---|---|
-| `types.ts` | 노션 SQL 기준 13개 테이블과 같은 필드 이름. `[11/1 추가]`는 새 migration이 필요한 항목, `[확인 필요]`는 노션 캡처에서 못 본 상태값 |
-| `repo.ts` | 데이터 규칙. 함수 하나가 Supabase DB 함수(RPC) 하나에 대응 (예매, 입금 확인, QR 검증 · 입장, 공연 등록 · 수정 · 삭제, 교류 신청 · 응답, 동아리 등록 · 승인) |
-| `seed.ts` | 시연용 가상 데이터 |
-| `store.tsx` | 화면 상태, localStorage 저장 |
+| `backend.ts` | 화면이 부르는 기능 목록. `SupabaseBackend`(DB 함수 호출) / `LocalBackend`(데모) 두 구현 |
+| `repo.ts` | 데모 모드의 데이터 규칙. `supabase/migrations`의 DB 함수와 같은 규칙 |
+| `types.ts` | 노션 SQL 기준 테이블과 같은 필드 이름 |
+| `store.tsx` | 화면 상태. 기능을 부르고 끝나면 데이터를 다시 읽음 |
+| `seed.ts` | 데모 모드 시연 데이터 |
 | `pages/*` | 화면 |
-
-## Supabase로 바꿀 때
-
-`repo.ts`의 함수 본문을 `supabase.rpc(...)`와 `select`로 바꾸고, `store.tsx`의 `run`을 비동기로 바꿉니다. 이미지 업로드는 지금 브라우저에서 줄여 data URL로 저장하므로 Supabase Storage 업로드로 바꿔야 합니다.
 
 ## 임시로 정한 값 (팀 결정 필요)
 

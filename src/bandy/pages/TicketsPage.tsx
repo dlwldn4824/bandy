@@ -1,8 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { useBandy } from '../store'
-import { cancelBooking, qrOf } from '../repo'
 import { Empty, NeedLogin, PageHeader } from '../components'
 import { dateLabel, won } from '../format'
 import { Ticket } from '../types'
@@ -12,8 +11,21 @@ const LEGACY_SERVICE = '/performances' // 기존 서비스(공연 정보 · 셋�
 
 // 구조도: 내 티켓 = 입장 예정 → 이후 공연 → 사용 완료 / 티켓 선택 → 티켓 상세·QR (ticketId · qrToken · checkInStatus)
 export function TicketsPage() {
-  const { db, me, run, showToast } = useBandy()
+  const { db, me, call, showToast } = useBandy()
   const [open, setOpen] = useState<Ticket | null>(null)
+  const [qr, setQr] = useState<{ ticketId: string; token: string } | null>(null)
+  // 티켓을 열 때마다 QR을 새로 받는다(서버에는 해시만 저장, 이전 QR은 폐기)
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    call((b) => b.issueTicketQr(open.id)).then((r) => {
+      if (!alive) return
+      if (r.ok) setQr({ ticketId: open.id, token: r.value })
+      else showToast(r.error)
+    })
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open?.id])
   if (!me) return <div className="b-page"><PageHeader title="내 티켓" /><NeedLogin what="내 티켓" /></div>
 
   const eventOf = (id: string) => db.events.find((e) => e.id === id)!
@@ -25,8 +37,8 @@ export function TicketsPage() {
   const used = tickets.filter((t) => t.status === 'CHECKED_IN')
   const pending = db.bookings.filter((b) => b.user_id === me.id && b.status === 'PENDING_PAYMENT')
 
-  const cancel = (bookingId: string) => {
-    const r = run((d) => cancelBooking(d, me.id, bookingId))
+  const cancel = async (bookingId: string) => {
+    const r = await call((b) => b.cancelBooking(bookingId))
     showToast(r.ok ? '예매를 취소했어요.' : r.error)
   }
 
@@ -91,7 +103,7 @@ export function TicketsPage() {
 
       {open && (() => {
         const ev = eventOf(open.event_id)
-        const qr = qrOf(db, open.id)
+        const token = qr?.ticketId === open.id ? qr.token : null
         const live = db.tickets.find((t) => t.id === open.id)
         return (
           <div className="b-modal" onClick={() => setOpen(null)}>
@@ -101,8 +113,8 @@ export function TicketsPage() {
               <p><b>입장번호 {open.entry_number}번</b></p>
               {live?.status === 'CHECKED_IN'
                 ? <p className="b-status ok">입장 완료</p>
-                : qr && <div className="b-qr"><QRCodeSVG value={qr.token} size={200} level="M" /></div>}
-              <p className="b-note">현장에서 운영진에게 이 QR을 보여 주세요.<br />코드: <code>{qr?.token}</code></p>
+                : token ? <div className="b-qr"><QRCodeSVG value={token} size={200} level="M" /></div> : <p className="b-sub">QR을 불러오는 중…</p>}
+              <p className="b-note">현장에서 운영진에게 이 QR을 보여 주세요.<br />코드: <code>{token}</code></p>
               <Link className="b-link" to={`/app/e/${ev.id}`}>공연 정보 확인</Link>
               <button type="button" className="b-btn ghost" onClick={() => setOpen(null)}>닫기</button>
             </div>

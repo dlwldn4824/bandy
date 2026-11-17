@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
-import {
-  cancelBooking, confirmDeposit, createEvent, deleteEvent, isClubManager, setEventStatus, updateClub, updateEvent,
-} from '../repo'
+import { isClubManager } from '../repo'
+import { Backend } from '../backend'
 import { Empty, ImageInput, PageHeader } from '../components'
 import { dateLabel, won } from '../format'
 import { EventCategory, EventRow } from '../types'
@@ -55,7 +54,7 @@ export function ManagePage() {
 }
 
 function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () => void }) {
-  const { db, me, run, showToast } = useBandy()
+  const { db, call, showToast } = useBandy()
   const [mode, setMode] = useState<'bookings' | 'edit'>('bookings')
   const [filter, setFilter] = useState<'pending' | 'all'>('pending')
   const event = db.events.find((e) => e.id === eventId)!
@@ -64,8 +63,8 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
   const pending = bookings.filter((b) => b.status === 'PENDING_PAYMENT')
   const nameOf = (uid: string) => db.profiles.find((p) => p.id === uid)?.display_name ?? '-'
 
-  const act = (fn: Parameters<typeof run>[0], ok: string) => {
-    const r = run(fn)
+  const act = async (fn: (b: Backend) => Promise<unknown>, ok: string) => {
+    const r = await call(fn)
     showToast(r.ok ? ok : r.error)
     return r.ok
   }
@@ -81,11 +80,11 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
         <p className="b-sub">입금 대기 {pending.length}건 · 발급 티켓 {tickets.length}장 · 입장 {tickets.filter((t) => t.status === 'CHECKED_IN').length}장</p>
         <div className="b-row">
           <Link className="b-btn small" to={`/app/scan/${event.id}`}>입장 관리 (QR)</Link>
-          <button type="button" className="b-btn ghost small" onClick={() => act((d) => setEventStatus(d, me!.id, event.id, event.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED'), event.status === 'PUBLISHED' ? '비공개로 돌렸어요.' : '공개했어요.')}>
+          <button type="button" className="b-btn ghost small" onClick={() => act((b) => b.setEventStatus(event.id, event.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED'), event.status === 'PUBLISHED' ? '비공개로 돌렸어요.' : '공개했어요.')}>
             {event.status === 'PUBLISHED' ? '비공개' : '공개'}
           </button>
           <button type="button" className="b-btn ghost small" onClick={() => setMode(mode === 'edit' ? 'bookings' : 'edit')}>{mode === 'edit' ? '수정 닫기' : '수정'}</button>
-          <button type="button" className="b-btn ghost small" onClick={() => { if (window.confirm('이 공연을 삭제할까요?') && act((d) => deleteEvent(d, me!.id, event.id), '삭제했어요.')) onDeleted() }}>삭제</button>
+          <button type="button" className="b-btn ghost small" onClick={async () => { if (window.confirm('이 공연을 삭제할까요?') && await act((b) => b.deleteEvent(event.id), '삭제했어요.')) onDeleted() }}>삭제</button>
           <Link className="b-link" to={`/app/e/${event.id}`}>공연 페이지</Link>
         </div>
       </section>
@@ -109,8 +108,8 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
                     <div className="b-row between"><strong>입금자명 {pay.depositor_name}</strong><span className="b-status wait">입금 대기</span></div>
                     <p className="b-sub">{nameOf(b.user_id)} · {item.ticket_type_name} {item.quantity}매 · {won(b.total_amount_krw)}</p>
                     <div className="b-row">
-                      <button type="button" className="b-btn small" onClick={() => act((d) => confirmDeposit(d, me!.id, b.id), '입금 확인했어요. 티켓이 발급됐어요.')}>입금 확인</button>
-                      <button type="button" className="b-btn ghost small" onClick={() => act((d) => cancelBooking(d, me!.id, b.id), '예매를 취소했어요.')}>취소</button>
+                      <button type="button" className="b-btn small" onClick={() => act((x) => x.confirmDeposit(b.id), '입금 확인했어요. 티켓이 발급됐어요.')}>입금 확인</button>
+                      <button type="button" className="b-btn ghost small" onClick={() => act((x) => x.cancelBooking(b.id), '예매를 취소했어요.')}>취소</button>
                     </div>
                   </article>
                 )
@@ -152,7 +151,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
 
 // 구조도: 공연 정보 입력 = eventName · description · eventDate · location · ticketInfo · posterImage
 function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow; onDone: (id: string) => void }) {
-  const { db, me, run, showToast } = useBandy()
+  const { db, call, showToast } = useBandy()
   const tt = event ? db.ticket_types.find((t) => t.event_id === event.id) : undefined
   const toLocal = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600000).toISOString().slice(0, 16)
   const [f, setF] = useState({
@@ -165,14 +164,14 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
   const [error, setError] = useState('')
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value })
 
-  const save = (publish: boolean) => {
+  const save = async (publish: boolean) => {
     const input = {
       ...f, starts_at: f.starts_at ? `${f.starts_at}:00+09:00` : '', price_krw: Number(f.price_krw), capacity: Number(f.capacity),
       poster_path: poster, publish,
     }
-    const r = run((d) => {
-      if (event) { updateEvent(d, me!.id, event.id, input); return event.id }
-      return createEvent(d, me!.id, clubId, input).id
+    const r = await call(async (b) => {
+      if (event) { await b.updateEvent(event.id, input); return event.id }
+      return b.createEvent(clubId, input)
     })
     if (!r.ok) { setError(r.error); return }
     showToast(event ? '수정했어요.' : publish ? '공개했어요.' : '초안으로 저장했어요.')
@@ -218,7 +217,7 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
 
 // 구조도: 동아리 정보 입력 = clubName · introduction · profileImage · snsLink (+ 11/1: 학교 · 장르 · 지역 · 교류 열림)
 function ClubForm({ clubId }: { clubId: string }) {
-  const { db, me, run, showToast } = useBandy()
+  const { db, call, showToast } = useBandy()
   const navigate = useNavigate()
   const club = db.clubs.find((c) => c.id === clubId)!
   const [f, setF] = useState({
@@ -228,8 +227,8 @@ function ClubForm({ clubId }: { clubId: string }) {
   const [image, setImage] = useState<string | null>(club.profile_path)
   const [error, setError] = useState('')
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value })
-  const save = () => {
-    const r = run((d) => updateClub(d, me!.id, clubId, { ...f, sns_url: f.sns_url.trim() || null, profile_path: image }))
+  const save = async () => {
+    const r = await call((b) => b.updateClub(clubId, { ...f, sns_url: f.sns_url.trim() || null, profile_path: image }))
     if (!r.ok) { setError(r.error); return }
     setError('')
     showToast('동아리 정보를 저장했어요.')

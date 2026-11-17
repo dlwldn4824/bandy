@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useBandy } from '../store'
-import { managerClubIds, setClubStatus, updateProfile } from '../repo'
+import { managerClubIds } from '../repo'
 import { PERSONAS } from '../seed'
 import { Empty, PageHeader, Thumb } from '../components'
 import { dateLabel, won } from '../format'
@@ -12,27 +12,60 @@ const PERSONA_TYPE: Record<string, 'personal' | 'club'> = {
 }
 
 export function LoginPage() {
-  const { login, showToast } = useBandy()
+  const { backend, call, showToast } = useBandy()
   const navigate = useNavigate()
   const [type, setType] = useState<'personal' | 'club'>('personal')
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
+  const [error, setError] = useState('')
+
+  if (backend.mode === 'local') {
+    return (
+      <div className="b-page">
+        <PageHeader back title="로그인" />
+        <p className="b-sub">회원 유형을 선택하고 로그인하세요.</p>
+        <div className="b-seg">
+          <button type="button" className={type === 'personal' ? 'on' : ''} onClick={() => setType('personal')}>개인 회원</button>
+          <button type="button" className={type === 'club' ? 'on' : ''} onClick={() => setType('club')}>동아리 회원</button>
+        </div>
+        <div className="b-stack">
+          {PERSONAS.filter((p) => PERSONA_TYPE[p.id] === type).map((p) => (
+            <button key={p.id} type="button" className="b-option" onClick={async () => { await call((b) => b.signInPersona(p.id)); showToast(`${p.label}(으)로 들어왔어요.`); navigate('/app') }}>
+              <strong>{p.label}</strong>
+              <span className="b-sub">{p.hint}</span>
+            </button>
+          ))}
+        </div>
+        <p className="b-note">데모 모드(Supabase 미연결)라 시연 역할로 들어갑니다.</p>
+        <Link className="b-link" to="/app/clubs/new">동아리 등록하기</Link>
+      </div>
+    )
+  }
+
+  // Supabase: 이메일 로그인 · 가입, 카카오(Supabase Auth 제공자 설정 후)
+  const submit = async () => {
+    const r = await call((b) => (mode === 'login' ? b.signInEmail(email, password) : b.signUpEmail(email, password, name)))
+    if (!r.ok) { setError(r.error); return }
+    showToast(mode === 'login' ? '로그인했어요.' : '가입했어요. 메일 인증이 켜져 있으면 메일을 확인해 주세요.')
+    navigate('/app')
+  }
   return (
     <div className="b-page">
-      <PageHeader back title="로그인" />
-      <p className="b-sub">회원 유형을 선택하고 로그인하세요.</p>
-      <div className="b-seg">
-        <button type="button" className={type === 'personal' ? 'on' : ''} onClick={() => setType('personal')}>개인 회원</button>
-        <button type="button" className={type === 'club' ? 'on' : ''} onClick={() => setType('club')}>동아리 회원</button>
-      </div>
-      <div className="b-stack">
-        {PERSONAS.filter((p) => PERSONA_TYPE[p.id] === type).map((p) => (
-          <button key={p.id} type="button" className="b-option" onClick={() => { login(p.id); showToast(`${p.label}(으)로 들어왔어요.`); navigate('/app') }}>
-            <strong>{p.label}</strong>
-            <span className="b-sub">{p.hint}</span>
-          </button>
-        ))}
-      </div>
-      <p className="b-note">프로토타입이라 실제 로그인 대신 시연 역할로 들어갑니다. 로그인 방식은 Supabase 연결 때 정합니다.</p>
-      <Link className="b-link" to="/app/clubs/new">동아리 등록하기</Link>
+      <PageHeader back title={mode === 'login' ? '로그인' : '회원가입'} />
+      <p className="b-sub">개인 · 동아리 회원 모두 같은 계정을 씁니다. 동아리 회원은 로그인 후 동아리를 등록하거나 운영진으로 추가돼요.</p>
+      <form className="b-stack" onSubmit={(e) => { e.preventDefault(); submit() }}>
+        {mode === 'signup' && <label className="b-field"><span>이름</span><input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" /></label>}
+        <label className="b-field"><span>이메일</span><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
+        <label className="b-field"><span>비밀번호</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
+        {error && <p className="b-warn">{error}</p>}
+        <button type="submit" className="b-btn">{mode === 'login' ? '로그인' : '가입하기'}</button>
+      </form>
+      <button type="button" className="b-btn ghost" onClick={async () => { const r = await call((b) => b.signInKakao()); if (!r.ok) setError(r.error) }}>카카오로 로그인</button>
+      <button type="button" className="b-link" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError('') }}>
+        {mode === 'login' ? '계정이 없나요? 회원가입' : '이미 계정이 있나요? 로그인'}
+      </button>
     </div>
   )
 }
@@ -49,7 +82,9 @@ function readSettings(): NotifySettings {
 
 // 구조도 마이페이지: 개인 = 프로필 · 예매 내역 · 알림 설정 · 계정 설정 / 동아리 = 동아리 프로필 · 등록 공연 · 공연 관리 · 예매자 관리 · 계정 설정
 export function MyPage() {
-  const { db, me, run, logout, reset, showToast } = useBandy()
+  const { backend, db, me, call, showToast } = useBandy()
+  const logout = () => call((b) => b.signOut())
+  const reset = async () => { const r = await call((b) => b.reset()); showToast(r.ok ? '시연 데이터를 처음으로 되돌렸어요.' : r.error) }
   const [name, setName] = useState(me?.display_name ?? '')
   const [settings, setSettings] = useState<NotifySettings>(readSettings)
 
@@ -61,7 +96,7 @@ export function MyPage() {
           <p className="b-sub">로그인하면 예매 내역과 동아리 관리를 볼 수 있어요.</p>
           <Link to="/app/login" className="b-btn">로그인</Link>
         </div>
-        <button type="button" className="b-reset" onClick={() => { reset(); showToast('시연 데이터를 처음으로 되돌렸어요.') }}>시연 데이터 처음으로 되돌리기</button>
+        {backend.mode === 'local' && <button type="button" className="b-reset" onClick={reset}>시연 데이터 처음으로 되돌리기</button>}
       </div>
     )
   }
@@ -83,7 +118,7 @@ export function MyPage() {
           <strong>{me.display_name}</strong>
           <span className="b-sub">{clubs.length ? '동아리 회원' : '개인 회원'}{me.is_admin ? ' · 밴디 운영자' : ''}</span>
         </span>
-        <Link to="/app/login" className="b-text-btn">역할 바꾸기</Link>
+        {backend.mode === 'local' && <Link to="/app/login" className="b-text-btn">역할 바꾸기</Link>}
       </section>
 
       {me.is_admin && (
@@ -95,8 +130,8 @@ export function MyPage() {
               <p className="b-sub">{c.school} · {c.genre} · {c.region}</p>
               {c.sns_url && <a className="b-link" href={c.sns_url} target="_blank" rel="noreferrer">SNS에서 확인</a>}
               <div className="b-row">
-                <button type="button" className="b-btn small" onClick={() => { const r = run((d) => setClubStatus(d, me.id, c.id, 'ACTIVE')); showToast(r.ok ? '승인했어요.' : r.error) }}>승인</button>
-                <button type="button" className="b-btn ghost small" onClick={() => { const r = run((d) => setClubStatus(d, me.id, c.id, 'REJECTED')); showToast(r.ok ? '거절했어요.' : r.error) }}>거절</button>
+                <button type="button" className="b-btn small" onClick={async () => { const r = await call((b) => b.setClubStatus(c.id, 'ACTIVE')); showToast(r.ok ? '승인했어요.' : r.error) }}>승인</button>
+                <button type="button" className="b-btn ghost small" onClick={async () => { const r = await call((b) => b.setClubStatus(c.id, 'REJECTED')); showToast(r.ok ? '거절했어요.' : r.error) }}>거절</button>
               </div>
             </article>
           ))}
@@ -152,14 +187,14 @@ export function MyPage() {
           <span>표시 이름</span>
           <span className="b-row">
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} />
-            <button type="button" className="b-btn small" disabled={name.trim() === me.display_name} onClick={() => { const r = run((d) => updateProfile(d, me.id, name)); showToast(r.ok ? '저장했어요.' : r.error) }}>저장</button>
+            <button type="button" className="b-btn small" disabled={name.trim() === me.display_name} onClick={async () => { const r = await call((b) => b.updateProfile(name)); showToast(r.ok ? '저장했어요.' : r.error) }}>저장</button>
           </span>
         </label>
         <button type="button" className="b-btn ghost" onClick={logout}>로그아웃</button>
       </section>
 
       {clubs.length === 0 && <Link to="/app/clubs/new" className="b-btn ghost">동아리 등록하기</Link>}
-      <button type="button" className="b-reset" onClick={() => { reset(); showToast('시연 데이터를 처음으로 되돌렸어요.') }}>시연 데이터 처음으로 되돌리기</button>
+      {backend.mode === 'local' && <button type="button" className="b-reset" onClick={reset}>시연 데이터 처음으로 되돌리기</button>}
     </div>
   )
 }
