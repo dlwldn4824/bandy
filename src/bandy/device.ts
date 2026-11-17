@@ -7,7 +7,7 @@ type DeviceInfo = {
   lastPersona?: string // 데모: 마지막 시연 역할
   depositorName?: string // 마지막 입금자명(다음 예매 때 미리 채움)
   dismissed?: Record<string, number> // 홈 신호 창을 닫은 기록(같은 창을 계속 띄우지 않기 위해)
-  qr?: Record<string, { token: string; at: number }> // 티켓별 마지막 QR(전파가 약한 공연장에서 다시 열 때 사용)
+  qr?: Record<string, { token: string; at: number; until?: number }> // 티켓별 마지막 QR(전파가 약한 공연장에서 다시 열 때 사용)
 }
 
 function read(): DeviceInfo {
@@ -32,15 +32,18 @@ export const device = {
     const fresh = Object.fromEntries(Object.entries(d).filter(([, at]) => Date.now() - at < 7 * 86400000))
     write({ dismissed: { ...fresh, [key]: Date.now() } })
   },
-  // QR은 서버 기준 24시간 유효. 저장해 둔 것도 24시간 안의 것만 쓴다
-  saveQr(ticketId: string, token: string) {
+  // QR 유효시간은 서버 기준 '24시간'과 '공연 시작 + 6시간' 중 긴 쪽(최대 7일). 저장해 둔 것도 그 안에서만 쓴다(1시간 여유를 둠)
+  saveQr(ticketId: string, token: string, eventStartsAt?: string) {
+    const now = Date.now()
+    const start = eventStartsAt ? new Date(eventStartsAt).getTime() : 0
+    const until = Math.max(now + 24 * 3600000, Math.min(start + 6 * 3600000, now + 7 * 86400000)) - 3600000
     const q = read().qr ?? {}
-    const fresh = Object.fromEntries(Object.entries(q).filter(([, v]) => Date.now() - v.at < 24 * 3600000))
-    write({ qr: { ...fresh, [ticketId]: { token, at: Date.now() } } })
+    const fresh = Object.fromEntries(Object.entries(q).filter(([, v]) => (v.until ?? v.at + 23 * 3600000) > now))
+    write({ qr: { ...fresh, [ticketId]: { token, at: now, until } } })
   },
   cachedQr(ticketId: string) {
     const v = read().qr?.[ticketId]
-    return v && Date.now() - v.at < 23 * 3600000 ? v.token : null
+    return v && (v.until ?? v.at + 23 * 3600000) > Date.now() ? v.token : null
   },
   // 로그아웃할 때 이 기기에 남긴 개인 정보(QR·입금자명)를 지운다. 마지막 이메일은 남긴다(다음 로그인 편의)
   clearPersonal() {

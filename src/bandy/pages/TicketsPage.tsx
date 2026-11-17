@@ -5,7 +5,7 @@ import { useBandy } from '../store'
 import { Empty, NeedLogin, PageHeader } from '../components'
 import { dateLabel, won } from '../format'
 import { EventRow, Ticket } from '../types'
-import { isOverdue, isPastEvent } from '../repo'
+import { isEventOver, isOverdue } from '../repo'
 import { useWakeLock } from '../convenience'
 import { device } from '../device'
 
@@ -41,7 +41,7 @@ export function TicketsPage() {
     let alive = true
     call((b) => b.issueTicketQr(open.id), { reload: false }).then((r) => {
       if (!alive) return
-      if (r.ok) { setQr({ ticketId: open.id, token: r.value }); device.saveQr(open.id, r.value); return }
+      if (r.ok) { setQr({ ticketId: open.id, token: r.value }); device.saveQr(open.id, r.value, eventOf(open.event_id).starts_at); return }
       const cached = device.cachedQr(open.id)
       if (cached && /연결하지 못했|인터넷/.test(r.error)) setQr({ ticketId: open.id, token: cached, offline: true })
       else showToast(r.error)
@@ -54,8 +54,8 @@ export function TicketsPage() {
   const eventOf = (id: string) => db.events.find((e) => e.id === id) ?? { ...UNKNOWN_EVENT, id }
   const tickets = db.tickets.filter((t) => t.user_id === me.id && t.status !== 'CANCELLED')
     .sort((a, b) => eventOf(a.event_id).starts_at.localeCompare(eventOf(b.event_id).starts_at) || a.issue_sequence - b.issue_sequence)
-  // 취소된 공연·이미 지난 공연의 미사용 티켓은 '지난·취소'로 따로 모은다
-  const closed = (t: Ticket) => { const ev = eventOf(t.event_id); return ev.status === 'CANCELLED' || isPastEvent(ev) }
+  // 취소된 공연·끝난 공연(시작 + 6시간)의 미사용 티켓은 '지난·취소'로 따로 모은다. 공연 중에 늦게 와도 QR을 열 수 있다
+  const closed = (t: Ticket) => { const ev = eventOf(t.event_id); return ev.status === 'CANCELLED' || isEventOver(ev) }
   const issued = tickets.filter((t) => t.status === 'ISSUED' && !closed(t))
   const soon = issued.filter((t) => new Date(eventOf(t.event_id).starts_at).getTime() - Date.now() < IMMINENT_MS)
   const later = issued.filter((t) => !soon.includes(t))
@@ -98,7 +98,7 @@ export function TicketsPage() {
             const ev = eventOf(b.event_id)
             const item = db.booking_items.find((i) => i.booking_id === b.id)
             const pay = db.payments.find((p) => p.booking_id === b.id)
-            const overdue = isOverdue(b)
+            const overdue = isOverdue(b, db)
             return (
               <article key={b.id} className="b-card b-pad b-stack">
                 <div className="b-row between"><strong>{ev.title}</strong><span className="b-status wait">{overdue ? '기한 지남' : '입금 대기'}</span></div>

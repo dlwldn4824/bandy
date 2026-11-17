@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useBandy } from '../store'
 import { loginHref } from '../convenience'
 import { device } from '../device'
-import { hasBookingFor, isEventStaff, isPastEvent, publicEvents, remaining, ticketTypesOf, uid } from '../repo'
+import { hasBookingFor, isEventOver, isEventStaff, isPastEvent, publicEvents, remaining, ticketTypesOf, uid } from '../repo'
 import { Empty, PageHeader, Thumb } from '../components'
 import { dateLabel, won } from '../format'
 
@@ -53,7 +53,7 @@ export function EventPage() {
           <span className="b-status">{event.category}</span>
           {event.status === 'CANCELLED' && <span className="b-status wait">취소된 공연</span>}
           {event.status === 'DRAFT' && <span className="b-status wait">{staff ? '초안 · 운영진만 보임' : '비공개로 바뀐 공연'}</span>}
-          {event.status === 'PUBLISHED' && isPastEvent(event) && <span className="b-status">지난 공연</span>}
+          {event.status === 'PUBLISHED' && isPastEvent(event) && <span className="b-status">{isEventOver(event) ? '지난 공연' : '진행 중'}</span>}
         </span>
         <h1>{event.title}</h1>
         <dl className="b-info">

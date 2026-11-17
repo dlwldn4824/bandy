@@ -121,7 +121,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
               {pending.map((b) => {
                 const item = db.booking_items.find((i) => i.booking_id === b.id)
                 const pay = db.payments.find((p) => p.booking_id === b.id)
-                const overdue = isOverdue(b)
+                const overdue = isOverdue(b, db)
                 return (
                   <article key={b.id} className="b-card b-pad b-stack">
                     <div className="b-row between"><strong>입금자명 {pay?.depositor_name}</strong><span className="b-status wait">{overdue ? '기한 지남' : pay?.depositor_notified_at ? '입금했다고 알림' : '입금 대기'}</span></div>
@@ -161,7 +161,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
                     <td>-</td>
                     <td>{nameOf(b.user_id)}</td>
                     <td>{db.booking_items.find((i) => i.booking_id === b.id)?.ticket_type_name}</td>
-                    <td><span className="b-status wait">{isOverdue(b) ? '기한 지남' : '입금 대기'}</span></td>
+                    <td><span className="b-status wait">{isOverdue(b, db) ? '기한 지남' : '입금 대기'}</span></td>
                     <td>-</td>
                   </tr>
                 ))}

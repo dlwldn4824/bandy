@@ -476,6 +476,8 @@ begin
     select b.id, b.user_id, b.event_id, i.quantity, e.title from public.bookings b
     join public.booking_items i on i.booking_id = b.id join public.events e on e.id = b.event_id
     where i.ticket_type_id = p_ticket_type and b.status = 'PENDING_PAYMENT' and b.expires_at <= now()
+      -- 기한 안에 '입금했어요'를 누른 예매는 돈이 오갔을 수 있으니 자동 만료하지 않고 운영진의 확인·취소를 기다린다
+      and not exists (select 1 from public.payments p where p.booking_id = b.id and p.depositor_notified_at is not null)
     for update of b
   loop
     update public.bookings set status = 'EXPIRED', updated_at = now() where id = r.id;
@@ -662,6 +664,19 @@ begin
     updated_at = now()
   where id = p_event_id;
   update public.ticket_types set price_krw = v_price, capacity = v_capacity, sales_ends_at = v_starts, updated_at = now() where id = v_tt.id;
+  if v_starts is distinct from v_event.starts_at or v_venue is distinct from v_event.venue_name then
+    -- 공연을 앞당기면 입금 기한도 새 시작 시각을 넘지 않게(예매 시각보다는 뒤)
+    update public.bookings set expires_at = greatest(least(expires_at, v_starts), created_at + interval '1 minute'), updated_at = now()
+    where event_id = p_event_id and status = 'PENDING_PAYMENT' and expires_at > v_starts;
+    -- 예매자에게 일정·장소 변경 알림(같은 변경은 한 번만)
+    perform public._notify(b.user_id, p_event_id, 'EVENT_CHANGED',
+      '[' || btrim(coalesce(p_input ->> 'title', v_event.title)) || '] 공연 ' ||
+      case when v_starts is distinct from v_event.starts_at then '일시가 ' || to_char(v_starts at time zone 'Asia/Seoul', 'MM.DD HH24:MI') || '(으)로' else '' end ||
+      case when v_starts is distinct from v_event.starts_at and v_venue is distinct from v_event.venue_name then ', ' else '' end ||
+      case when v_venue is distinct from v_event.venue_name then '장소가 ' || v_venue || '(으)로' else '' end || ' 바뀌었어요.',
+      'event-changed-' || p_event_id || '-' || b.user_id || '-' || md5(coalesce(v_starts::text, '') || v_venue))
+    from (select distinct user_id from public.bookings where event_id = p_event_id and status in ('PENDING_PAYMENT', 'CONFIRMED')) b;
+  end if;
   perform public._audit(p_event_id, 'UPDATE', 'event', p_event_id);
 end;
 $$;
@@ -839,6 +854,13 @@ begin
   update public.bookings set status = 'CANCELLED', cancelled_at = now(), updated_at = now() where id = p_booking_id;
   update public.payments set status = 'FAILED', failure_code = 'CANCELLED_BEFORE_DEPOSIT', updated_at = now() where booking_id = p_booking_id and status = 'PENDING';
   update public.ticket_types set reserved_quantity = reserved_quantity - v_i.quantity, updated_at = now() where id = v_i.ticket_type_id;
+  if not v_by_host and exists (select 1 from public.payments where booking_id = p_booking_id and depositor_notified_at is not null) then
+    select title into v_title from public.events where id = v_b.event_id;
+    perform public._notify(m.user_id, v_b.event_id, 'BOOKING_CANCELLED_AFTER_DEPOSIT',
+      '[' || v_title || '] 입금했다고 알린 예매가 취소됐어요. 입금 내역을 확인하고 환불해 주세요.', 'cancel-after-deposit-' || p_booking_id || '-' || m.user_id)
+    from public.club_memberships m join public.events e on e.club_id = m.club_id
+    where e.id = v_b.event_id and m.status = 'ACTIVE' and m.role in ('OWNER', 'MANAGER');
+  end if;
   if v_by_host then
     select title into v_title from public.events where id = v_b.event_id;
     perform public._notify(v_b.user_id, v_b.event_id, 'BOOKING_CANCELLED', v_title || ' 예매가 주최 동아리에 의해 취소됐어요.', 'booking-cancelled-' || p_booking_id);
@@ -860,7 +882,9 @@ begin
   end if;
   update public.qr_credentials set revoked_at = now() where ticket_id = p_ticket_id and revoked_at is null;
   insert into public.qr_credentials (ticket_id, token_hash, expires_at)
-  values (p_ticket_id, encode(extensions.digest(v_token, 'sha256'), 'hex'), now() + interval '24 hours');
+  -- 유효시간: 24시간과 '공연 시작 + 6시간' 중 긴 쪽(최대 7일). 전날 받아 둔 QR도 공연장에서 쓸 수 있게
+  values (p_ticket_id, encode(extensions.digest(v_token, 'sha256'), 'hex'),
+          greatest(now() + interval '24 hours', least((select starts_at from public.events where id = v_t.event_id) + interval '6 hours', now() + interval '7 days')));
   return v_token;
 end;
 $$;
@@ -1000,7 +1024,9 @@ language plpgsql security definer set search_path = '' as $$
 declare r record; n integer := 0;
 begin
   for r in select distinct i.ticket_type_id from public.bookings b join public.booking_items i on i.booking_id = b.id
-           where b.status = 'PENDING_PAYMENT' and b.expires_at <= now() order by 1 loop
+           where b.status = 'PENDING_PAYMENT' and b.expires_at <= now()
+             and not exists (select 1 from public.payments p where p.booking_id = b.id and p.depositor_notified_at is not null)
+           order by 1 loop
     perform 1 from public.ticket_types where id = r.ticket_type_id for update;
     perform public._expire_bookings(r.ticket_type_id);
     n := n + 1;
@@ -1112,7 +1138,7 @@ end;
 $$;
 
 -- 앱을 열 때 한 번 부르는 '홈 신호'. 화면은 prompt를 보고 바로 띄울 창을 정한다.
---   TICKET_NOW  : 3시간 안에 시작(또는 진행 중)하는 공연의 미사용 티켓 → 티켓 QR 바로 열기
+--   TICKET_NOW  : 3시간 안에 시작하거나 진행 중(시작 + 6시간까지)인 공연의 미사용 티켓 → 티켓 QR 바로 열기
 --   STAFF_TODAY : 내가 운영하는 공연이 24시간 안에 있음 → 입장 관리 바로 가기
 --   PAYMENT_DUE : 입금 기한이 24시간 안에 끝나는 입금 대기 예매 → 계좌 안내
 -- 그 밖에 배지·배너용 숫자(안 읽은 알림, 입금 대기, 가입 신청, 받은 교류 신청)를 함께 준다. 비로그인이면 {"signed_in": false}
@@ -1126,13 +1152,14 @@ begin
            (select count(*) from public.tickets t2 where t2.event_id = e.id and t2.user_id = v_uid and t2.status = 'ISSUED') as ticket_count
     from public.tickets t join public.events e on e.id = t.event_id
     where t.user_id = v_uid and t.status = 'ISSUED' and e.status in ('PUBLISHED', 'DRAFT', 'ENDED')
-      and e.starts_at between now() - interval '3 hours' and now() + interval '24 hours'
+      and e.starts_at between now() - interval '6 hours' and now() + interval '24 hours'  -- 공연 중(시작 + 6시간)까지
     order by e.starts_at, t.entry_number limit 1) x;
   select coalesce(jsonb_agg(to_jsonb(x) order by x.starts_at), '[]'::jsonb) into v_staff from (
     select e.id as event_id, e.title, e.starts_at,
            (select count(*) from public.tickets t where t.event_id = e.id and t.status = 'CHECKED_IN') as checked_in,
            (select count(*) from public.tickets t where t.event_id = e.id and t.status <> 'CANCELLED') as issued,
-           (select count(*) from public.bookings b where b.event_id = e.id and b.status = 'PENDING_PAYMENT' and b.expires_at > now()) as pending_deposits
+           (select count(*) from public.bookings b join public.payments p on p.booking_id = b.id and p.status = 'PENDING'
+             where b.event_id = e.id and b.status = 'PENDING_PAYMENT' and (b.expires_at > now() or p.depositor_notified_at is not null)) as pending_deposits
     from public.events e
     where e.status = 'PUBLISHED' and public.is_club_manager(e.club_id)
       and e.starts_at between now() - interval '6 hours' and now() + interval '24 hours') x;
@@ -1140,7 +1167,7 @@ begin
     select b.id as booking_id, e.id as event_id, e.title, b.total_amount_krw, b.expires_at,
            e.bank_name, e.account_number, e.account_holder, p.depositor_name, p.depositor_notified_at
     from public.bookings b join public.events e on e.id = b.event_id join public.payments p on p.booking_id = b.id and p.status = 'PENDING'
-    where b.user_id = v_uid and b.status = 'PENDING_PAYMENT' and b.expires_at > now()) x;
+    where b.user_id = v_uid and b.status = 'PENDING_PAYMENT' and (b.expires_at > now() or p.depositor_notified_at is not null)) x;
   v_prompt := case
     when v_ticket is not null and (v_ticket ->> 'starts_at')::timestamptz <= now() + interval '3 hours' then 'TICKET_NOW'
     when jsonb_array_length(v_staff) > 0 then 'STAFF_TODAY'

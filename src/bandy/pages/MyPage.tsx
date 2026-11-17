@@ -188,7 +188,7 @@ export function MyPage() {
         </div>
         {bookings.slice(0, 5).map((b) => {
           const ev = db.events.find((e) => e.id === b.event_id)
-          const label = b.status === 'CONFIRMED' ? '확정' : b.status === 'EXPIRED' || isOverdue(b) ? '기한 만료' : '입금 대기'
+          const label = b.status === 'CONFIRMED' ? '확정' : b.status === 'EXPIRED' || isOverdue(b, db) ? '기한 만료' : '입금 대기'
           return (
             <Link key={b.id} to={`/app/e/${b.event_id}`} className="b-card b-pad b-row between">
               <span className="b-stack tight">

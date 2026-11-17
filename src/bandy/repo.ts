@@ -5,6 +5,7 @@ import {
   Booking, Club, Db, EventRow, ExchangeKind, ExchangeRequest, HomeState, Ticket, TicketType, Uuid,
 } from './types'
 import { seedDb } from './seed'
+import { dateLabel } from './format'
 
 export class BandyError extends Error {}
 
@@ -81,9 +82,23 @@ export function isPastEvent(e: Pick<EventRow, 'starts_at'>) {
   return new Date(e.starts_at).getTime() <= Date.now()
 }
 
-// 입금 대기인데 기한이 지난 예매(서버에서는 다음 처리 때 EXPIRED로 바뀐다)
-export function isOverdue(b: Booking) {
+// 입금 기한이 지났는가(시각만 봄)
+function pastDeadline(b: Booking) {
   return b.status === 'PENDING_PAYMENT' && new Date(b.expires_at).getTime() <= Date.now()
+}
+
+// 만료 대상인가: 기한이 지났고, 기한 안에 '입금했어요'를 누르지 않은 입금 대기 예매.
+// 알린 예매는 돈이 오갔을 수 있어 자동 만료하지 않고 운영진의 확인·취소를 기다린다(서버 _expire_bookings와 같음)
+export function isOverdue(b: Booking, db?: Db) {
+  if (!pastDeadline(b)) return false
+  const notified = db?.payments.find((p) => p.booking_id === b.id)?.depositor_notified_at
+  return !notified
+}
+
+// 공연이 끝났다고 보는 시각: 시작 + 6시간(끝 시각 칸이 없어 임시 기준). 그 전까지는 티켓 QR을 열 수 있다
+export const EVENT_GRACE_MS = 6 * 3600000
+export function isEventOver(e: Pick<EventRow, 'starts_at'>) {
+  return new Date(e.starts_at).getTime() + EVENT_GRACE_MS <= Date.now()
 }
 
 function checkPublishable(venue: string, startsAt: string, price: number, account: string) {
@@ -334,6 +349,7 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
   if (!Number.isFinite(input.capacity) || input.capacity <= 0 || input.capacity > 100000) throw new BandyError('정원은 1~100000 사이여야 합니다.')
   if (!Number.isFinite(input.price_krw) || input.price_krw < 0) throw new BandyError('가격은 0원 이상이어야 합니다.')
   const tt = db.ticket_types.find((t) => t.event_id === eventId)!
+  const before = { starts_at: event.starts_at, venue_name: event.venue_name }
   const hasBookings = db.bookings.some((b) => b.event_id === eventId && b.status !== 'CANCELLED')
   if (hasBookings && input.price_krw !== tt.price_krw) throw new BandyError('예매가 있는 공연은 가격을 바꿀 수 없습니다.')
   if (input.capacity < tt.reserved_quantity + tt.sold_quantity) throw new BandyError('이미 예매된 수량보다 정원을 줄일 수 없습니다.')
@@ -349,6 +365,20 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
     updated_at: now(),
   })
   Object.assign(tt, { price_krw: input.price_krw, capacity: input.capacity, sales_ends_at: event.starts_at, updated_at: now() })
+  if (event.starts_at !== before.starts_at || event.venue_name !== before.venue_name) {
+    // 공연을 앞당기면 입금 기한도 새 시작 시각을 넘지 않게, 예매자에게 일정·장소 변경 알림(서버 update_event와 같음)
+    for (const b of db.bookings.filter((x) => x.event_id === eventId && x.status === 'PENDING_PAYMENT' && x.expires_at > event.starts_at)) {
+      b.expires_at = new Date(Math.max(new Date(event.starts_at).getTime(), new Date(b.created_at).getTime() + 60000)).toISOString()
+    }
+    const parts = [
+      event.starts_at !== before.starts_at ? `일시가 ${dateLabel(event.starts_at)}(으)로` : '',
+      event.venue_name !== before.venue_name ? `장소가 ${event.venue_name}(으)로` : '',
+    ].filter(Boolean).join(', ')
+    const users = new Set(db.bookings.filter((x) => x.event_id === eventId && (x.status === 'PENDING_PAYMENT' || x.status === 'CONFIRMED')).map((x) => x.user_id))
+    for (const u of users) {
+      notify(db, u, eventId, 'EVENT_CHANGED', `[${event.title}] 공연 ${parts} 바뀌었어요.`, `event-changed-${eventId}-${u}-${event.starts_at}-${event.venue_name}`)
+    }
+  }
 }
 
 // 공연 삭제 [DELETE]. [미정] 예매가 있는 공연의 삭제·환불 정책이 정해지기 전에는 예매가 없을 때만 지운다.
@@ -501,7 +531,7 @@ function releaseBooking(db: Db, booking: Booking, status: 'CANCELLED' | 'EXPIRED
 // 입금 기한이 지난 예매 정리 + 알림(서버 _expire_bookings와 같은 규칙)
 function expireBookings(db: Db, ticketTypeId: Uuid) {
   const ids = new Set(db.booking_items.filter((i) => i.ticket_type_id === ticketTypeId).map((i) => i.booking_id))
-  for (const b of db.bookings.filter((x) => ids.has(x.id) && isOverdue(x))) {
+  for (const b of db.bookings.filter((x) => ids.has(x.id) && isOverdue(x, db))) {
     releaseBooking(db, b, 'EXPIRED', 'EXPIRED')
     const ev = db.events.find((e) => e.id === b.event_id)
     notify(db, b.user_id, b.event_id, 'BOOKING_EXPIRED', `${ev?.title ?? '공연'} 예매가 입금 기한이 지나 취소됐어요.`, `booking-expired-${b.id}`)
@@ -521,6 +551,12 @@ export function cancelBooking(db: Db, userId: Uuid | null, bookingId: Uuid) {
   if (booking.status === 'EXPIRED') return // 기한이 지나 방금 만료됨(자리 반환 완료). 취소와 결과가 같다
   if (booking.status !== 'PENDING_PAYMENT') throw new BandyError('입금 확인 전 예매만 취소할 수 있습니다.')
   releaseBooking(db, booking, 'CANCELLED', 'CANCELLED_BEFORE_DEPOSIT')
+  // 입금했다고 알린 뒤 본인이 취소하면 운영진에게 환불 확인 알림
+  if (!byHost && db.payments.find((p) => p.booking_id === booking.id)?.depositor_notified_at) {
+    for (const m of clubManagers(db, event.club_id)) {
+      notify(db, m.user_id, event.id, 'BOOKING_CANCELLED_AFTER_DEPOSIT', `[${event.title}] 입금했다고 알린 예매가 취소됐어요. 입금 내역을 확인하고 환불해 주세요.`, `cancel-after-deposit-${booking.id}-${m.user_id}`)
+    }
+  }
   if (byHost) {
     notify(db, booking.user_id, event.id, 'BOOKING_CANCELLED', `${event.title} 예매가 주최 동아리에 의해 취소됐어요.`, `booking-cancelled-${booking.id}`)
   }
@@ -551,7 +587,10 @@ export function issueTicketQr(db: Db, userId: Uuid | null, ticketId: Uuid) {
   const token = `${t.id}.${Math.random().toString(36).slice(2, 12)}`
   db.qr_credentials.push({
     id: uid('qr'), ticket_id: t.id, token, token_hash: fakeHash(token),
-    expires_at: new Date(Date.now() + 24 * 3600000).toISOString(), revoked_at: null, created_at: now(),
+    // 24시간과 '공연 시작 + 6시간' 중 긴 쪽(최대 7일) — 서버와 같음
+    expires_at: new Date(Math.max(Date.now() + 24 * 3600000,
+      Math.min(new Date(db.events.find((e) => e.id === t.event_id)!.starts_at).getTime() + EVENT_GRACE_MS, Date.now() + 7 * 86400000))).toISOString(),
+    revoked_at: null, created_at: now(),
   })
   return token
 }
@@ -700,7 +739,7 @@ export function markDepositSent(db: Db, userId: Uuid | null, bookingId: Uuid) {
   requireLogin(db, userId)
   const b = db.bookings.find((x) => x.id === bookingId)
   if (!b || b.user_id !== userId) throw new BandyError('예매를 찾지 못했습니다.')
-  if (b.status !== 'PENDING_PAYMENT' || isOverdue(b)) throw new BandyError('입금 대기 중인 예매가 아닙니다.')
+  if (b.status !== 'PENDING_PAYMENT' || pastDeadline(b)) throw new BandyError('입금 대기 중인 예매가 아닙니다.')
   const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'PENDING')!
   if (pay.depositor_notified_at && Date.now() - new Date(pay.depositor_notified_at).getTime() < 10 * 60000) {
     throw new BandyError('이미 알렸어요. 잠시 후 다시 눌러 주세요.')
@@ -721,7 +760,7 @@ export function homeState(db: Db, userId: Uuid | null): HomeState {
   const evOf = (id: Uuid) => db.events.find((e) => e.id === id)
   const mine = db.tickets.filter((x) => x.user_id === userId && x.status === 'ISSUED')
     .map((x) => ({ x, e: evOf(x.event_id) }))
-    .filter(({ e }) => e && e.status !== 'CANCELLED' && new Date(e.starts_at).getTime() >= t - 3 * H && new Date(e.starts_at).getTime() <= t + 24 * H)
+    .filter(({ e }) => e && e.status !== 'CANCELLED' && new Date(e.starts_at).getTime() >= t - EVENT_GRACE_MS && new Date(e.starts_at).getTime() <= t + 24 * H)
     .sort((a, b) => a.e!.starts_at.localeCompare(b.e!.starts_at) || (a.x.entry_number ?? 0) - (b.x.entry_number ?? 0))
   const first = mine[0]
   const nextTicket = first ? {
@@ -736,10 +775,10 @@ export function homeState(db: Db, userId: Uuid | null): HomeState {
       event_id: e.id, title: e.title, starts_at: e.starts_at,
       checked_in: db.tickets.filter((x) => x.event_id === e.id && x.status === 'CHECKED_IN').length,
       issued: db.tickets.filter((x) => x.event_id === e.id && x.status !== 'CANCELLED').length,
-      pending_deposits: db.bookings.filter((b) => b.event_id === e.id && b.status === 'PENDING_PAYMENT' && !isOverdue(b)).length,
+      pending_deposits: db.bookings.filter((b) => b.event_id === e.id && b.status === 'PENDING_PAYMENT' && !isOverdue(b, db)).length,
     }))
   const pendingPayments = db.bookings
-    .filter((b) => b.user_id === userId && b.status === 'PENDING_PAYMENT' && !isOverdue(b))
+    .filter((b) => b.user_id === userId && b.status === 'PENDING_PAYMENT' && !isOverdue(b, db))
     .sort((a, b) => a.expires_at.localeCompare(b.expires_at))
     .map((b) => {
       const e = evOf(b.event_id)!

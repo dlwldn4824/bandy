@@ -362,6 +362,41 @@ select public.confirm_deposit(:'bk7');
 select test.ok(public.my_home_state() ->> 'prompt' = 'TICKET_NOW', '관객: 곧 시작하는 공연 티켓 → QR 바로 열기 신호');
 select test.ok((public.my_home_state() -> 'next_ticket' ->> 'event_id')::uuid = :'ev7'::uuid, '바로 열 티켓의 공연');
 select test.ok((public.my_home_state() ->> 'unread_notifications')::int >= 1, '안 읽은 알림 수');
+
+-- 14. 시간 기준 정합성(입금 기한 · 공연 일정 변경 · QR 유효시간)
+:as_o1
+select public.create_event(:'c1', jsonb_build_object('title', '시간 시험', 'starts_at', (now() + interval '5 days')::text, 'venue_name', '홀', 'price_krw', 5000, 'capacity', 10, 'bank_name', 'b', 'account_number', '1', 'publish', true)) as ev8 \gset
+select id as tt8 from public.ticket_types where event_id = :'ev8' \gset
+:as_u
+select public.create_booking(:'tt8', 1, '김관객', 'time-1') as bk8a \gset
+select public.create_booking(:'tt8', 1, '김관객', 'time-2') as bk8b \gset
+select test.ok((select expires_at <= (select starts_at from public.events where id = :'ev8') from public.bookings where id = :'bk8a'), '입금 기한은 공연 시작을 넘지 않음');
+select public.mark_deposit_sent(:'bk8a');
+reset role;
+update public.bookings set created_at = now() - interval '3 days 1 hour', expires_at = now() - interval '1 hour' where id = :'bk8a';
+select test.ok(public.expire_overdue_bookings() = 0, '기한 안에 입금했다고 알린 예매는 일괄 만료에서 제외');
+:as_o1
+select test.ok(public.confirm_deposit(:'bk8a') = 'CONFIRMED', '기한 안에 알린 예매는 기한 뒤에도 입금 확인 가능');
+select public.update_event(:'ev8', jsonb_build_object('starts_at', (now() + interval '1 hour')::text, 'venue_name', '새 홀'));
+reset role;
+select test.ok((select b.expires_at <= e.starts_at from public.bookings b join public.events e on e.id = b.event_id where b.id = :'bk8b'), '공연을 앞당기면 입금 기한도 새 시작 이전으로');
+select test.ok((select count(*) from public.notifications where type = 'EVENT_CHANGED' and event_id = :'ev8') = 1, '예매자에게 일정·장소 변경 알림');
+:as_u
+select id as t8 from public.tickets where booking_id = :'bk8a' \gset
+select public.issue_ticket_qr(:'t8') is not null as x \gset
+reset role;
+select test.ok((select expires_at >= now() + interval '23 hours' from public.qr_credentials where ticket_id = :'t8' and revoked_at is null), 'QR은 최소 24시간 유효');
+:as_o1
+select public.update_event(:'ev8', jsonb_build_object('starts_at', (now() + interval '3 days')::text));
+:as_u
+select public.issue_ticket_qr(:'t8') is not null as x \gset
+reset role;
+select test.ok((select expires_at >= (select starts_at from public.events where id = :'ev8') + interval '5 hours' from public.qr_credentials where ticket_id = :'t8' and revoked_at is null), '미리 받은 QR도 공연 시작 6시간 뒤까지 유효');
+:as_u
+select public.mark_deposit_sent(:'bk8b');
+select public.cancel_booking(:'bk8b');
+reset role;
+select test.ok((select count(*) from public.notifications where type = 'BOOKING_CANCELLED_AFTER_DEPOSIT' and event_id = :'ev8') >= 1, '입금했다고 알린 뒤 취소하면 운영진에게 환불 확인 알림');
 reset role;
 select test.ok((select count(*) from public.audit_logs where action in ('CONFIRM_DEPOSIT', 'CHECK_IN')) >= 2, '입금 확인·입장 감사 기록');
 \echo 'ALL TESTS PASSED'
