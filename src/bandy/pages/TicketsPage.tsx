@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { useBandy } from '../store'
 import { Empty, NeedLogin, PageHeader } from '../components'
 import { dateLabel, won } from '../format'
 import { EventRow, Ticket } from '../types'
 import { isOverdue, isPastEvent } from '../repo'
+import { useWakeLock } from '../convenience'
+import { device } from '../device'
 
 const IMMINENT_MS = 24 * 3600000 // [미정] 입장 임박 기준. 지금은 공연 시작 24시간 전부터 '입장 예정'
 const LEGACY_SERVICE = '/performances' // 기존 서비스(공연 정보 · 셋리스트 · 채팅 · 방명록). 공연별 연결 방식은 미정
@@ -20,14 +22,28 @@ const UNKNOWN_EVENT: Pick<EventRow, 'id' | 'title' | 'starts_at' | 'venue_name' 
 export function TicketsPage() {
   const { db, me, call, showToast } = useBandy()
   const [open, setOpen] = useState<Ticket | null>(null)
-  const [qr, setQr] = useState<{ ticketId: string; token: string } | null>(null)
-  // 티켓을 열 때마다 QR을 새로 받는다(서버에는 해시만 저장, 이전 QR은 폐기)
+  const [qr, setQr] = useState<{ ticketId: string; token: string; offline?: boolean } | null>(null)
+  const [params, setParams] = useSearchParams()
+  // 홈 신호·알림에서 ?open=티켓ID 로 들어오면 그 티켓 QR을 바로 연다
+  const openId = params.get('open')
+  useEffect(() => {
+    if (!openId || !me) return
+    const t = db.tickets.find((x) => x.id === openId && x.user_id === me.id && x.status === 'ISSUED')
+    if (t) setOpen(t)
+    setParams({}, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, me?.id, db.tickets.length])
+  useWakeLock(!!open) // QR을 보여 주는 동안 화면이 꺼지지 않게
+  // 티켓을 열 때마다 QR을 새로 받는다(서버에는 해시만 저장, 이전 QR은 폐기).
+  // 공연장 전파가 약해 못 받으면 이 기기에 저장해 둔 마지막 QR(24시간 안)을 보여 준다
   useEffect(() => {
     if (!open) return
     let alive = true
     call((b) => b.issueTicketQr(open.id), { reload: false }).then((r) => {
       if (!alive) return
-      if (r.ok) setQr({ ticketId: open.id, token: r.value })
+      if (r.ok) { setQr({ ticketId: open.id, token: r.value }); device.saveQr(open.id, r.value); return }
+      const cached = device.cachedQr(open.id)
+      if (cached && /연결하지 못했|인터넷/.test(r.error)) setQr({ ticketId: open.id, token: cached, offline: true })
       else showToast(r.error)
     })
     return () => { alive = false }
@@ -92,7 +108,12 @@ export function TicketsPage() {
                   : (
                     <>
                       <p className="b-sub">{ev.bank_name} {ev.account_number} (예금주 {ev.account_holder}) · 기한 {dateLabel(b.expires_at)}</p>
-                      <button type="button" className="b-btn ghost small" onClick={() => cancel(b.id)}>예매 취소</button>
+                      <div className="b-row">
+                        {pay?.depositor_notified_at
+                          ? <span className="b-sub">입금했다고 알렸어요 · 확인을 기다리는 중</span>
+                          : <button type="button" className="b-btn small" onClick={async () => { const r = await call((x) => x.markDepositSent(b.id)); showToast(r.ok ? '주최 동아리에 입금했다고 알렸어요.' : r.error) }}>입금했어요</button>}
+                        <button type="button" className="b-btn ghost small" onClick={() => cancel(b.id)}>예매 취소</button>
+                      </div>
                     </>
                   )}
               </article>
@@ -140,7 +161,8 @@ export function TicketsPage() {
               {live?.status === 'CHECKED_IN'
                 ? <p className="b-status ok">입장 완료</p>
                 : token ? <div className="b-qr"><QRCodeSVG value={token} size={200} level="M" /></div> : <p className="b-sub">QR을 불러오는 중…</p>}
-              <p className="b-note">현장에서 운영진에게 이 QR을 보여 주세요.<br />코드: <code>{token}</code></p>
+              {qr?.offline && qr.ticketId === open.id && <p className="b-warn">인터넷 연결이 약해 이 기기에 저장된 QR을 보여 줘요.</p>}
+              <p className="b-note">현장에서 운영진에게 이 QR을 보여 주세요. 화면 밝기를 높이면 잘 찍혀요.<br />코드: <code>{token}</code></p>
               {ev.id && <Link className="b-link" to={`/app/e/${ev.id}`}>공연 정보 확인</Link>}
               <button type="button" className="b-btn ghost" onClick={() => setOpen(null)}>닫기</button>
             </div>

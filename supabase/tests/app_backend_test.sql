@@ -338,6 +338,30 @@ select public.create_booking(:'tt6b', 2, '김관객', 'two-b') is not null as x 
 select public.set_event_status(:'ev6', 'CANCELLED');
 reset role;
 select test.ok((select sum(reserved_quantity) from public.ticket_types where event_id = :'ev6') = 0, '두 종류 공연 취소 시 각 종류 수량 반환');
+
+-- 13. 모바일 편의: 홈 신호 · 입금했어요
+:as_anon
+select test.ok((public.my_home_state() ->> 'signed_in')::boolean = false, '비로그인 홈 신호');
+:as_o1
+select public.create_event(:'c1', jsonb_build_object('title', '오늘 공연', 'starts_at', (now() + interval '2 hours')::text, 'venue_name', '홀', 'price_krw', 1000, 'capacity', 10, 'bank_name', '카카오뱅크', 'account_number', '3333-77', 'publish', true)) as ev7 \gset
+select id as tt7 from public.ticket_types where event_id = :'ev7' \gset
+select test.ok(public.my_home_state() ->> 'prompt' = 'STAFF_TODAY', '운영진: 오늘 공연 → 입장 관리 신호');
+:as_v
+select public.create_booking(:'tt7', 1, '이준', 'home-1') as bk7 \gset
+select test.ok(public.my_home_state() ->> 'prompt' = 'PAYMENT_DUE', '관객: 기한 임박 입금 대기 → 계좌 안내 신호');
+select test.ok(jsonb_array_length(public.my_home_state() -> 'pending_payments') = 1, '입금 대기 목록');
+select public.mark_deposit_sent(:'bk7');
+select test.fails_with($$select public.mark_deposit_sent('$$ || :'bk7' || $$')$$, '이미 알렸', '입금했어요는 10분에 한 번');
+:as_u
+select test.fails_with($$select public.mark_deposit_sent('$$ || :'bk7' || $$')$$, '찾지 못', '남의 예매에는 입금했어요 불가');
+:as_o1
+select test.ok((select count(*) from public.notifications where type = 'DEPOSIT_SENT' and event_id = :'ev7') = 1, '운영진에게 입금했어요 알림');
+select test.ok((select depositor_notified_at is not null from public.payments where booking_id = :'bk7'), '운영진이 입금 알림 시각 확인');
+select public.confirm_deposit(:'bk7');
+:as_v
+select test.ok(public.my_home_state() ->> 'prompt' = 'TICKET_NOW', '관객: 곧 시작하는 공연 티켓 → QR 바로 열기 신호');
+select test.ok((public.my_home_state() -> 'next_ticket' ->> 'event_id')::uuid = :'ev7'::uuid, '바로 열 티켓의 공연');
+select test.ok((public.my_home_state() ->> 'unread_notifications')::int >= 1, '안 읽은 알림 수');
 reset role;
-select test.ok((select count(*) from public.audit_logs where action in ('CONFIRM_DEPOSIT', 'CHECK_IN')) = 2, '입금 확인·입장 감사 기록');
+select test.ok((select count(*) from public.audit_logs where action in ('CONFIRM_DEPOSIT', 'CHECK_IN')) >= 2, '입금 확인·입장 감사 기록');
 \echo 'ALL TESTS PASSED'

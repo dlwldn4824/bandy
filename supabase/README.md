@@ -44,6 +44,8 @@
 | `request_club_join(p_club_id)` · `respond_club_join(p_membership_id, p_accept)` | 로그인 / 동아리 운영진 | 부원 가입 신청 · 수락/거절 |
 | `set_member_role(p_membership_id, p_role)` · `remove_member(p_membership_id)` | 회장(OWNER) / 회장·본인 | 운영진(MANAGER) 지정·해제, 내보내기·탈퇴. 회장은 바꾸거나 내보낼 수 없음 |
 | `mark_notifications_read(p_id)` | 본인 | 알림 읽음(전체 또는 하나) |
+| `my_home_state()` | 누구나(비로그인은 빈 값) | 앱을 열 때 부르는 '홈 신호'. `prompt`(TICKET_NOW: 3시간 안 공연 티켓 → QR 바로 열기 / STAFF_TODAY: 24시간 안 내 동아리 공연 → 입장 관리 / PAYMENT_DUE: 기한 24시간 안 입금 대기 → 계좌 안내) + 다음 티켓, 오늘 운영 공연, 입금 대기 목록, 안 읽은 알림·가입 신청·받은 교류 신청 수 |
+| `mark_deposit_sent(p_booking_id)` | 예매자 본인 | '입금했어요' → 주최 운영진 알림, 입금 확인 목록 맨 위로. 10분에 한 번 |
 
 ## 검증
 
@@ -51,7 +53,7 @@
 PGHOST=<소켓 경로> PGPORT=<포트> PGUSER=postgres supabase/tests/run_backend.sh
 ```
 
-`tests/local_supabase_shim.sql`이 Supabase의 역할·`auth.users`·`auth.uid()`를 흉내 내고, `tests/app_backend_test.sql`이 107개 항목(권한 차단, 정원, 중복 요청, 만료, 입금 확인, QR 재발급·검증·입장, 교류, 수정·삭제 제한 + 2026-11-17 독립 검토 반영분: 비공개·취소 공연의 예매자 조회, 지난 공연 예매·공개 차단, 공개 조건, 입력 형식 오류 한국어 안내, 입금 기한·알림, 공연 취소, 링크 형식, 등록 남용, 교류 중복, 부원·운영진, 동아리 정지)을 확인합니다.
+`tests/local_supabase_shim.sql`이 Supabase의 역할·`auth.users`·`auth.uid()`를 흉내 내고, `tests/app_backend_test.sql`이 118개 항목(권한 차단, 정원, 중복 요청, 만료, 입금 확인, QR 재발급·검증·입장, 교류, 수정·삭제 제한 + 2026-11-17 독립 검토 반영분: 비공개·취소 공연의 예매자 조회, 지난 공연 예매·공개 차단, 공개 조건, 입력 형식 오류 한국어 안내, 입금 기한·알림, 공연 취소, 링크 형식, 등록 남용, 교류 중복, 부원·운영진, 동아리 정지)을 확인합니다.
 
 이 밖에 개발 중 확인한 것:
 - 마지막 1석에 두 사람이 동시에 예매 → 한 명만 성공
@@ -70,6 +72,7 @@ PGHOST=<소켓 경로> PGPORT=<포트> PGUSER=postgres supabase/tests/run_backen
 - 공연·동아리 이미지는 지금 data URL로 `poster_path`/`profile_path`에 저장 → Supabase Storage 업로드로 바꿔야 함
 - 주소 → 좌표 변환(카카오 Local) 미연결: 좌표가 없는 공연은 지도·거리 정렬에서 빠짐
 - 승인 대기 중인 동아리 등록은 한 사람당 1건
+- 입금 기한은 '예매 후 3일'과 '공연 시작' 중 빠른 쪽
 - 동아리 정지 시: 공연 등록·수정·공개·입금 확인·동아리 정보 수정은 멈춤. 비공개·공연 취소·삭제, 이미 발급된 티켓 입장은 됨
 - 회원 정지 시: 예매·동아리 등록·가입·교류 신청과 운영진 업무(입금 확인·입장 처리 등)는 막힘. 이미 산 티켓 QR, 본인 입금 전 예매 취소, 이름 수정은 됨
 - 공연 취소 시 입금 완료분 환불은 앱 밖에서 동아리가 직접(알림 문구로 안내)

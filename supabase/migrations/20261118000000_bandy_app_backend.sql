@@ -151,6 +151,8 @@ create table if not exists public.payments (
 -- [11/1] 12월 공연은 카드 결제 없이 계좌이체 + 동아리의 입금 확인
 alter table public.payments add column if not exists depositor_name text not null default '';
 alter table public.payments add column if not exists confirmed_by uuid references public.profiles (id);
+-- [편의] 예매자가 '입금했어요'를 누른 시각. 운영진 입금 확인 목록에서 먼저 보여 준다
+alter table public.payments add column if not exists depositor_notified_at timestamptz;
 create unique index if not exists payments_one_success on public.payments (booking_id) where status in ('SUCCEEDED', 'REFUND_PENDING');
 
 create table if not exists public.tickets (
@@ -755,7 +757,7 @@ begin
   if v_tt.price_krw > 0 and btrim(coalesce(p_depositor_name, '')) = '' then raise exception '입금자명을 입력하세요.' using errcode = '22023'; end if;
 
   insert into public.bookings (user_id, event_id, total_amount_krw, expires_at, idempotency_key, request_hash)
-  values (v_uid, v_event.id, v_tt.price_krw * p_quantity, now() + interval '3 days', v_key, v_hash) returning id into v_booking;
+  values (v_uid, v_event.id, v_tt.price_krw * p_quantity, least(now() + interval '3 days', v_event.starts_at), v_key, v_hash) returning id into v_booking;  -- 입금 기한: 3일 또는 공연 시작 중 빠른 쪽
   insert into public.booking_items (booking_id, event_id, user_id, ticket_type_id, quantity, unit_price_krw, ticket_type_name)
   values (v_booking, v_event.id, v_uid, v_tt.id, p_quantity, v_tt.price_krw, v_tt.name) returning id into v_item;
   insert into public.payments (booking_id, provider, provider_order_id, depositor_name)
@@ -1086,6 +1088,74 @@ begin
   end if;
 end $$;
 
+-- ───────────────────────── RPC: 사용자 편의(모바일) ─────────────────────────
+-- 예매자의 '입금했어요' 알림. 주최 운영진에게 알림이 가고, 입금 확인 목록 위로 올라간다. 10분에 한 번까지
+create or replace function public.mark_deposit_sent(p_booking_id uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+declare v_b public.bookings; v_pay public.payments; v_title text; v_club uuid; m record;
+begin
+  perform public._require_login();
+  select * into v_b from public.bookings where id = p_booking_id;
+  if not found or v_b.user_id <> auth.uid() then raise exception '예매를 찾지 못했습니다.' using errcode = 'P0002'; end if;
+  if v_b.status <> 'PENDING_PAYMENT' or v_b.expires_at <= now() then raise exception '입금 대기 중인 예매가 아닙니다.' using errcode = 'P0001'; end if;
+  select * into v_pay from public.payments where booking_id = p_booking_id and status = 'PENDING' for update;
+  if v_pay.depositor_notified_at is not null and v_pay.depositor_notified_at > now() - interval '10 minutes' then
+    raise exception '이미 알렸어요. 잠시 후 다시 눌러 주세요.' using errcode = 'P0001';
+  end if;
+  update public.payments set depositor_notified_at = now(), updated_at = now() where id = v_pay.id;
+  select title, club_id into v_title, v_club from public.events where id = v_b.event_id;
+  for m in select user_id from public.club_memberships where club_id = v_club and status = 'ACTIVE' and role in ('OWNER', 'MANAGER') loop
+    perform public._notify(m.user_id, v_b.event_id, 'DEPOSIT_SENT',
+      '[' || v_title || '] ' || v_pay.depositor_name || '님이 입금했다고 알렸어요. 입금 확인해 주세요.', 'deposit-sent-' || v_pay.id || '-' || m.user_id || '-' || gen_random_uuid());
+  end loop;
+end;
+$$;
+
+-- 앱을 열 때 한 번 부르는 '홈 신호'. 화면은 prompt를 보고 바로 띄울 창을 정한다.
+--   TICKET_NOW  : 3시간 안에 시작(또는 진행 중)하는 공연의 미사용 티켓 → 티켓 QR 바로 열기
+--   STAFF_TODAY : 내가 운영하는 공연이 24시간 안에 있음 → 입장 관리 바로 가기
+--   PAYMENT_DUE : 입금 기한이 24시간 안에 끝나는 입금 대기 예매 → 계좌 안내
+-- 그 밖에 배지·배너용 숫자(안 읽은 알림, 입금 대기, 가입 신청, 받은 교류 신청)를 함께 준다. 비로그인이면 {"signed_in": false}
+create or replace function public.my_home_state() returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+declare v_uid uuid := auth.uid(); v_ticket jsonb; v_staff jsonb; v_pay jsonb; v_prompt text;
+begin
+  if v_uid is null then return jsonb_build_object('signed_in', false); end if;
+  select to_jsonb(x) into v_ticket from (
+    select t.id as ticket_id, e.id as event_id, e.title, e.starts_at, e.venue_name, t.entry_number,
+           (select count(*) from public.tickets t2 where t2.event_id = e.id and t2.user_id = v_uid and t2.status = 'ISSUED') as ticket_count
+    from public.tickets t join public.events e on e.id = t.event_id
+    where t.user_id = v_uid and t.status = 'ISSUED' and e.status in ('PUBLISHED', 'DRAFT', 'ENDED')
+      and e.starts_at between now() - interval '3 hours' and now() + interval '24 hours'
+    order by e.starts_at, t.entry_number limit 1) x;
+  select coalesce(jsonb_agg(to_jsonb(x) order by x.starts_at), '[]'::jsonb) into v_staff from (
+    select e.id as event_id, e.title, e.starts_at,
+           (select count(*) from public.tickets t where t.event_id = e.id and t.status = 'CHECKED_IN') as checked_in,
+           (select count(*) from public.tickets t where t.event_id = e.id and t.status <> 'CANCELLED') as issued,
+           (select count(*) from public.bookings b where b.event_id = e.id and b.status = 'PENDING_PAYMENT' and b.expires_at > now()) as pending_deposits
+    from public.events e
+    where e.status = 'PUBLISHED' and public.is_club_manager(e.club_id)
+      and e.starts_at between now() - interval '6 hours' and now() + interval '24 hours') x;
+  select coalesce(jsonb_agg(to_jsonb(x) order by x.expires_at), '[]'::jsonb) into v_pay from (
+    select b.id as booking_id, e.id as event_id, e.title, b.total_amount_krw, b.expires_at,
+           e.bank_name, e.account_number, e.account_holder, p.depositor_name, p.depositor_notified_at
+    from public.bookings b join public.events e on e.id = b.event_id join public.payments p on p.booking_id = b.id and p.status = 'PENDING'
+    where b.user_id = v_uid and b.status = 'PENDING_PAYMENT' and b.expires_at > now()) x;
+  v_prompt := case
+    when v_ticket is not null and (v_ticket ->> 'starts_at')::timestamptz <= now() + interval '3 hours' then 'TICKET_NOW'
+    when jsonb_array_length(v_staff) > 0 then 'STAFF_TODAY'
+    when exists (select 1 from jsonb_array_elements(v_pay) p where (p ->> 'expires_at')::timestamptz <= now() + interval '24 hours'
+                 and p ->> 'depositor_notified_at' is null) then 'PAYMENT_DUE'
+  end;
+  return jsonb_build_object(
+    'signed_in', true, 'now', now(), 'prompt', v_prompt,
+    'next_ticket', v_ticket, 'staff_events', v_staff, 'pending_payments', v_pay,
+    'unread_notifications', (select count(*) from public.notifications where user_id = v_uid and read_at is null),
+    'join_requests', (select count(*) from public.club_memberships m where m.status = 'PENDING' and public.is_club_manager(m.club_id)),
+    'exchange_requests', (select count(*) from public.exchange_requests r where r.status = 'PENDING' and public.is_club_manager(r.to_club_id)));
+end;
+$$;
+
 -- ───────────────────────── 실행 권한 ─────────────────────────
 revoke execute on all functions in schema public from public, anon, authenticated;
 grant execute on function public.is_admin(), public.is_club_manager(uuid), public.is_event_staff(uuid),
@@ -1100,3 +1170,5 @@ grant execute on function
   public.request_club_join(uuid), public.respond_club_join(uuid, boolean), public.set_member_role(uuid, text), public.remove_member(uuid)
 to authenticated;
 grant execute on function public.expire_overdue_bookings() to service_role;
+grant execute on function public.my_home_state() to anon, authenticated;
+grant execute on function public.mark_deposit_sent(uuid) to authenticated;

@@ -2,7 +2,7 @@
 //  - SupabaseBackend: VITE_SUPABASE_URL · VITE_SUPABASE_ANON_KEY가 있으면 실제 Supabase(DB 함수)를 부른다.
 //  - LocalBackend: 없으면 브라우저 저장소로 도는 데모. 규칙은 repo.ts(= supabase/migrations의 DB 함수와 같은 규칙).
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import { Club, Db, EventRow, ExchangeKind } from './types'
+import { Club, Db, EventRow, ExchangeKind, HomeState } from './types'
 import * as repo from './repo'
 import { BandyError, initialDb, loadDb, saveDb } from './repo'
 
@@ -55,7 +55,7 @@ export interface Backend {
   signInPersona(userId: string): Promise<void>
   signInEmail(email: string, password: string): Promise<void>
   signUpEmail(email: string, password: string, name: string): Promise<void>
-  signInKakao(): Promise<void>
+  signInKakao(next?: string): Promise<void>
   signOut(): Promise<void>
   reset(): Promise<void>
   // 기능 (구조도 + 11/1)
@@ -82,6 +82,9 @@ export interface Backend {
   respondClubJoin(membershipId: string, accept: boolean): Promise<void>
   setMemberRole(membershipId: string, role: 'MANAGER' | 'MEMBER'): Promise<void>
   removeMember(membershipId: string): Promise<void>
+  // 모바일 편의: 홈 신호(앱을 열 때 바로 띄울 창), 입금했어요 알림
+  homeState(): Promise<HomeState>
+  markDepositSent(bookingId: string): Promise<void>
 }
 
 // ───────────────────────── 브라우저 데모 ─────────────────────────
@@ -171,6 +174,8 @@ class LocalBackend implements Backend {
   async respondClubJoin(membershipId: string, accept: boolean) { this.mutate((d, u) => repo.respondClubJoin(d, u, membershipId, accept)) }
   async setMemberRole(membershipId: string, role: 'MANAGER' | 'MEMBER') { this.mutate((d, u) => repo.setMemberRole(d, u, membershipId, role)) }
   async removeMember(membershipId: string) { this.mutate((d, u) => repo.removeMember(d, u, membershipId)) }
+  async homeState() { return repo.homeState(this.db, this.uid()) }
+  async markDepositSent(bookingId: string) { this.mutate((d, u) => repo.markDepositSent(d, u, bookingId)) }
 }
 
 // ───────────────────────── Supabase ─────────────────────────
@@ -237,8 +242,9 @@ class SupabaseBackend implements Backend {
     const { error } = await this.sb.auth.signUp({ email, password, options: { data: { name } } })
     if (error) throw new BackendError(error.message, error.code)
   }
-  async signInKakao() {
-    const { error } = await this.sb.auth.signInWithOAuth({ provider: 'kakao', options: { redirectTo: `${window.location.origin}/app` } })
+  async signInKakao(next = '/app') {
+    // 카카오 로그인 후 보던 화면으로 돌아온다(Supabase Auth의 Redirect URLs에 이 사이트 주소가 등록돼 있어야 함)
+    const { error } = await this.sb.auth.signInWithOAuth({ provider: 'kakao', options: { redirectTo: `${window.location.origin}${next}` } })
     if (error) throw new BackendError(error.message, error.code)
   }
   async signOut() { await this.sb.auth.signOut() }
@@ -272,11 +278,23 @@ class SupabaseBackend implements Backend {
   async respondClubJoin(membershipId: string, accept: boolean) { await this.rpc('respond_club_join', { p_membership_id: membershipId, p_accept: accept }) }
   async setMemberRole(membershipId: string, role: 'MANAGER' | 'MEMBER') { await this.rpc('set_member_role', { p_membership_id: membershipId, p_role: role }) }
   async removeMember(membershipId: string) { await this.rpc('remove_member', { p_membership_id: membershipId }) }
+  async homeState() {
+    const s = await this.rpc<HomeState>('my_home_state', {})
+    // bigint 금액은 숫자로
+    s.pending_payments = s.pending_payments?.map((p) => ({ ...p, total_amount_krw: Number(p.total_amount_krw) }))
+    return s
+  }
+  async markDepositSent(bookingId: string) { await this.rpc('mark_deposit_sent', { p_booking_id: bookingId }) }
 }
 
 export function createBackend(): Backend {
   const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
-  if (url && key) return new SupabaseBackend(createClient(url, key))
+  // 로그인 유지: 세션을 이 기기(localStorage)에 저장하고 토큰을 자동 갱신한다. 카카오 로그인 후 돌아온 주소에서 세션을 읽는다
+  if (url && key) {
+    return new SupabaseBackend(createClient(url, key, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'bandy-auth', flowType: 'pkce' },
+    }))
+  }
   return new LocalBackend()
 }

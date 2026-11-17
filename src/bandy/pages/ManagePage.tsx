@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
 import { isClubManager, isOverdue, isPastEvent } from '../repo'
 import { Backend } from '../backend'
+import { loginHref } from '../convenience'
 import { Empty, ImageInput, PageHeader } from '../components'
 import { dateLabel, won } from '../format'
 import { EventCategory, EventRow } from '../types'
@@ -21,7 +22,7 @@ export function ManagePage() {
   const club = db.clubs.find((c) => c.id === clubId)
 
   if (!club || !isClubManager(db, me?.id ?? null, clubId)) {
-    return <div className="b-page"><PageHeader back title="동아리 관리" /><Empty>이 동아리의 운영진만 볼 수 있어요. <Link to="/app/login">역할 바꾸기</Link></Empty></div>
+    return <div className="b-page"><PageHeader back title="동아리 관리" /><Empty>이 동아리의 운영진만 볼 수 있어요. <Link to={loginHref()}>역할 바꾸기</Link></Empty></div>
   }
 
   const events = db.events.filter((e) => e.club_id === club.id).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
@@ -68,7 +69,10 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
   const event = db.events.find((e) => e.id === eventId)!
   const bookings = db.bookings.filter((b) => b.event_id === eventId && b.status !== 'CANCELLED')
   const tickets = db.tickets.filter((t) => t.event_id === eventId && t.status !== 'CANCELLED')
+  // '입금했어요'를 누른 예매를 먼저, 그다음 오래된 순
+  const notifiedAt = (bookingId: string) => db.payments.find((p) => p.booking_id === bookingId)?.depositor_notified_at ?? null
   const pending = bookings.filter((b) => b.status === 'PENDING_PAYMENT')
+    .sort((a, b) => (notifiedAt(a.id) ? 0 : 1) - (notifiedAt(b.id) ? 0 : 1) || a.created_at.localeCompare(b.created_at))
   const cancelled = event.status === 'CANCELLED'
   const nameOf = (uid: string) => db.profiles.find((p) => p.id === uid)?.display_name ?? '-'
 
@@ -120,7 +124,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
                 const overdue = isOverdue(b)
                 return (
                   <article key={b.id} className="b-card b-pad b-stack">
-                    <div className="b-row between"><strong>입금자명 {pay?.depositor_name}</strong><span className="b-status wait">{overdue ? '기한 지남' : '입금 대기'}</span></div>
+                    <div className="b-row between"><strong>입금자명 {pay?.depositor_name}</strong><span className="b-status wait">{overdue ? '기한 지남' : pay?.depositor_notified_at ? '입금했다고 알림' : '입금 대기'}</span></div>
                     <p className="b-sub">{nameOf(b.user_id)} · {item?.ticket_type_name} {item?.quantity}매 · {won(b.total_amount_krw)} · 기한 {dateLabel(b.expires_at)}</p>
                     {overdue
                       ? <p className="b-note">입금 기한이 지나 입금 확인을 할 수 없어요. 자리는 자동으로 풀려요.</p>

@@ -4,6 +4,7 @@ import { EventRow } from './types'
 import { dateLabel, distanceKm, HERE, shortDate, timeOf } from './format'
 import { useBandy } from './store'
 import { activeManagerClubIds } from './repo'
+import { useLoginPath } from './convenience'
 
 export const APP_NAME = 'BANDY' // 서비스 이름 확정 전(BANDY / RE:CONNECT). 여기만 바꾸면 된다.
 
@@ -78,10 +79,11 @@ export function Empty({ children }: { children: React.ReactNode }) {
 }
 
 export function NeedLogin({ what }: { what: string }) {
+  const login = useLoginPath()
   return (
     <div className="b-card b-pad b-center b-stack">
       <p className="b-sub">{what}은(는) 로그인한 뒤에 볼 수 있어요.</p>
-      <Link to="/app/login" className="b-btn">로그인</Link>
+      <Link to={login} className="b-btn">로그인</Link>
     </div>
   )
 }

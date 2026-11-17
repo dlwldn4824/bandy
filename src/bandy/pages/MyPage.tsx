@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { InstallCard } from '../convenience'
+import { device, safeNext } from '../device'
 import { useBandy } from '../store'
 import { isOverdue, managerClubIds, safeUrl } from '../repo'
 import { PERSONAS } from '../seed'
@@ -14,9 +16,12 @@ const PERSONA_TYPE: Record<string, 'personal' | 'club'> = {
 export function LoginPage() {
   const { backend, call, showToast } = useBandy()
   const navigate = useNavigate()
-  const [type, setType] = useState<'personal' | 'club'>('personal')
+  const [params] = useSearchParams()
+  const next = safeNext(params.get('next')) // 로그인 후 보던 화면으로 돌아간다
+  const lastPersona = device.get().lastPersona
+  const [type, setType] = useState<'personal' | 'club'>(lastPersona && PERSONA_TYPE[lastPersona] === 'club' ? 'club' : 'personal')
   const [mode, setMode] = useState<'login' | 'signup'>('login')
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(device.get().lastEmail ?? '') // 이 기기에서 마지막으로 쓴 이메일
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [error, setError] = useState('')
@@ -32,8 +37,8 @@ export function LoginPage() {
         </div>
         <div className="b-stack">
           {PERSONAS.filter((p) => PERSONA_TYPE[p.id] === type).map((p) => (
-            <button key={p.id} type="button" className="b-option" onClick={async () => { await call((b) => b.signInPersona(p.id)); showToast(`${p.label}(으)로 들어왔어요.`); navigate('/app') }}>
-              <strong>{p.label}</strong>
+            <button key={p.id} type="button" className={`b-option${p.id === lastPersona ? ' on' : ''}`} onClick={async () => { await call((b) => b.signInPersona(p.id)); device.set({ lastPersona: p.id }); showToast(`${p.label}(으)로 들어왔어요.`); navigate(next, { replace: true }) }}>
+              <strong>{p.label}{p.id === lastPersona ? ' · 최근 로그인' : ''}</strong>
               <span className="b-sub">{p.hint}</span>
             </button>
           ))}
@@ -48,8 +53,9 @@ export function LoginPage() {
   const submit = async () => {
     const r = await call((b) => (mode === 'login' ? b.signInEmail(email, password) : b.signUpEmail(email, password, name)))
     if (!r.ok) { setError(r.error); return }
-    showToast(mode === 'login' ? '로그인했어요.' : '가입했어요. 메일 인증이 켜져 있으면 메일을 확인해 주세요.')
-    navigate('/app')
+    device.set({ lastEmail: email.trim() })
+    showToast(mode === 'login' ? '로그인했어요. 이 기기에서는 로그인이 유지돼요.' : '가입했어요. 메일 인증이 켜져 있으면 메일을 확인해 주세요.')
+    navigate(next, { replace: true })
   }
   return (
     <div className="b-page">
@@ -62,7 +68,7 @@ export function LoginPage() {
         {error && <p className="b-warn">{error}</p>}
         <button type="submit" className="b-btn">{mode === 'login' ? '로그인' : '가입하기'}</button>
       </form>
-      <button type="button" className="b-btn ghost" onClick={async () => { const r = await call((b) => b.signInKakao()); if (!r.ok) setError(r.error) }}>카카오로 로그인</button>
+      <button type="button" className="b-btn ghost" onClick={async () => { const r = await call((b) => b.signInKakao(next)); if (!r.ok) setError(r.error) }}>카카오로 로그인</button>
       <button type="button" className="b-link" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError('') }}>
         {mode === 'login' ? '계정이 없나요? 회원가입' : '이미 계정이 있나요? 로그인'}
       </button>
@@ -83,7 +89,8 @@ function readSettings(): NotifySettings {
 // 구조도 마이페이지: 개인 = 프로필 · 예매 내역 · 알림 설정 · 계정 설정 / 동아리 = 동아리 프로필 · 등록 공연 · 공연 관리 · 예매자 관리 · 계정 설정
 export function MyPage() {
   const { backend, db, me, call, showToast } = useBandy()
-  const logout = () => call((b) => b.signOut())
+  // 로그아웃하면 이 기기에 남긴 QR·입금자명도 지운다(공용 기기 대비)
+  const logout = async () => { await call((b) => b.signOut()); device.clearPersonal() }
   const reset = async () => { const r = await call((b) => b.reset()); showToast(r.ok ? '시연 데이터를 처음으로 되돌렸어요.' : r.error) }
   const [name, setName] = useState(me?.display_name ?? '')
   const [settings, setSettings] = useState<NotifySettings>(readSettings)
@@ -94,7 +101,7 @@ export function MyPage() {
         <PageHeader title="마이페이지" />
         <div className="b-card b-pad b-stack b-center">
           <p className="b-sub">로그인하면 예매 내역과 동아리 관리를 볼 수 있어요.</p>
-          <Link to="/app/login" className="b-btn">로그인</Link>
+          <Link to="/app/login?next=%2Fapp%2Fmy" className="b-btn">로그인</Link>
         </div>
         {backend.mode === 'local' && <button type="button" className="b-reset" onClick={reset}>시연 데이터 처음으로 되돌리기</button>}
       </div>
@@ -194,6 +201,8 @@ export function MyPage() {
         })}
         {bookings.length === 0 && <Empty>예매 내역이 없어요.</Empty>}
       </section>
+
+      <InstallCard />
 
       <section className="b-card b-pad b-stack">
         <h2>알림 설정</h2>

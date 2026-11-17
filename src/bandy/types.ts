@@ -130,6 +130,7 @@ export interface Payment {
   status: PaymentStatus
   depositor_name: string // [11/1 추가] 입금자명
   confirmed_by: Uuid | null // [11/1 추가] 입금 확인한 동아리 운영진
+  depositor_notified_at?: Timestamp | null // [편의] 예매자가 '입금했어요'를 누른 시각
   approved_at: Timestamp | null
   failure_code: string | null
   reconciliation_required: boolean
@@ -218,6 +219,26 @@ export interface Db {
   event_staff: EventStaff[]
   notifications: Notification[]
   exchange_requests: ExchangeRequest[]
+}
+
+// 앱을 열 때 받는 '홈 신호'(서버 my_home_state와 같은 모양). prompt로 바로 띄울 창을 정한다
+export type HomePrompt = 'TICKET_NOW' | 'STAFF_TODAY' | 'PAYMENT_DUE' | null
+export interface HomeState {
+  signed_in: boolean
+  now?: Timestamp
+  prompt?: HomePrompt
+  next_ticket?: {
+    ticket_id: Uuid; event_id: Uuid; title: string; starts_at: Timestamp; venue_name: string | null
+    entry_number: number | null; ticket_count: number
+  } | null
+  staff_events?: Array<{ event_id: Uuid; title: string; starts_at: Timestamp; checked_in: number; issued: number; pending_deposits: number }>
+  pending_payments?: Array<{
+    booking_id: Uuid; event_id: Uuid; title: string; total_amount_krw: number; expires_at: Timestamp
+    bank_name: string; account_number: string; account_holder: string; depositor_name: string; depositor_notified_at: Timestamp | null
+  }>
+  unread_notifications?: number
+  join_requests?: number
+  exchange_requests?: number
 }
 
 export const EXCHANGE_KIND_LABEL: Record<ExchangeKind, string> = {

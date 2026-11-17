@@ -8,6 +8,7 @@ import { LoginPage, MyPage } from './pages/MyPage'
 import { ManagePage } from './pages/ManagePage'
 import { ScanPage } from './pages/ScanPage'
 import { BottomBar } from './components'
+import { usePwaHead } from './convenience'
 import './bandy.css'
 
 // 상세·예매·스캔·로그인은 하단 바 대신 화면 아래 고정 버튼을 쓴다.
@@ -15,6 +16,7 @@ const NO_TABS = [/^\/app\/e\//, /^\/app\/scan\//, /^\/app\/login/]
 
 function Shell() {
   const { toast, loading } = useBandy()
+  usePwaHead()
   const { pathname } = useLocation()
   const tabs = !NO_TABS.some((r) => r.test(pathname))
   return (

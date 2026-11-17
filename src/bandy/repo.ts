@@ -2,7 +2,7 @@
 // 함수 하나가 나중의 Supabase RPC(DB 함수) 하나에 대응한다. 규칙은 supabase/reference SQL에서 검증한 것과 같다.
 // Supabase 연결 때는 이 파일의 함수 본문만 supabase.rpc(...) / select 호출로 바꾸면 된다.
 import {
-  Booking, Club, Db, EventRow, ExchangeKind, ExchangeRequest, Ticket, TicketType, Uuid,
+  Booking, Club, Db, EventRow, ExchangeKind, ExchangeRequest, HomeState, Ticket, TicketType, Uuid,
 } from './types'
 import { seedDb } from './seed'
 
@@ -404,7 +404,8 @@ export function createBooking(db: Db, userId: Uuid | null, ticketTypeId: Uuid, q
   const total = tt.price_krw * quantity
   const booking: Booking = {
     id: uid('bk'), user_id: userId!, event_id: event.id, status: 'PENDING_PAYMENT', total_amount_krw: total,
-    expires_at: new Date(Date.now() + BOOKING_HOLD_DAYS * 86400000).toISOString(),
+    // 입금 기한: 3일 또는 공연 시작 중 빠른 쪽
+    expires_at: new Date(Math.min(Date.now() + BOOKING_HOLD_DAYS * 86400000, new Date(event.starts_at).getTime())).toISOString(),
     confirmed_at: null, cancelled_at: null, idempotency_key: idempotencyKey || uid('idem'),
     request_hash: hash, created_at: now(), updated_at: now(),
   }
@@ -416,7 +417,7 @@ export function createBooking(db: Db, userId: Uuid | null, ticketTypeId: Uuid, q
   db.payments.push({
     id: uid('pay'), booking_id: booking.id, provider: 'BANK_TRANSFER', environment: 'TEST',
     provider_order_id: `BANDY-${booking.id.slice(-8).toUpperCase()}`, provider_payment_key: null,
-    status: 'PENDING', depositor_name: depositorName.trim(), confirmed_by: null, approved_at: null,
+    status: 'PENDING', depositor_name: depositorName.trim(), confirmed_by: null, depositor_notified_at: null, approved_at: null,
     failure_code: null, reconciliation_required: false, created_at: now(), updated_at: now(),
   })
   tt.reserved_quantity += quantity
@@ -691,6 +692,75 @@ export function removeMember(db: Db, userId: Uuid | null, membershipId: Uuid) {
   if (!m || !(m.user_id === userId || isOwner(db, userId, m.club_id))) throw new BandyError('부원을 찾지 못했습니다.')
   if (m.role === 'OWNER') throw new BandyError('회장은 탈퇴하거나 내보낼 수 없습니다.')
   Object.assign(m, { status: 'LEFT', role: 'MEMBER', updated_at: now() })
+}
+
+// ───────────── 사용자 편의(모바일) ─────────────
+// 예매자의 '입금했어요' → 주최 운영진 알림. 10분에 한 번까지 (서버 mark_deposit_sent와 같음)
+export function markDepositSent(db: Db, userId: Uuid | null, bookingId: Uuid) {
+  requireLogin(db, userId)
+  const b = db.bookings.find((x) => x.id === bookingId)
+  if (!b || b.user_id !== userId) throw new BandyError('예매를 찾지 못했습니다.')
+  if (b.status !== 'PENDING_PAYMENT' || isOverdue(b)) throw new BandyError('입금 대기 중인 예매가 아닙니다.')
+  const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'PENDING')!
+  if (pay.depositor_notified_at && Date.now() - new Date(pay.depositor_notified_at).getTime() < 10 * 60000) {
+    throw new BandyError('이미 알렸어요. 잠시 후 다시 눌러 주세요.')
+  }
+  pay.depositor_notified_at = now()
+  pay.updated_at = now()
+  const ev = db.events.find((e) => e.id === b.event_id)!
+  for (const m of clubManagers(db, ev.club_id)) {
+    notify(db, m.user_id, ev.id, 'DEPOSIT_SENT', `[${ev.title}] ${pay.depositor_name}님이 입금했다고 알렸어요. 입금 확인해 주세요.`, `deposit-sent-${pay.id}-${m.user_id}-${uid('n')}`)
+  }
+}
+
+// 앱을 열 때 받는 '홈 신호' (서버 my_home_state와 같은 규칙)
+export function homeState(db: Db, userId: Uuid | null): HomeState {
+  if (!userId) return { signed_in: false }
+  const t = Date.now()
+  const H = 3600000
+  const evOf = (id: Uuid) => db.events.find((e) => e.id === id)
+  const mine = db.tickets.filter((x) => x.user_id === userId && x.status === 'ISSUED')
+    .map((x) => ({ x, e: evOf(x.event_id) }))
+    .filter(({ e }) => e && e.status !== 'CANCELLED' && new Date(e.starts_at).getTime() >= t - 3 * H && new Date(e.starts_at).getTime() <= t + 24 * H)
+    .sort((a, b) => a.e!.starts_at.localeCompare(b.e!.starts_at) || (a.x.entry_number ?? 0) - (b.x.entry_number ?? 0))
+  const first = mine[0]
+  const nextTicket = first ? {
+    ticket_id: first.x.id, event_id: first.e!.id, title: first.e!.title, starts_at: first.e!.starts_at, venue_name: first.e!.venue_name,
+    entry_number: first.x.entry_number, ticket_count: mine.filter((m) => m.e!.id === first.e!.id).length,
+  } : null
+  const staffEvents = db.events
+    .filter((e) => e.status === 'PUBLISHED' && isClubManager(db, userId, e.club_id)
+      && new Date(e.starts_at).getTime() >= t - 6 * H && new Date(e.starts_at).getTime() <= t + 24 * H)
+    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+    .map((e) => ({
+      event_id: e.id, title: e.title, starts_at: e.starts_at,
+      checked_in: db.tickets.filter((x) => x.event_id === e.id && x.status === 'CHECKED_IN').length,
+      issued: db.tickets.filter((x) => x.event_id === e.id && x.status !== 'CANCELLED').length,
+      pending_deposits: db.bookings.filter((b) => b.event_id === e.id && b.status === 'PENDING_PAYMENT' && !isOverdue(b)).length,
+    }))
+  const pendingPayments = db.bookings
+    .filter((b) => b.user_id === userId && b.status === 'PENDING_PAYMENT' && !isOverdue(b))
+    .sort((a, b) => a.expires_at.localeCompare(b.expires_at))
+    .map((b) => {
+      const e = evOf(b.event_id)!
+      const p = db.payments.find((x) => x.booking_id === b.id)
+      return {
+        booking_id: b.id, event_id: e.id, title: e.title, total_amount_krw: b.total_amount_krw, expires_at: b.expires_at,
+        bank_name: e.bank_name, account_number: e.account_number, account_holder: e.account_holder,
+        depositor_name: p?.depositor_name ?? '', depositor_notified_at: p?.depositor_notified_at ?? null,
+      }
+    })
+  const prompt = nextTicket && new Date(nextTicket.starts_at).getTime() <= t + 3 * H ? 'TICKET_NOW'
+    : staffEvents.length > 0 ? 'STAFF_TODAY'
+      : pendingPayments.some((p) => new Date(p.expires_at).getTime() <= t + 24 * H && !p.depositor_notified_at) ? 'PAYMENT_DUE'
+        : null
+  const managed = managerClubIds(db, userId)
+  return {
+    signed_in: true, now: new Date(t).toISOString(), prompt, next_ticket: nextTicket, staff_events: staffEvents, pending_payments: pendingPayments,
+    unread_notifications: db.notifications.filter((n) => n.user_id === userId && !n.read_at).length,
+    join_requests: db.club_memberships.filter((m) => m.status === 'PENDING' && managed.includes(m.club_id)).length,
+    exchange_requests: db.exchange_requests.filter((r) => r.status === 'PENDING' && managed.includes(r.to_club_id)).length,
+  }
 }
 
 // ───────────── 알림 ─────────────

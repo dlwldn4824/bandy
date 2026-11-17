@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
 import { bookingCount, feedEvents, managerClubIds, publicClubs } from '../repo'
+import { HomeSignals } from '../convenience'
 import { APP_NAME, Empty, EventItem, MapBox, NeedLogin, PageHeader, Thumb, within } from '../components'
 import { dayKey, distanceKm, shortDate } from '../format'
 import { EventCategory, EventRow } from '../types'
@@ -44,6 +45,7 @@ export function HomePage() {
         <Link to="/app/notifications" className="b-text-btn">알림{unread > 0 && <span className="b-count">{unread}</span>}</Link>
       </header>
       <SearchForm onSearch={(q) => navigate(`/app/events?q=${encodeURIComponent(q)}`)} />
+      <HomeSignals />
 
       {promos.length > 0 && (
         <section className="b-stack">
@@ -225,7 +227,13 @@ export function NotificationsPage() {
     <div className="b-page">
       <PageHeader back title="알림" right={unread > 0 && <button type="button" className="b-link" onClick={() => call((b) => b.markNotificationsRead())}>모두 읽음</button>} />
       {notes.map((n) => {
-        const to = n.event_id ? `/app/e/${n.event_id}` : n.type.startsWith('EXCHANGE') ? '/app/clubs?tab=inbox' : '/app/my'
+        // 알림을 누르면 바로 처리할 화면으로: 티켓 발급 → 내 티켓, 입금했어요 → 공연 관리, 교류 → 신청함, 가입·역할 → 마이페이지
+        const ev = n.event_id ? db.events.find((e) => e.id === n.event_id) : undefined
+        const to = n.type === 'BOOKING_CONFIRMED' ? '/app/tickets'
+          : n.type === 'DEPOSIT_SENT' && ev ? `/app/manage/${ev.club_id}?event=${ev.id}`
+            : n.type.startsWith('EXCHANGE') ? '/app/clubs?tab=inbox'
+              : n.type === 'CLUB_JOIN_REQUESTED' ? '/app/my'
+                : n.event_id ? `/app/e/${n.event_id}` : '/app/my'
         return (
           <Link key={n.id} to={to} className={`b-card b-pad b-notice${n.read_at ? '' : ' unread'}`} onClick={() => call((b) => b.markNotificationsRead(n.id))}>
             <p>{n.message}</p>

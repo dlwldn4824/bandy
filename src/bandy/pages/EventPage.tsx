@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useBandy } from '../store'
+import { loginHref } from '../convenience'
+import { device } from '../device'
 import { hasBookingFor, isEventStaff, isPastEvent, publicEvents, remaining, ticketTypesOf, uid } from '../repo'
 import { Empty, PageHeader, Thumb } from '../components'
 import { dateLabel, won } from '../format'
@@ -89,7 +91,7 @@ export function EventPage() {
 
       <div className="b-dock">
         {open
-          ? <Link className="b-btn" to={me ? `/app/e/${event.id}/book` : '/app/login'}>{me ? (free ? '신청하기' : '예매하기') : '로그인하고 예매하기'}</Link>
+          ? <Link className="b-btn" to={me ? `/app/e/${event.id}/book` : loginHref(`/app/e/${event.id}/book`)}>{me ? (free ? '신청하기' : '예매하기') : '로그인하고 예매하기'}</Link>
           : <button type="button" className="b-btn" disabled>{label}</button>}
       </div>
     </div>
@@ -106,7 +108,8 @@ export function BookPage() {
   const types = event ? ticketTypesOf(db, event.id) : []
   const [typeId, setTypeId] = useState(types[0]?.id ?? '')
   const [qty, setQty] = useState(1)
-  const [depositor, setDepositor] = useState(me?.display_name ?? '')
+  // 입금자명은 이 기기에서 마지막으로 쓴 이름을 먼저 채운다
+  const [depositor, setDepositor] = useState(device.get().depositorName ?? me?.display_name ?? '')
   // 같은 내용으로 다시 눌러도(네트워크 재시도 포함) 예매가 하나만 생기도록 요청 키를 둔다.
   // 내용을 바꾸면 새 키를 써서 '같은 키로 다른 예매' 충돌이 나지 않게 한다.
   const requestKey = useMemo(() => newRequestKey(), [typeId, qty, depositor])
@@ -118,7 +121,7 @@ export function BookPage() {
   if (!event || (!doneId && !bookingState(event, left).open)) {
     return <div className="b-page"><PageHeader back title="예매" /><Empty>예매할 수 없는 공연이에요.</Empty></div>
   }
-  if (!me) return <div className="b-page"><PageHeader back title="예매" /><Empty>로그인이 필요해요. <Link to="/app/login">로그인</Link></Empty></div>
+  if (!me) return <div className="b-page"><PageHeader back title="예매" /><Empty>로그인이 필요해요. <Link to={loginHref()}>로그인</Link></Empty></div>
 
   const selected = types.find((t) => t.id === typeId) ?? types[0]
   const free = selected?.price_krw === 0
@@ -132,6 +135,7 @@ export function BookPage() {
     setBusy(false)
     if (!r.ok) { setError(r.error); return }
     setError('')
+    if (!free && depositor.trim()) device.set({ depositorName: depositor.trim() })
     if (free) {
       showToast('신청이 확정됐어요. 내 티켓에서 QR을 확인하세요.')
       navigate('/app/tickets')

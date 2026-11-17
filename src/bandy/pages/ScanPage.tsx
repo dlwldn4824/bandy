@@ -5,6 +5,7 @@ import { useBandy } from '../store'
 import { isEventStaff } from '../repo'
 import { CheckResult } from '../backend'
 import { Empty, PageHeader } from '../components'
+import { loginHref } from '../convenience'
 
 // 구조도(운영자): QR 스캔 → QR 검증 → 불가(invalid · alreadyCheckedIn) / 가능 → 관객 정보 확인 → 입장 처리 → 예매자 목록 갱신
 export function ScanPage() {
@@ -31,7 +32,7 @@ export function ScanPage() {
 
   useEffect(() => () => { scanner.current?.stop().catch(() => undefined) }, [])
 
-  if (!event || !allowed) return <div className="b-page"><PageHeader back title="입장 관리" /><Empty>이 공연의 운영진만 입장 처리를 할 수 있어요. <Link to="/app/login">로그인</Link></Empty></div>
+  if (!event || !allowed) return <div className="b-page"><PageHeader back title="입장 관리" /><Empty>이 공연의 운영진만 입장 처리를 할 수 있어요. <Link to={loginHref()}>로그인</Link></Empty></div>
 
   const startCamera = async () => {
     try {

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
+import { loginHref } from '../convenience'
 import { canSeeOpenChat, isPastEvent, managerClubIds, publicClubs, publicEvents, safeUrl } from '../repo'
 import { Backend } from '../backend'
 import { Empty, EventItem, ImageInput, NeedLogin, PageHeader, Thumb } from '../components'
@@ -193,7 +194,7 @@ export function ClubPage() {
         <section className="b-card b-pad b-stack">
           <h2>교류 신청</h2>
           {!club.exchange_open && <p className="b-sub">지금은 교류를 받지 않는 동아리예요.</p>}
-          {club.exchange_open && !me && <Link to="/app/login" className="b-btn">로그인하고 신청하기</Link>}
+          {club.exchange_open && !me && <Link to={loginHref()} className="b-btn">로그인하고 신청하기</Link>}
           {club.exchange_open && me && mine.length === 0 && <p className="b-sub">승인된 동아리의 운영진만 교류를 신청할 수 있어요.</p>}
           {me && mine.length > 0 && connected && <p className="b-sub">이미 교류 중인 동아리예요. {chat ? '위의 오픈채팅으로 연락해 보세요.' : ''}</p>}
           {me && mine.length > 0 && !connected && pendingToMe && <p className="b-sub">이 동아리가 보낸 신청이 있어요. <Link to="/app/clubs?tab=inbox">교류 신청함</Link>에서 수락할 수 있어요.</p>}
