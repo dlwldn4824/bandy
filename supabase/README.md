@@ -31,15 +31,18 @@
 |---|---|---|
 | `update_profile(p_display_name)` | 본인 | 표시 이름 수정 |
 | `create_club(p_input)` · `update_club(p_club_id, p_patch)` | 로그인 / 동아리 운영진 | 동아리 등록(승인 대기, 등록자 OWNER) · 수정 |
-| `set_club_status(p_club_id, p_status)` | 운영자 | 승인(ACTIVE) / 거절(REJECTED) |
-| `create_event` · `update_event` · `set_event_status` · `delete_event` | 동아리 운영진 | 공연 등록·수정·공개·삭제. 예매가 있으면 가격 변경·삭제 불가, 예매 수량보다 정원 축소 불가 |
-| `create_booking(p_ticket_type_id, p_quantity, p_depositor_name, p_idempotency_key)` | 로그인 | 입금 대기 예매. 서버가 금액 계산, 정원 확인, 같은 요청 키는 같은 예매 반환, 기한 지난 예매는 자동 만료 |
-| `confirm_deposit(p_booking_id)` | 주최 동아리 | 입금 확인 → 예매 확정 + 수량만큼 티켓(입장번호) 발급. 두 번 눌러도 안전 |
-| `cancel_booking(p_booking_id)` | 본인 / 주최 동아리 | 입금 전 예매 취소, 자리 반환 |
+| `set_club_status(p_club_id, p_status)` | 운영자 | 승인(ACTIVE) / 거절(REJECTED) / 정지(SUSPENDED). 정지되면 공연 등록·수정·공개·입금 확인이 멈추고, 이미 발급된 티켓의 입장 처리와 입금 전 취소는 계속 됨 |
+| `create_event` · `update_event` · `set_event_status` · `delete_event` | 승인된 동아리 운영진 | 공연 등록·수정·공개·취소·삭제. 공개 조건(장소, 앞으로의 일시, 유료면 계좌)은 등록·공개 전환·공개 중 수정에 똑같이 적용. 예매가 있으면 가격 변경·삭제 불가, 예매 수량보다 정원 축소 불가. `update_event`는 보내지 않은 칸을 그대로 둠. 공연을 취소(CANCELLED)하면 입금 대기 예매는 취소되고 예매자 모두에게 알림, 다시 열 수 없음 |
+| `create_booking(p_ticket_type_id, p_quantity, p_depositor_name, p_idempotency_key)` | 로그인(정지 회원 제외) | 입금 대기 예매. 서버가 금액 계산, 정원 확인, 판매 기간(공연 시작 전까지) 확인, 입금자명 20자까지, 같은 요청 키는 동시에 와도 같은 예매 반환 |
+| `confirm_deposit(p_booking_id)` | 주최 동아리 운영진(OWNER·MANAGER) | 입금 확인 → 예매 확정 + 수량만큼 티켓(입장번호) 발급. 두 번 눌러도 안전. 입금 기한이 지난 예매는 언제 눌러도 거부 |
+| `cancel_booking(p_booking_id)` | 본인 / 주최 동아리 운영진 | 입금 전 예매 취소, 자리 반환. 주최 쪽이 취소하면 예매자에게 알림 |
+| `expire_overdue_bookings()` | 서버(service_role) | 입금 기한이 지난 예매를 한꺼번에 만료 + 알림. 예매·입금 확인·취소 때도 그 티켓 종류는 먼저 정리됨 |
 | `issue_ticket_qr(p_ticket_id)` | 티켓 주인 | QR 토큰 새로 발급(이전 QR 폐기, DB에는 해시만) |
-| `verify_ticket(p_event_id, p_token)` | 공연 운영진 | 검증만: valid / already_checked_in / invalid + 관객 정보 |
+| `verify_ticket(p_event_id, p_token)` | 공연 운영진 | 검증만: valid / already_checked_in / invalid + 관객 정보. 취소된 공연의 QR은 invalid, 토큰 앞뒤 공백·줄바꿈 무시 |
 | `check_in(p_event_id, p_token)` | 공연 운영진 | 입장 처리. 동시에 여러 번 스캔해도 한 번만 바뀜 |
-| `request_exchange` · `respond_exchange` · `cancel_exchange` | 동아리 운영진 | 교류 신청 · 수락/거절 · 취소. 수락되면 서로 오픈채팅 링크 공개 |
+| `request_exchange` · `respond_exchange` · `cancel_exchange` | 동아리 운영진 | 교류 신청 · 수락/거절 · 취소. 수락되면 서로 오픈채팅 링크 공개. 상대가 보낸 신청이 대기 중이거나 이미 교류 중이면 새 신청 거부. 알림은 운영진(OWNER·MANAGER)에게만 |
+| `request_club_join(p_club_id)` · `respond_club_join(p_membership_id, p_accept)` | 로그인 / 동아리 운영진 | 부원 가입 신청 · 수락/거절 |
+| `set_member_role(p_membership_id, p_role)` · `remove_member(p_membership_id)` | 회장(OWNER) / 회장·본인 | 운영진(MANAGER) 지정·해제, 내보내기·탈퇴. 회장은 바꾸거나 내보낼 수 없음 |
 | `mark_notifications_read(p_id)` | 본인 | 알림 읽음(전체 또는 하나) |
 
 ## 검증
@@ -48,11 +51,13 @@
 PGHOST=<소켓 경로> PGPORT=<포트> PGUSER=postgres supabase/tests/run_backend.sh
 ```
 
-`tests/local_supabase_shim.sql`이 Supabase의 역할·`auth.users`·`auth.uid()`를 흉내 내고, `tests/app_backend_test.sql`이 59개 항목(권한 차단, 정원, 중복 요청, 만료, 입금 확인, QR 재발급·검증·입장, 교류, 수정·삭제 제한)을 확인합니다.
+`tests/local_supabase_shim.sql`이 Supabase의 역할·`auth.users`·`auth.uid()`를 흉내 내고, `tests/app_backend_test.sql`이 98개 항목(권한 차단, 정원, 중복 요청, 만료, 입금 확인, QR 재발급·검증·입장, 교류, 수정·삭제 제한 + 2026-11-17 독립 검토 반영분: 비공개·취소 공연의 예매자 조회, 지난 공연 예매·공개 차단, 공개 조건, 입력 형식 오류 한국어 안내, 입금 기한·알림, 공연 취소, 링크 형식, 등록 남용, 교류 중복, 부원·운영진, 동아리 정지)을 확인합니다.
 
 이 밖에 개발 중 확인한 것:
 - 마지막 1석에 두 사람이 동시에 예매 → 한 명만 성공
 - 같은 QR을 동시에 3번 입장 처리 → 1번만 입장, 감사 기록 1건
+- 같은 요청 키로 동시에 3번 예매 × 30회 → 오류 0, 예매 1건
+- 같은 공연에 공연 수정과 입금 확인 40쌍 동시 실행 → 교착 0, 입장번호 중복 0
 - 앱을 Supabase 모드로 빌드해 브라우저에서 가입 → 동아리 등록 → 승인 → 공연 등록·수정 → 예매·취소 → 입금 확인 → QR 발급 → 검증 → 입장 → 교류 신청·수락까지 진행 (Supabase 서버 대신 같은 API를 흉내 낸 테스트 서버 + 이 migration을 적용한 로컬 PostgreSQL)
 
 **아직 확인 못 한 것:** 실제 Supabase 프로젝트(bandy-dev)에 적용, 실제 Supabase Auth(메일 인증 설정, 카카오 제공자), 실제 PostgREST의 응답 형식 차이.
@@ -64,3 +69,8 @@ PGHOST=<소켓 경로> PGPORT=<포트> PGUSER=postgres supabase/tests/run_backen
 - `payments`를 예매자 본인·주최 운영진이 직접 읽을 수 있게 함(노션 초안은 앱 직접 조회 금지) — 입금자명·주문번호 표시용
 - 공연·동아리 이미지는 지금 data URL로 `poster_path`/`profile_path`에 저장 → Supabase Storage 업로드로 바꿔야 함
 - 주소 → 좌표 변환(카카오 Local) 미연결: 좌표가 없는 공연은 지도·거리 정렬에서 빠짐
+- 승인 대기 중인 동아리 등록은 한 사람당 1건
+- 동아리 정지 시: 새 판매·공개·입금 확인은 멈추고, 이미 발급된 티켓 입장은 유지
+- 공연 취소 시 입금 완료분 환불은 앱 밖에서 동아리가 직접(알림 문구로 안내)
+- 입금 기한 만료를 제때 하려면 `expire_overdue_bookings()`를 주기 실행해야 함(예: pg_cron `*/10 * * * *`). 안 해도 예매·입금 확인·취소 때 그 공연분은 정리되고, 기한 지난 예매는 입금 확인이 거부됨
+- 앱은 테이블을 통째로 읽음 → Supabase 기본 응답 상한(보통 1000행)을 넘으면 목록이 잘릴 수 있음. 12월 시범 규모에서는 문제없지만 커지면 화면별 조회로 바꿔야 함

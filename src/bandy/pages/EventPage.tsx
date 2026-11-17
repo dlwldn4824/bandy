@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useBandy } from '../store'
-import { isEventStaff, publicEvents, remaining, ticketTypesOf } from '../repo'
+import { hasBookingFor, isEventStaff, isPastEvent, publicEvents, remaining, ticketTypesOf, uid } from '../repo'
 import { Empty, PageHeader, Thumb } from '../components'
 import { dateLabel, won } from '../format'
 
@@ -10,8 +10,23 @@ function useVisibleEvent() {
   const { db, me } = useBandy()
   const event = db.events.find((e) => e.id === eventId)
   const staff = isEventStaff(db, me?.id ?? null, eventId)
-  const visible = !!event && (publicEvents(db).some((e) => e.id === eventId) || staff)
+  // 예매한 사람은 공연이 비공개·취소돼도 공연 정보를 본다(서버 RLS와 같은 규칙)
+  const visible = !!event && (publicEvents(db).some((e) => e.id === eventId) || staff || hasBookingFor(db, me?.id ?? null, eventId))
   return { event: visible ? event : undefined, staff }
+}
+
+// 예매 가능 여부와 버튼 문구
+function bookingState(event: { status: string; starts_at: string }, left: number) {
+  if (event.status === 'CANCELLED') return { open: false, label: '취소된 공연' }
+  if (event.status !== 'PUBLISHED') return { open: false, label: '공개 전' }
+  if (isPastEvent(event)) return { open: false, label: '예매 마감' }
+  if (left <= 0) return { open: false, label: '매진' }
+  return { open: true, label: '' }
+}
+
+// 요청 키. crypto.randomUUID는 https·localhost에서만 있어 휴대폰에서 http 내부망 주소로 열면 없다
+function newRequestKey() {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : uid('req')
 }
 
 // 구조도: 공연 상세 (공연 정보 · 팀/동아리) → 예매 화면
@@ -20,12 +35,12 @@ export function EventPage() {
   const { event, staff } = useVisibleEvent()
   if (!event) return <div className="b-page"><PageHeader back title="공연" /><Empty>공개된 공연이 아니에요.</Empty></div>
 
-  const club = db.clubs.find((c) => c.id === event.club_id)!
+  const club = db.clubs.find((c) => c.id === event.club_id)
   const types = ticketTypesOf(db, event.id)
   const free = types.every((t) => t.price_krw === 0)
   const left = types.reduce((n, t) => n + remaining(t), 0)
   const myBookings = me ? db.bookings.filter((b) => b.user_id === me.id && b.event_id === event.id && b.status !== 'CANCELLED') : []
-  const open = event.status === 'PUBLISHED' && left > 0
+  const { open, label } = bookingState(event, left)
 
   return (
     <div className="b-page with-dock">
@@ -34,14 +49,16 @@ export function EventPage() {
       <section className="b-stack">
         <span className="b-row">
           <span className="b-status">{event.category}</span>
-          {event.status !== 'PUBLISHED' && <span className="b-status wait">초안 · 운영진만 보임</span>}
+          {event.status === 'CANCELLED' && <span className="b-status wait">취소된 공연</span>}
+          {event.status === 'DRAFT' && <span className="b-status wait">{staff ? '초안 · 운영진만 보임' : '비공개로 바뀐 공연'}</span>}
+          {event.status === 'PUBLISHED' && isPastEvent(event) && <span className="b-status">지난 공연</span>}
         </span>
         <h1>{event.title}</h1>
         <dl className="b-info">
           <dt>일시</dt><dd>{dateLabel(event.starts_at)}</dd>
           <dt>장소</dt><dd>{event.venue_name}{event.address ? <span className="b-sub"><br />{event.address}</span> : null}</dd>
           <dt>티켓</dt><dd>{types.map((t) => `${t.name} ${won(t.price_krw)}`).join(' / ')} · 남은 {left}석</dd>
-          <dt>주최</dt><dd><Link className="b-link" to={`/app/c/${club.id}`}>{club.name}</Link> <span className="b-sub">{club.school}</span></dd>
+          <dt>주최</dt><dd>{club ? <><Link className="b-link" to={`/app/c/${club.id}`}>{club.name}</Link> <span className="b-sub">{club.school}</span></> : event.account_holder}</dd>
         </dl>
       </section>
 
@@ -56,7 +73,7 @@ export function EventPage() {
         <section className="b-card b-pad b-stack">
           <h2>내 예매</h2>
           {myBookings.map((b) => (
-            <p key={b.id} className="b-sub">{b.status === 'CONFIRMED' ? '확정' : '입금 대기'} · {won(b.total_amount_krw)}</p>
+            <p key={b.id} className="b-sub">{{ CONFIRMED: '확정', PENDING_PAYMENT: '입금 대기', EXPIRED: '기한 만료', CANCELLED: '취소' }[b.status]} · {won(b.total_amount_krw)}</p>
           ))}
           <Link className="b-link" to="/app/tickets">내 티켓에서 보기</Link>
         </section>
@@ -65,7 +82,7 @@ export function EventPage() {
       {staff && (
         <section className="b-card b-pad b-stack">
           <h2>공연 관리</h2>
-          <Link className="b-btn ghost" to={`/app/manage/${club.id}?event=${event.id}`}>예매자 목록 · 입금 확인 · 수정</Link>
+          <Link className="b-btn ghost" to={`/app/manage/${event.club_id}?event=${event.id}`}>예매자 목록 · 입금 확인 · 수정</Link>
           <Link className="b-btn ghost" to={`/app/scan/${event.id}`}>입장 관리 (QR 스캔)</Link>
         </section>
       )}
@@ -73,7 +90,7 @@ export function EventPage() {
       <div className="b-dock">
         {open
           ? <Link className="b-btn" to={me ? `/app/e/${event.id}/book` : '/app/login'}>{me ? (free ? '신청하기' : '예매하기') : '로그인하고 예매하기'}</Link>
-          : <button type="button" className="b-btn" disabled>{event.status === 'PUBLISHED' ? '매진' : '공개 전'}</button>}
+          : <button type="button" className="b-btn" disabled>{label}</button>}
       </div>
     </div>
   )
@@ -92,19 +109,26 @@ export function BookPage() {
   const [depositor, setDepositor] = useState(me?.display_name ?? '')
   // 같은 내용으로 다시 눌러도(네트워크 재시도 포함) 예매가 하나만 생기도록 요청 키를 둔다.
   // 내용을 바꾸면 새 키를 써서 '같은 키로 다른 예매' 충돌이 나지 않게 한다.
-  const requestKey = useMemo(() => crypto.randomUUID(), [typeId, qty, depositor])
+  const requestKey = useMemo(() => newRequestKey(), [typeId, qty, depositor])
+  const sending = useRef(false) // 같은 순간 두 번 눌러도 한 번만 보낸다(busy는 다음 렌더 전이라 못 막음)
   const [error, setError] = useState('')
   const [doneId, setDoneId] = useState<string | null>(null)
 
-  if (!event) return <div className="b-page"><PageHeader back title="예매" /><Empty>예매할 수 없는 공연이에요.</Empty></div>
+  const left = event ? types.reduce((n, t) => n + remaining(t), 0) : 0
+  if (!event || (!doneId && !bookingState(event, left).open)) {
+    return <div className="b-page"><PageHeader back title="예매" /><Empty>예매할 수 없는 공연이에요.</Empty></div>
+  }
   if (!me) return <div className="b-page"><PageHeader back title="예매" /><Empty>로그인이 필요해요. <Link to="/app/login">로그인</Link></Empty></div>
 
   const selected = types.find((t) => t.id === typeId) ?? types[0]
   const free = selected?.price_krw === 0
 
   const submit = async () => {
+    if (sending.current) return
+    sending.current = true
     setBusy(true)
     const r = await call((b) => b.createBooking(selected.id, qty, depositor, requestKey))
+    sending.current = false
     setBusy(false)
     if (!r.ok) { setError(r.error); return }
     setError('')
@@ -165,7 +189,7 @@ export function BookPage() {
         {!free && (
           <label className="b-field">
             <span>입금자명</span>
-            <input value={depositor} onChange={(e) => setDepositor(e.target.value)} placeholder="입금할 때 쓰는 이름" />
+            <input value={depositor} onChange={(e) => setDepositor(e.target.value)} maxLength={20} placeholder="입금할 때 쓰는 이름" />
           </label>
         )}
         <div className="b-sum"><span>합계</span><b>{won(selected.price_krw * qty)}</b></div>

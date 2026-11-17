@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useBandy } from '../store'
-import { managerClubIds } from '../repo'
+import { isOverdue, managerClubIds, safeUrl } from '../repo'
 import { PERSONAS } from '../seed'
 import { Empty, PageHeader, Thumb } from '../components'
 import { dateLabel, won } from '../format'
@@ -100,7 +100,9 @@ export function MyPage() {
       </div>
     )
   }
-  const clubs = managerClubIds(db, me.id).map((id) => db.clubs.find((c) => c.id === id)!)
+  const clubs = managerClubIds(db, me.id).map((id) => db.clubs.find((c) => c.id === id)).filter((c) => !!c)
+  // 부원(MEMBER)으로 가입했거나 가입 신청 중인 동아리
+  const joined = db.club_memberships.filter((m) => m.user_id === me.id && m.role === 'MEMBER' && (m.status === 'ACTIVE' || m.status === 'PENDING'))
   const pendingClubs = me.is_admin ? db.clubs.filter((c) => c.status === 'PENDING') : []
   const bookings = db.bookings.filter((b) => b.user_id === me.id && b.status !== 'CANCELLED').sort((a, b) => b.created_at.localeCompare(a.created_at))
   const unread = db.notifications.filter((n) => n.user_id === me.id && !n.read_at).length
@@ -128,7 +130,7 @@ export function MyPage() {
             <article key={c.id} className="b-card b-pad b-stack">
               <strong>{c.name}</strong>
               <p className="b-sub">{c.school} · {c.genre} · {c.region}</p>
-              {c.sns_url && <a className="b-link" href={c.sns_url} target="_blank" rel="noreferrer">SNS에서 확인</a>}
+              {safeUrl(c.sns_url) && <a className="b-link" href={safeUrl(c.sns_url)!} target="_blank" rel="noreferrer">SNS에서 확인</a>}
               <div className="b-row">
                 <button type="button" className="b-btn small" onClick={async () => { const r = await call((b) => b.setClubStatus(c.id, 'ACTIVE')); showToast(r.ok ? '승인했어요.' : r.error) }}>승인</button>
                 <button type="button" className="b-btn ghost small" onClick={async () => { const r = await call((b) => b.setClubStatus(c.id, 'REJECTED')); showToast(r.ok ? '거절했어요.' : r.error) }}>거절</button>
@@ -143,7 +145,7 @@ export function MyPage() {
         const events = db.events.filter((e) => e.club_id === c.id)
         return (
           <section key={c.id} className="b-stack">
-            <h2 className="b-h2">동아리 · {c.name} {c.status !== 'ACTIVE' && <span className="b-status wait">{c.status === 'PENDING' ? '승인 대기' : '거절됨'}</span>}</h2>
+            <h2 className="b-h2">동아리 · {c.name} {c.status !== 'ACTIVE' && <span className="b-status wait">{c.status === 'PENDING' ? '승인 대기' : c.status === 'SUSPENDED' ? '정지됨' : '거절됨'}</span>}</h2>
             <Link to={`/app/manage/${c.id}?tab=profile`} className="b-card b-club">
               {c.profile_path && <Thumb src={c.profile_path} className="round" />}
               <span className="b-grow b-stack tight"><strong>동아리 프로필</strong><span className="b-sub">{c.school} · {c.genre} · {c.region}</span></span>
@@ -157,17 +159,36 @@ export function MyPage() {
         )
       })}
 
+      {joined.length > 0 && (
+        <section className="b-stack">
+          <h2 className="b-h2">가입한 동아리</h2>
+          {joined.map((m) => (
+            <article key={m.id} className="b-card b-pad b-row between">
+              <Link to={`/app/c/${m.club_id}`} className="b-link">{db.clubs.find((c) => c.id === m.club_id)?.name ?? '동아리'}</Link>
+              <span className="b-row">
+                <span className={`b-status${m.status === 'ACTIVE' ? ' ok' : ' wait'}`}>{m.status === 'ACTIVE' ? '부원' : '가입 신청 중'}</span>
+                <button type="button" className="b-btn ghost small" onClick={async () => { const r = await call((b) => b.removeMember(m.id)); showToast(r.ok ? (m.status === 'ACTIVE' ? '탈퇴했어요.' : '신청을 취소했어요.') : r.error) }}>{m.status === 'ACTIVE' ? '탈퇴' : '신청 취소'}</button>
+              </span>
+            </article>
+          ))}
+        </section>
+      )}
+
       <section className="b-stack">
         <div className="b-row between">
           <h2 className="b-h2">예매 내역</h2>
           <Link to="/app/tickets" className="b-link">내 티켓</Link>
         </div>
         {bookings.slice(0, 5).map((b) => {
-          const ev = db.events.find((e) => e.id === b.event_id)!
+          const ev = db.events.find((e) => e.id === b.event_id)
+          const label = b.status === 'CONFIRMED' ? '확정' : b.status === 'EXPIRED' || isOverdue(b) ? '기한 만료' : '입금 대기'
           return (
-            <Link key={b.id} to={`/app/e/${ev.id}`} className="b-card b-pad b-row between">
-              <span className="b-stack tight"><strong>{ev.title}</strong><span className="b-sub">{dateLabel(ev.starts_at)} · {won(b.total_amount_krw)}</span></span>
-              <span className={`b-status ${b.status === 'CONFIRMED' ? 'ok' : 'wait'}`}>{b.status === 'CONFIRMED' ? '확정' : '입금 대기'}</span>
+            <Link key={b.id} to={`/app/e/${b.event_id}`} className="b-card b-pad b-row between">
+              <span className="b-stack tight">
+                <strong>{ev?.title ?? '(공연 정보를 불러오지 못했어요)'}</strong>
+                <span className="b-sub">{ev ? `${dateLabel(ev.starts_at)} · ` : ''}{won(b.total_amount_krw)}{ev?.status === 'CANCELLED' ? ' · 공연 취소' : ''}</span>
+              </span>
+              <span className={`b-status ${b.status === 'CONFIRMED' ? 'ok' : 'wait'}`}>{label}</span>
             </Link>
           )
         })}

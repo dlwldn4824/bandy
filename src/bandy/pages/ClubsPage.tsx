@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
-import { canSeeOpenChat, managerClubIds, publicClubs, publicEvents } from '../repo'
+import { canSeeOpenChat, isPastEvent, managerClubIds, publicClubs, publicEvents, safeUrl } from '../repo'
 import { Backend } from '../backend'
 import { Empty, EventItem, ImageInput, NeedLogin, PageHeader, Thumb } from '../components'
 import { EXCHANGE_KIND_LABEL, ExchangeKind } from '../types'
@@ -111,12 +111,14 @@ function Inbox() {
       <h2 className="b-h2">연결된 동아리</h2>
       {connected.map((r) => {
         const other = mine.includes(r.from_club_id) ? r.to_club_id : r.from_club_id
-        const club = db.clubs.find((c) => c.id === other)!
+        const club = db.clubs.find((c) => c.id === other)
+        if (!club) return null
+        const chat = safeUrl(club.open_chat_url)
         return (
           <article key={r.id} className="b-card b-pad b-row between">
             <span><Link to={`/app/c/${club.id}`}><strong>{club.name}</strong></Link> <span className="b-sub">· {EXCHANGE_KIND_LABEL[r.kind]}</span></span>
-            {club.open_chat_url
-              ? <a className="b-btn small" href={club.open_chat_url} target="_blank" rel="noreferrer">오픈채팅</a>
+            {chat
+              ? <a className="b-btn small" href={chat} target="_blank" rel="noreferrer">오픈채팅</a>
               : <span className="b-sub">링크 없음</span>}
           </article>
         )
@@ -138,7 +140,10 @@ export function ClubPage() {
   const isManager = managerClubIds(db, me?.id ?? null).includes(clubId)
   if (!club || (club.status !== 'ACTIVE' && !isManager)) return <div className="b-page"><Empty>동아리를 찾지 못했어요.</Empty></div>
 
-  const events = publicEvents(db).filter((e) => e.club_id === club.id)
+  const events = publicEvents(db).filter((e) => e.club_id === club.id && !isPastEvent(e))
+  const myMembership = me ? db.club_memberships.find((m) => m.club_id === club.id && m.user_id === me.id) : undefined
+  const sns = safeUrl(club.sns_url)
+  const chat = safeUrl(club.open_chat_url)
   const showChat = canSeeOpenChat(db, me?.id ?? null, club.id)
   const pendingFromMe = db.exchange_requests.some((r) => r.to_club_id === club.id && mine.includes(r.from_club_id) && r.status === 'PENDING')
 
@@ -160,14 +165,26 @@ export function ClubPage() {
         {club.profile_path && <Thumb src={club.profile_path} className="round big" />}
         <h1>{club.name}</h1>
         <p className="b-sub">{club.school} · {club.genre} · {club.region}</p>
-        {club.status !== 'ACTIVE' && <p className="b-warn">운영자 승인 대기 중이에요. 승인 전에는 다른 사람에게 보이지 않아요.</p>}
+        {club.status !== 'ACTIVE' && <p className="b-warn">{club.status === 'SUSPENDED' ? '운영이 정지된 동아리예요. 다른 사람에게 보이지 않아요.' : '운영자 승인 대기 중이에요. 승인 전에는 다른 사람에게 보이지 않아요.'}</p>}
         {club.introduction && <p className="b-body">{club.introduction}</p>}
         <div className="b-row center">
-          {club.sns_url && <a className="b-link" href={club.sns_url} target="_blank" rel="noreferrer">인스타그램</a>}
-          {showChat && club.open_chat_url && <a className="b-link" href={club.open_chat_url} target="_blank" rel="noreferrer">오픈채팅</a>}
+          {sns && <a className="b-link" href={sns} target="_blank" rel="noreferrer">인스타그램</a>}
+          {showChat && chat && <a className="b-link" href={chat} target="_blank" rel="noreferrer">오픈채팅</a>}
           {isManager && <Link className="b-link" to={`/app/manage/${club.id}`}>동아리 관리</Link>}
         </div>
       </section>
+
+      {!isManager && club.status === 'ACTIVE' && me && (
+        <section className="b-card b-pad b-row between">
+          <span className="b-stack tight">
+            <strong>동아리 부원이신가요?</strong>
+            <span className="b-sub">가입하면 운영진이 입금 확인·입장 처리를 맡길 수 있어요.</span>
+          </span>
+          {myMembership?.status === 'ACTIVE' ? <span className="b-status ok">부원</span>
+            : myMembership?.status === 'PENDING' ? <span className="b-status wait">가입 신청 중</span>
+              : <button type="button" className="b-btn small" onClick={async () => { const r = await call((b) => b.requestClubJoin(club.id)); showToast(r.ok ? '가입을 신청했어요. 운영진이 수락하면 알려 드려요.' : r.error) }}>가입 신청</button>}
+        </section>
+      )}
 
       {!isManager && club.status === 'ACTIVE' && (
         <section className="b-card b-pad b-stack">

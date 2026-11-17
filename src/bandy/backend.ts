@@ -77,6 +77,11 @@ export interface Backend {
   respondExchange(requestId: string, accept: boolean): Promise<void>
   cancelExchange(requestId: string): Promise<void>
   markNotificationsRead(id?: string): Promise<void>
+  // 부원 · 운영진
+  requestClubJoin(clubId: string): Promise<void>
+  respondClubJoin(membershipId: string, accept: boolean): Promise<void>
+  setMemberRole(membershipId: string, role: 'MANAGER' | 'MEMBER'): Promise<void>
+  removeMember(membershipId: string): Promise<void>
 }
 
 // ───────────────────────── 브라우저 데모 ─────────────────────────
@@ -146,17 +151,12 @@ class LocalBackend implements Backend {
   async updateEvent(eventId: string, input: EventInput) { this.mutate((d, u) => repo.updateEvent(d, u, eventId, input)) }
   async setEventStatus(eventId: string, status: EventRow['status']) { this.mutate((d, u) => repo.setEventStatus(d, u, eventId, status)) }
   async deleteEvent(eventId: string) { this.mutate((d, u) => repo.deleteEvent(d, u, eventId)) }
-  async createBooking(ticketTypeId: string, quantity: number, depositor: string) {
-    return this.mutate((d, u) => repo.createBooking(d, u, ticketTypeId, quantity, depositor).id)
+  async createBooking(ticketTypeId: string, quantity: number, depositor: string, idempotencyKey: string) {
+    return this.mutate((d, u) => repo.createBooking(d, u, ticketTypeId, quantity, depositor, idempotencyKey).id)
   }
   async confirmDeposit(bookingId: string) { this.mutate((d, u) => repo.confirmDeposit(d, u, bookingId)) }
   async cancelBooking(bookingId: string) { this.mutate((d, u) => repo.cancelBooking(d, u, bookingId)) }
-  async issueTicketQr(ticketId: string) {
-    const t = this.db.tickets.find((x) => x.id === ticketId && x.user_id === this.uid())
-    const qr = t && repo.qrOf(this.db, t.id)
-    if (!qr) throw new BandyError('티켓을 찾지 못했습니다.')
-    return qr.token
-  }
+  async issueTicketQr(ticketId: string) { return this.mutate((d, u) => repo.issueTicketQr(d, u, ticketId)) }
   async verifyTicket(eventId: string, token: string) { return this.mutate((d, u) => this.info(d, repo.verifyTicket(d, u, eventId, token))) }
   async checkIn(eventId: string, token: string) { return this.mutate((d, u) => this.info(d, repo.checkIn(d, u, eventId, token))) }
   async requestExchange(fromClubId: string, toClubId: string, kind: ExchangeKind, message: string) {
@@ -167,6 +167,10 @@ class LocalBackend implements Backend {
   async markNotificationsRead(id?: string) {
     this.mutate((d, u) => (id ? repo.markNotificationRead(d, u, id) : repo.markNotificationsRead(d, u)))
   }
+  async requestClubJoin(clubId: string) { this.mutate((d, u) => { repo.requestClubJoin(d, u, clubId) }) }
+  async respondClubJoin(membershipId: string, accept: boolean) { this.mutate((d, u) => repo.respondClubJoin(d, u, membershipId, accept)) }
+  async setMemberRole(membershipId: string, role: 'MANAGER' | 'MEMBER') { this.mutate((d, u) => repo.setMemberRole(d, u, membershipId, role)) }
+  async removeMember(membershipId: string) { this.mutate((d, u) => repo.removeMember(d, u, membershipId)) }
 }
 
 // ───────────────────────── Supabase ─────────────────────────
@@ -264,6 +268,10 @@ class SupabaseBackend implements Backend {
   async respondExchange(requestId: string, accept: boolean) { await this.rpc('respond_exchange', { p_request_id: requestId, p_accept: accept }) }
   async cancelExchange(requestId: string) { await this.rpc('cancel_exchange', { p_request_id: requestId }) }
   async markNotificationsRead(id?: string) { await this.rpc('mark_notifications_read', { p_id: id ?? null }) }
+  async requestClubJoin(clubId: string) { await this.rpc('request_club_join', { p_club_id: clubId }) }
+  async respondClubJoin(membershipId: string, accept: boolean) { await this.rpc('respond_club_join', { p_membership_id: membershipId, p_accept: accept }) }
+  async setMemberRole(membershipId: string, role: 'MANAGER' | 'MEMBER') { await this.rpc('set_member_role', { p_membership_id: membershipId, p_role: role }) }
+  async removeMember(membershipId: string) { await this.rpc('remove_member', { p_membership_id: membershipId }) }
 }
 
 export function createBackend(): Backend {

@@ -14,6 +14,14 @@ begin
   begin execute stmt; exception when others then raise notice 'ok - % (거부: %)', msg, sqlerrm; return; end;
   raise exception 'FAIL: % — 거부되어야 하는데 성공함', msg;
 end; $$;
+create function test.fails_with(stmt text, pattern text, msg text) returns void language plpgsql as $$
+begin
+  begin execute stmt; exception when others then
+    if sqlerrm !~ pattern then raise exception 'FAIL: % — 거부 문구가 다름: %', msg, sqlerrm; end if;
+    raise notice 'ok - % (거부: %)', msg, sqlerrm; return;
+  end;
+  raise exception 'FAIL: % — 거부되어야 하는데 성공함', msg;
+end; $$;
 grant execute on all functions in schema test to anon, authenticated;
 
 \set as_admin 'reset role; select set_config(''request.jwt.claim.sub'', ''00000000-0000-0000-0000-00000000000a'', false); set role authenticated;'
@@ -166,6 +174,128 @@ select test.ok((select display_name from public.profiles where id = auth.uid()) 
 select public.create_event(:'c1', '{"title":"지울 공연","starts_at":"2027-01-01T19:00+09","capacity":10}') as ev3 \gset
 select public.delete_event(:'ev3');
 select test.ok((select count(*) from public.events where id = :'ev3') = 0, '예매 없는 공연 삭제');
+
+-- 12. 독립 검토(2026-11-17) 반영
+-- 12-1. 예매자는 공연이 비공개·취소·동아리 정지여도 그 공연을 본다(내 티켓 화면 유지)
+:as_o1
+select public.set_event_status(:'ev2', 'DRAFT');
+:as_u
+select test.ok((select count(*) from public.events where id = :'ev2') = 1, '비공개로 돌린 공연도 예매자에게 보임');
+:as_v
+select test.ok((select count(*) from public.events where id = :'ev2') = 0, '예매 안 한 사람에게는 비공개 공연 안 보임');
+:as_o1
+select public.set_event_status(:'ev2', 'PUBLISHED');
+
+-- 12-2. 지난 공연: 공개·예매 불가
+select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"옛 공연","starts_at":"2020-01-01T19:00+09","venue_name":"홀","capacity":5,"publish":true}')$$, '지난 일시', '과거 일시로 공개 등록 불가');
+select public.create_event(:'c1', '{"title":"유료 초안","starts_at":"2026-12-20T19:00+09","venue_name":"홀","price_krw":5000,"capacity":5}') as ev5 \gset
+select id as tt5 from public.ticket_types where event_id = :'ev5' \gset
+select test.fails_with($$select public.set_event_status('$$ || :'ev5' || $$', 'PUBLISHED')$$, '입금 계좌', '계좌 없는 유료 공연은 공개 전환 불가');
+select public.update_event(:'ev5', '{"title":"유료 공연","bank_name":"카카오뱅크","account_number":"3333-55"}');
+select test.ok((select price_krw from public.ticket_types where id = :'tt5') = 5000, '가격을 안 보내면 기존 가격 유지');
+select public.set_event_status(:'ev5', 'PUBLISHED');
+select test.fails_with($$select public.update_event('$$ || :'ev5' || $$', '{"account_number":""}')$$, '입금 계좌', '공개 중 유료 공연의 계좌 삭제 불가');
+select test.fails_with($$select public.set_event_status('$$ || :'ev5' || $$', 'OPEN')$$, '알 수 없는', '없는 상태값은 한국어로 거부');
+select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"x","starts_at":"2026-12-20T19:00+09","capacity":5,"price_krw":"abc"}')$$, '숫자로', '숫자 형식 오류는 한국어 안내');
+select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"x","starts_at":"내일","capacity":5}')$$, '일시 형식', '일시 형식 오류는 한국어 안내');
+select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"x","starts_at":"2026-12-20T19:00+09","capacity":5,"latitude":"200"}')$$, '좌표', '좌표 범위 오류는 한국어 안내');
+reset role;
+update public.events set starts_at = now() - interval '1 hour' where id = :'ev2';
+:as_v
+select test.fails_with($$select public.create_booking('$$ || :'tt2' || $$', 1, '')$$, '마감', '시작한 공연은 예매 불가');
+reset role;
+update public.events set starts_at = '2026-12-29T09:30+09' where id = :'ev2';
+
+-- 12-3. 입금자명 길이 · 정지 회원
+:as_v
+select test.fails_with($$select public.create_booking('$$ || :'tt5' || $$', 1, repeat('가', 21))$$, '20자', '입금자명 20자 초과 거부');
+reset role;
+update public.profiles set status = 'SUSPENDED' where id = '00000000-0000-0000-0000-00000000000c';
+:as_v
+select test.fails_with($$select public.create_booking('$$ || :'tt5' || $$', 1, '이준')$$, '제한된 계정', '정지 회원은 예매 불가');
+reset role;
+update public.profiles set status = 'ACTIVE' where id = '00000000-0000-0000-0000-00000000000c';
+
+-- 12-4. 입금 기한: 기한이 지나면 언제 눌러도 입금 확인 거부, 정리 함수가 만료·알림 처리
+:as_v
+select public.create_booking(:'tt5', 1, '이준', 'late-1') as bk_late \gset
+select public.create_booking(:'tt5', 1, '이준', 'host-cancel-1') as bk_hc \gset
+reset role;
+update public.bookings set created_at = now() - interval '4 days', expires_at = now() - interval '1 day' where id = :'bk_late';
+:as_o1
+select test.fails_with($$select public.confirm_deposit('$$ || :'bk_late' || $$')$$, '만료', '기한 지난 예매는 입금 확인 거부');
+reset role;
+select test.ok(public.expire_overdue_bookings() = 1, '기한 지난 예매 일괄 정리');
+:as_o1
+select public.cancel_booking(:'bk_hc');
+reset role;
+select test.ok((select status from public.bookings where id = :'bk_late') = 'EXPIRED', '정리 후 만료 상태');
+select test.ok((select reserved_quantity from public.ticket_types where id = :'tt5') = 0, '만료·취소분 자리 반환');
+select test.ok((select count(*) from public.notifications where user_id = '00000000-0000-0000-0000-00000000000c'
+                and event_id = :'ev5' and type in ('BOOKING_EXPIRED', 'BOOKING_CANCELLED')) = 2, '만료·주최 취소 알림');
+
+-- 12-5. QR: 앞뒤 줄바꿈 허용, 취소된 공연은 입장 불가 + 대기 예매 정리
+:as_u
+select id as t2 from public.tickets where booking_id = :'bk' and issue_sequence = 2 \gset
+select public.issue_ticket_qr(:'t2') as qr2 \gset
+:as_o1
+select test.ok(public.verify_ticket(:'ev', E'  ' || :'qr2' || E'\n') ->> 'result' = 'valid', '토큰 앞뒤 줄바꿈은 무시');
+:as_v
+select public.create_booking(:'tt', 1, '이준', 'pend-ev') as bk_pend \gset
+:as_o1
+select public.set_event_status(:'ev', 'CANCELLED');
+select test.ok(public.verify_ticket(:'ev', :'qr2') ->> 'result' = 'invalid', '취소된 공연 QR은 입장 불가');
+select test.ok((select status from public.bookings where id = :'bk_pend') = 'CANCELLED', '공연 취소 시 입금 대기 예매 취소');
+select test.fails_with($$select public.set_event_status('$$ || :'ev' || $$', 'PUBLISHED')$$, '다시 열 수 없', '취소된 공연은 다시 공개 불가');
+:as_u
+select test.ok((select count(*) from public.events where id = :'ev') = 1, '취소된 공연도 예매자에게 보임');
+select test.ok((select count(*) from public.notifications where type = 'EVENT_CANCELLED') = 1, '확정 예매자에게 공연 취소 알림');
+select test.fails_with($$select public.issue_ticket_qr('$$ || :'t2' || $$')$$, '취소된 공연', '취소된 공연은 QR 발급 불가');
+
+-- 12-6. 동아리 링크 · 등록 남용
+:as_o1
+select test.fails_with($$select public.update_club('$$ || :'c1' || $$', '{"sns_url":"javascript:alert(1)"}')$$, 'http', 'javascript: SNS 링크 거부');
+select test.fails_with($$select public.update_club('$$ || :'c1' || $$', '{"open_chat_url":"javascript:alert(1)"}')$$, 'http', 'javascript: 오픈채팅 링크 거부');
+select public.update_club(:'c1', '{"sns_url":"https://instagram.com/rexa"}');
+:as_u
+select public.create_club('{"name":"새밴드"}') as c3 \gset
+select test.fails_with($$select public.create_club('{"name":"새밴드2"}')$$, '승인 대기', '승인 대기 동아리는 1건까지');
+
+-- 12-7. 교류: 자기 자신 · 역방향 대기 · 이미 교류 중 · 부원(MEMBER)은 알림 안 받음
+:as_o1
+select test.fails_with($$select public.request_exchange('$$ || :'c1' || $$', '$$ || :'c1' || $$', 'PRACTICE')$$, '같은 동아리', '자기 동아리 신청은 한국어로 거부');
+select test.fails_with($$select public.request_exchange('$$ || :'c1' || $$', '$$ || :'c2' || $$', 'PRACTICE')$$, '이미 교류 중', '이미 교류 중이면 재신청 불가');
+
+-- 12-8. 부원 · 운영진: 가입 신청 → 수락 → 회장이 운영진 지정 → 입금 확인 가능
+:as_v
+select public.request_club_join(:'c1') as mem_v \gset
+:as_o1
+select test.ok((select display_name from public.profiles where id = '00000000-0000-0000-0000-00000000000c') = 'viewer', '운영진은 가입 신청자 이름 확인');
+select public.respond_club_join(:'mem_v', true);
+:as_v
+select test.fails_with($$select public.confirm_deposit('$$ || :'bk_late' || $$')$$, '찾지 못', '부원(MEMBER)은 입금 확인 불가');
+:as_o1
+select public.set_member_role(:'mem_v', 'MANAGER');
+:as_v
+select test.ok((select count(*) from public.bookings where event_id = :'ev5') >= 1, '운영진이 되면 예매자 명단 조회');
+select test.fails_with($$select public.set_member_role('$$ || :'mem_v' || $$', 'MEMBER')$$, '회장만', '운영진은 역할 변경 불가');
+select public.remove_member(:'mem_v');
+:as_o1
+select test.fails_with($$select public.remove_member((select id from public.club_memberships where user_id = auth.uid() and role = 'OWNER' limit 1))$$, '회장은', '회장은 탈퇴 불가');
+
+-- 12-9. 동아리 정지: 공연 공개·입금 확인 중단, 알림 문구
+:as_v
+select public.create_booking(:'tt5', 1, '이준', 'susp-1') as bk_s \gset
+:as_admin
+select public.set_club_status(:'c1', 'SUSPENDED');
+:as_o1
+select test.fails_with($$select public.confirm_deposit('$$ || :'bk_s' || $$')$$, '승인된 동아리만', '정지된 동아리는 입금 확인 불가');
+select test.fails_with($$select public.set_event_status('$$ || :'ev5' || $$', 'DRAFT')$$, '승인된 동아리만', '정지된 동아리는 공연 상태 변경 불가');
+select test.ok((select message from public.notifications where type = 'CLUB_STATUS' order by created_at desc limit 1) like '%정지%', '정지 알림은 정지 문구');
+:as_v
+select test.ok((select count(*) from public.events where id = :'ev5') = 1, '정지 동아리 공연도 예매자에게 보임');
+:as_admin
+select public.set_club_status(:'c1', 'ACTIVE');
 reset role;
 select test.ok((select count(*) from public.audit_logs where action in ('CONFIRM_DEPOSIT', 'CHECK_IN')) = 2, '입금 확인·입장 감사 기록');
 \echo 'ALL TESTS PASSED'

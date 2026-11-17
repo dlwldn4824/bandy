@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { EventRow } from './types'
 import { dateLabel, distanceKm, HERE, shortDate, timeOf } from './format'
 import { useBandy } from './store'
-import { managerClubIds } from './repo'
+import { activeManagerClubIds } from './repo'
 
 export const APP_NAME = 'BANDY' // 서비스 이름 확정 전(BANDY / RE:CONNECT). 여기만 바꾸면 된다.
 
@@ -136,12 +136,13 @@ export function within(e: EventRow, radiusKm: number) {
 }
 
 // 하단 바: 홈 / 지도·캘린더 / 가운데(개인=내 티켓, 동아리=+공연 등록 메뉴) / 동아리 찾기 / 마이페이지
+// '동아리'는 승인된 동아리의 운영진. 승인 대기·정지 동아리만 있으면 개인 하단 바(내 티켓)를 쓴다
 export function BottomBar() {
   const { db, me } = useBandy()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [menu, setMenu] = useState(false)
-  const clubId = managerClubIds(db, me?.id ?? null)[0]
+  const clubId = activeManagerClubIds(db, me?.id ?? null)[0]
   const tab = (to: string, label: string, end = false) => (
     <NavLink to={to} end={end} className={({ isActive }) => `b-tab${isActive ? ' active' : ''}`} onClick={() => setMenu(false)}>{label}</NavLink>
   )

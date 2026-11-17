@@ -4,10 +4,17 @@ import { QRCodeSVG } from 'qrcode.react'
 import { useBandy } from '../store'
 import { Empty, NeedLogin, PageHeader } from '../components'
 import { dateLabel, won } from '../format'
-import { Ticket } from '../types'
+import { EventRow, Ticket } from '../types'
+import { isOverdue, isPastEvent } from '../repo'
 
 const IMMINENT_MS = 24 * 3600000 // [미정] 입장 임박 기준. 지금은 공연 시작 24시간 전부터 '입장 예정'
 const LEGACY_SERVICE = '/performances' // 기존 서비스(공연 정보 · 셋리스트 · 채팅 · 방명록). 공연별 연결 방식은 미정
+
+// 공연 정보를 못 읽는 경우(권한·삭제 등)에도 화면이 깨지지 않게 쓰는 자리 표시
+const UNKNOWN_EVENT: Pick<EventRow, 'id' | 'title' | 'starts_at' | 'venue_name' | 'status' | 'bank_name' | 'account_number' | 'account_holder'> = {
+  id: '', title: '(공연 정보를 불러오지 못했어요)', starts_at: '9999-12-31T00:00:00Z', venue_name: '', status: 'PUBLISHED',
+  bank_name: '', account_number: '', account_holder: '',
+}
 
 // 구조도: 내 티켓 = 입장 예정 → 이후 공연 → 사용 완료 / 티켓 선택 → 티켓 상세·QR (ticketId · qrToken · checkInStatus)
 export function TicketsPage() {
@@ -28,13 +35,16 @@ export function TicketsPage() {
   }, [open?.id])
   if (!me) return <div className="b-page"><PageHeader title="내 티켓" /><NeedLogin what="내 티켓" /></div>
 
-  const eventOf = (id: string) => db.events.find((e) => e.id === id)!
+  const eventOf = (id: string) => db.events.find((e) => e.id === id) ?? { ...UNKNOWN_EVENT, id }
   const tickets = db.tickets.filter((t) => t.user_id === me.id && t.status !== 'CANCELLED')
     .sort((a, b) => eventOf(a.event_id).starts_at.localeCompare(eventOf(b.event_id).starts_at) || a.issue_sequence - b.issue_sequence)
-  const issued = tickets.filter((t) => t.status === 'ISSUED')
+  // 취소된 공연·이미 지난 공연의 미사용 티켓은 '지난·취소'로 따로 모은다
+  const closed = (t: Ticket) => { const ev = eventOf(t.event_id); return ev.status === 'CANCELLED' || isPastEvent(ev) }
+  const issued = tickets.filter((t) => t.status === 'ISSUED' && !closed(t))
   const soon = issued.filter((t) => new Date(eventOf(t.event_id).starts_at).getTime() - Date.now() < IMMINENT_MS)
   const later = issued.filter((t) => !soon.includes(t))
   const used = tickets.filter((t) => t.status === 'CHECKED_IN')
+  const missed = tickets.filter((t) => t.status === 'ISSUED' && closed(t))
   const pending = db.bookings.filter((b) => b.user_id === me.id && b.status === 'PENDING_PAYMENT')
 
   const cancel = async (bookingId: string) => {
@@ -42,18 +52,20 @@ export function TicketsPage() {
     showToast(r.ok ? '예매를 취소했어요.' : r.error)
   }
 
-  const row = (t: Ticket, kind: 'soon' | 'later' | 'used') => {
+  const row = (t: Ticket, kind: 'soon' | 'later' | 'used' | 'missed') => {
     const ev = eventOf(t.event_id)
     const item = db.booking_items.find((i) => i.id === t.booking_item_id)
+    const inactive = kind === 'used' || kind === 'missed'
+    const label = kind === 'used' ? '입장 완료' : kind === 'missed' ? (ev.status === 'CANCELLED' ? '공연 취소' : '지난 공연') : 'QR'
     return (
       <div key={t.id} className="b-stack">
-        <button type="button" className={`b-ticket${kind === 'used' ? ' used' : ''}`} onClick={() => kind !== 'used' && setOpen(t)} disabled={kind === 'used'}>
+        <button type="button" className={`b-ticket${inactive ? ' used' : ''}`} onClick={() => !inactive && setOpen(t)} disabled={inactive}>
           <span className="b-ticket-no">{t.entry_number}</span>
           <span className="b-grow b-stack tight">
             <strong>{ev.title}</strong>
             <span className="b-sub">{dateLabel(ev.starts_at)} · {item?.ticket_type_name}</span>
           </span>
-          <span className={`b-status${kind === 'used' ? '' : ' red'}`}>{kind === 'used' ? '입장 완료' : 'QR'}</span>
+          <span className={`b-status${inactive ? '' : ' red'}`}>{label}</span>
         </button>
       </div>
     )
@@ -68,14 +80,21 @@ export function TicketsPage() {
           <h2 className="b-h2">입금 대기</h2>
           {pending.map((b) => {
             const ev = eventOf(b.event_id)
-            const item = db.booking_items.find((i) => i.booking_id === b.id)!
-            const pay = db.payments.find((p) => p.booking_id === b.id)!
+            const item = db.booking_items.find((i) => i.booking_id === b.id)
+            const pay = db.payments.find((p) => p.booking_id === b.id)
+            const overdue = isOverdue(b)
             return (
               <article key={b.id} className="b-card b-pad b-stack">
-                <div className="b-row between"><strong>{ev.title}</strong><span className="b-status wait">입금 대기</span></div>
-                <p className="b-sub">{item.ticket_type_name} {item.quantity}매 · {won(b.total_amount_krw)} · 입금자명 {pay.depositor_name}</p>
-                <p className="b-sub">{ev.bank_name} {ev.account_number} (예금주 {ev.account_holder})</p>
-                <button type="button" className="b-btn ghost small" onClick={() => cancel(b.id)}>예매 취소</button>
+                <div className="b-row between"><strong>{ev.title}</strong><span className="b-status wait">{overdue ? '기한 지남' : '입금 대기'}</span></div>
+                <p className="b-sub">{item?.ticket_type_name} {item?.quantity}매 · {won(b.total_amount_krw)} · 입금자명 {pay?.depositor_name}</p>
+                {overdue
+                  ? <p className="b-note">입금 기한({dateLabel(b.expires_at)})이 지나 예매가 취소돼요. 다시 예매해 주세요.</p>
+                  : (
+                    <>
+                      <p className="b-sub">{ev.bank_name} {ev.account_number} (예금주 {ev.account_holder}) · 기한 {dateLabel(b.expires_at)}</p>
+                      <button type="button" className="b-btn ghost small" onClick={() => cancel(b.id)}>예매 취소</button>
+                    </>
+                  )}
               </article>
             )
           })}
@@ -101,6 +120,13 @@ export function TicketsPage() {
         {used.length === 0 && <Empty>입장한 티켓이 없어요.</Empty>}
       </section>
 
+      {missed.length > 0 && (
+        <section className="b-stack">
+          <h2 className="b-h2">지난·취소된 공연</h2>
+          {missed.map((t) => row(t, 'missed'))}
+        </section>
+      )}
+
       {open && (() => {
         const ev = eventOf(open.event_id)
         const token = qr?.ticketId === open.id ? qr.token : null
@@ -115,7 +141,7 @@ export function TicketsPage() {
                 ? <p className="b-status ok">입장 완료</p>
                 : token ? <div className="b-qr"><QRCodeSVG value={token} size={200} level="M" /></div> : <p className="b-sub">QR을 불러오는 중…</p>}
               <p className="b-note">현장에서 운영진에게 이 QR을 보여 주세요.<br />코드: <code>{token}</code></p>
-              <Link className="b-link" to={`/app/e/${ev.id}`}>공연 정보 확인</Link>
+              {ev.id && <Link className="b-link" to={`/app/e/${ev.id}`}>공연 정보 확인</Link>}
               <button type="button" className="b-btn ghost" onClick={() => setOpen(null)}>닫기</button>
             </div>
           </div>

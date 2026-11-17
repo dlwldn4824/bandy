@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
-import { isClubManager } from '../repo'
+import { isClubManager, isOverdue, isPastEvent } from '../repo'
 import { Backend } from '../backend'
 import { Empty, ImageInput, PageHeader } from '../components'
 import { dateLabel, won } from '../format'
 import { EventCategory, EventRow } from '../types'
 
 const STATUS_LABEL: Record<EventRow['status'], string> = { DRAFT: '초안', PUBLISHED: '공개', ENDED: '종료', CANCELLED: '취소' }
-type Tab = 'events' | 'new' | 'profile'
+type Tab = 'events' | 'new' | 'profile' | 'members'
+const ROLE_LABEL = { OWNER: '회장', MANAGER: '운영진', MEMBER: '부원' } as const
 
 // 구조도(동아리): 공연 관리(수정 · 삭제 · 예매자 목록 · 입장 관리) / 공연 등록 / 동아리 등록·수정
 export function ManagePage() {
@@ -16,7 +17,7 @@ export function ManagePage() {
   const [params, setParams] = useSearchParams()
   const { db, me } = useBandy()
   const q = params.get('tab')
-  const [tab, setTab] = useState<Tab>(q === 'new' || q === 'profile' ? q : 'events')
+  const [tab, setTab] = useState<Tab>(q === 'new' || q === 'profile' || q === 'members' ? q : 'events')
   const club = db.clubs.find((c) => c.id === clubId)
 
   if (!club || !isClubManager(db, me?.id ?? null, clubId)) {
@@ -31,12 +32,18 @@ export function ManagePage() {
     <div className="b-page">
       <PageHeader back title={`${club.name} 관리`} />
       {club.status !== 'ACTIVE' && (
-        <p className="b-warn">{club.status === 'PENDING' ? '운영자 승인 대기 중이에요. 승인되면 공연을 올리고 교류를 신청할 수 있어요.' : '승인이 거절됐어요.'}</p>
+        <p className="b-warn">{{
+          PENDING: '운영자 승인 대기 중이에요. 승인되면 공연을 올리고 교류를 신청할 수 있어요.',
+          SUSPENDED: '운영이 정지된 동아리예요. 공연 등록·공개·입금 확인이 멈춰요. (이미 발급된 티켓의 입장 처리는 돼요)',
+          REJECTED: '승인이 거절됐어요.',
+          ACTIVE: '',
+        }[club.status]}</p>
       )}
       <div className="b-seg">
         <button type="button" className={tab === 'events' ? 'on' : ''} onClick={() => setTab('events')}>공연 관리</button>
         <button type="button" className={tab === 'new' ? 'on' : ''} onClick={() => setTab('new')}>공연 등록</button>
         <button type="button" className={tab === 'profile' ? 'on' : ''} onClick={() => setTab('profile')}>동아리 정보</button>
+        <button type="button" className={tab === 'members' ? 'on' : ''} onClick={() => setTab('members')}>부원</button>
       </div>
 
       {tab === 'events' && (
@@ -49,6 +56,7 @@ export function ManagePage() {
       )}
       {tab === 'new' && <EventForm clubId={club.id} onDone={(id) => { setTab('events'); setParams({ event: id }) }} />}
       {tab === 'profile' && <ClubForm clubId={club.id} />}
+      {tab === 'members' && <Members clubId={club.id} />}
     </div>
   )
 }
@@ -61,6 +69,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
   const bookings = db.bookings.filter((b) => b.event_id === eventId && b.status !== 'CANCELLED')
   const tickets = db.tickets.filter((t) => t.event_id === eventId && t.status !== 'CANCELLED')
   const pending = bookings.filter((b) => b.status === 'PENDING_PAYMENT')
+  const cancelled = event.status === 'CANCELLED'
   const nameOf = (uid: string) => db.profiles.find((p) => p.id === uid)?.display_name ?? '-'
 
   const act = async (fn: (b: Backend) => Promise<unknown>, ok: string) => {
@@ -76,14 +85,19 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
           <strong>{event.title}</strong>
           <span className={`b-status${event.status === 'PUBLISHED' ? ' ok' : ''}`}>{STATUS_LABEL[event.status]}</span>
         </div>
-        <p className="b-sub">{dateLabel(event.starts_at)} · {event.venue_name}</p>
+        <p className="b-sub">{dateLabel(event.starts_at)} · {event.venue_name}{isPastEvent(event) ? ' · 지난 공연' : ''}</p>
         <p className="b-sub">입금 대기 {pending.length}건 · 발급 티켓 {tickets.length}장 · 입장 {tickets.filter((t) => t.status === 'CHECKED_IN').length}장</p>
         <div className="b-row">
           <Link className="b-btn small" to={`/app/scan/${event.id}`}>입장 관리 (QR)</Link>
-          <button type="button" className="b-btn ghost small" onClick={() => act((b) => b.setEventStatus(event.id, event.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED'), event.status === 'PUBLISHED' ? '비공개로 돌렸어요.' : '공개했어요.')}>
-            {event.status === 'PUBLISHED' ? '비공개' : '공개'}
-          </button>
-          <button type="button" className="b-btn ghost small" onClick={() => setMode(mode === 'edit' ? 'bookings' : 'edit')}>{mode === 'edit' ? '수정 닫기' : '수정'}</button>
+          {!cancelled && (
+            <button type="button" className="b-btn ghost small" onClick={() => act((b) => b.setEventStatus(event.id, event.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED'), event.status === 'PUBLISHED' ? '비공개로 돌렸어요.' : '공개했어요.')}>
+              {event.status === 'PUBLISHED' ? '비공개' : '공개'}
+            </button>
+          )}
+          {!cancelled && <button type="button" className="b-btn ghost small" onClick={() => setMode(mode === 'edit' ? 'bookings' : 'edit')}>{mode === 'edit' ? '수정 닫기' : '수정'}</button>}
+          {!cancelled && bookings.length > 0 && (
+            <button type="button" className="b-btn ghost small" onClick={() => { if (window.confirm('공연을 취소할까요? 입금 대기 예매는 취소되고 예매자 모두에게 알림이 가요. 되돌릴 수 없어요.')) act((b) => b.setEventStatus(event.id, 'CANCELLED'), '공연을 취소했어요.') }}>공연 취소</button>
+          )}
           <button type="button" className="b-btn ghost small" onClick={async () => { if (window.confirm('이 공연을 삭제할까요?') && await act((b) => b.deleteEvent(event.id), '삭제했어요.')) onDeleted() }}>삭제</button>
           <Link className="b-link" to={`/app/e/${event.id}`}>공연 페이지</Link>
         </div>
@@ -101,16 +115,21 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
           {filter === 'pending' ? (
             <>
               {pending.map((b) => {
-                const item = db.booking_items.find((i) => i.booking_id === b.id)!
-                const pay = db.payments.find((p) => p.booking_id === b.id)!
+                const item = db.booking_items.find((i) => i.booking_id === b.id)
+                const pay = db.payments.find((p) => p.booking_id === b.id)
+                const overdue = isOverdue(b)
                 return (
                   <article key={b.id} className="b-card b-pad b-stack">
-                    <div className="b-row between"><strong>입금자명 {pay.depositor_name}</strong><span className="b-status wait">입금 대기</span></div>
-                    <p className="b-sub">{nameOf(b.user_id)} · {item.ticket_type_name} {item.quantity}매 · {won(b.total_amount_krw)}</p>
-                    <div className="b-row">
-                      <button type="button" className="b-btn small" onClick={() => act((x) => x.confirmDeposit(b.id), '입금 확인했어요. 티켓이 발급됐어요.')}>입금 확인</button>
-                      <button type="button" className="b-btn ghost small" onClick={() => act((x) => x.cancelBooking(b.id), '예매를 취소했어요.')}>취소</button>
-                    </div>
+                    <div className="b-row between"><strong>입금자명 {pay?.depositor_name}</strong><span className="b-status wait">{overdue ? '기한 지남' : '입금 대기'}</span></div>
+                    <p className="b-sub">{nameOf(b.user_id)} · {item?.ticket_type_name} {item?.quantity}매 · {won(b.total_amount_krw)} · 기한 {dateLabel(b.expires_at)}</p>
+                    {overdue
+                      ? <p className="b-note">입금 기한이 지나 입금 확인을 할 수 없어요. 자리는 자동으로 풀려요.</p>
+                      : (
+                        <div className="b-row">
+                          <button type="button" className="b-btn small" onClick={() => act((x) => x.confirmDeposit(b.id), '입금 확인했어요. 티켓이 발급됐어요.')}>입금 확인</button>
+                          <button type="button" className="b-btn ghost small" onClick={() => act((x) => x.cancelBooking(b.id), '예매를 취소했어요.')}>취소</button>
+                        </div>
+                      )}
                   </article>
                 )
               })}
@@ -135,7 +154,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
                     <td>-</td>
                     <td>{nameOf(b.user_id)}</td>
                     <td>{db.booking_items.find((i) => i.booking_id === b.id)?.ticket_type_name}</td>
-                    <td><span className="b-status wait">입금 대기</span></td>
+                    <td><span className="b-status wait">{isOverdue(b) ? '기한 지남' : '입금 대기'}</span></td>
                     <td>-</td>
                   </tr>
                 ))}
@@ -250,5 +269,49 @@ function ClubForm({ clubId }: { clubId: string }) {
       <button type="button" className="b-btn" onClick={save}>저장</button>
       <button type="button" className="b-link" onClick={() => navigate(`/app/c/${clubId}`)}>동아리 페이지 보기</button>
     </section>
+  )
+}
+
+// 부원 · 운영진: 가입 신청 수락, 회장이 운영진 지정(운영진은 입금 확인·입장 처리 가능)
+function Members({ clubId }: { clubId: string }) {
+  const { db, me, call, showToast } = useBandy()
+  const members = db.club_memberships.filter((m) => m.club_id === clubId && m.status !== 'LEFT')
+  const iAmOwner = members.some((m) => m.user_id === me?.id && m.role === 'OWNER' && m.status === 'ACTIVE')
+  const nameOf = (uid: string) => db.profiles.find((p) => p.id === uid)?.display_name ?? '(이름 비공개)'
+  const act = async (fn: (b: Backend) => Promise<unknown>, ok: string) => {
+    const r = await call(fn)
+    showToast(r.ok ? ok : r.error)
+  }
+  const requests = members.filter((m) => m.status === 'PENDING')
+  const active = members.filter((m) => m.status === 'ACTIVE')
+  return (
+    <div className="b-stack">
+      <h2 className="b-h2">가입 신청</h2>
+      {requests.map((m) => (
+        <article key={m.id} className="b-card b-pad b-row between">
+          <strong>{nameOf(m.user_id)}</strong>
+          <span className="b-row">
+            <button type="button" className="b-btn small" onClick={() => act((b) => b.respondClubJoin(m.id, true), '가입을 수락했어요.')}>수락</button>
+            <button type="button" className="b-btn ghost small" onClick={() => act((b) => b.respondClubJoin(m.id, false), '가입 신청을 거절했어요.')}>거절</button>
+          </span>
+        </article>
+      ))}
+      {requests.length === 0 && <Empty>새 가입 신청이 없어요.</Empty>}
+      <h2 className="b-h2">부원</h2>
+      <p className="b-note">운영진은 입금 확인·입장 처리·공연 관리를 함께 할 수 있어요. 운영진 지정은 회장만 할 수 있어요.</p>
+      {active.map((m) => (
+        <article key={m.id} className="b-card b-pad b-row between">
+          <span className="b-stack tight"><strong>{nameOf(m.user_id)}</strong><span className="b-sub">{ROLE_LABEL[m.role]}</span></span>
+          {iAmOwner && m.role !== 'OWNER' && (
+            <span className="b-row">
+              <button type="button" className="b-btn ghost small" onClick={() => act((b) => b.setMemberRole(m.id, m.role === 'MANAGER' ? 'MEMBER' : 'MANAGER'), '역할을 바꿨어요.')}>
+                {m.role === 'MANAGER' ? '부원으로' : '운영진으로'}
+              </button>
+              <button type="button" className="b-btn ghost small" onClick={() => { if (window.confirm('이 부원을 내보낼까요?')) act((b) => b.removeMember(m.id), '내보냈어요.') }}>내보내기</button>
+            </span>
+          )}
+        </article>
+      ))}
+    </div>
   )
 }

@@ -37,10 +37,25 @@ function event(
   }
 }
 
+// 시연 공연 날짜는 오늘 기준 며칠 뒤(한국 시간)로 잡는다. 날짜를 고정하면 그날이 지나면 시연 예매가 막힌다
+function kstAt(daysFromToday: number, hh: number, mm: number) {
+  const kstToday = new Date(Date.now() + 9 * 3600000)
+  const d = new Date(Date.UTC(kstToday.getUTCFullYear(), kstToday.getUTCMonth(), kstToday.getUTCDate() + daysFromToday, hh - 9, mm))
+  return d.toISOString()
+}
+
+const STARTS: Record<string, string> = {
+  'ev-rexa': kstAt(12, 19, 0),
+  'ev-sound': kstAt(18, 18, 30),
+  'ev-jazz': kstAt(25, 19, 0),
+  'ev-hack': kstAt(42, 9, 30),
+  'ev-rexa-draft': kstAt(117, 19, 0),
+}
+
 function ticketType(id: string, event_id: string, name: string, price_krw: number, capacity: number) {
   return {
     id, event_id, name, price_krw, capacity, reserved_quantity: 0, sold_quantity: 0,
-    sales_starts_at: T0, sales_ends_at: '2026-12-31T23:59:00+09:00', status: 'ACTIVE' as const,
+    sales_starts_at: T0, sales_ends_at: STARTS[event_id], status: 'ACTIVE' as const,
     created_at: T0, updated_at: T0,
   }
 }
@@ -79,19 +94,19 @@ export function seedDb(): Db {
       member('u-dawn', 'dawn'),
     ],
     events: [
-      event('ev-rexa', 'rexa', 'u-rexa', '렉사 X 멜로딕 연합 공연', '공연', '2026-11-29T19:00:00+09:00',
+      event('ev-rexa', 'rexa', 'u-rexa', '렉사 X 멜로딕 연합 공연', '공연', STARTS['ev-rexa'],
         '제휴 공연장 노원 라이브홀', '서울 노원구 광운로 20', 37.6195, 127.0600,
         '렉사와 멜로딕의 겨울 연합 무대. 1부 렉사, 2부 멜로딕, 마지막 연합곡.'),
-      event('ev-sound', 'soundwave', 'u-sound', '사운드웨이브 겨울 정기공연', '공연', '2026-12-05T18:30:00+09:00',
+      event('ev-sound', 'soundwave', 'u-sound', '사운드웨이브 겨울 정기공연', '공연', STARTS['ev-sound'],
         '서울과기대 100주년관', '서울 노원구 공릉로 232', 37.6318, 127.0773,
         '한 학기 동안 준비한 6팀의 무대.'),
-      event('ev-jazz', 'jazzlab', 'u-admin', '재즈랩 겨울 재즈의 밤', '공연', '2026-12-12T19:00:00+09:00',
+      event('ev-jazz', 'jazzlab', 'u-admin', '재즈랩 겨울 재즈의 밤', '공연', STARTS['ev-jazz'],
         '공릉 재즈바 블루노트', '서울 노원구 동일로 1000', 37.6255, 127.0730,
         '스탠더드 넘버와 학생 자작곡.'),
-      event('ev-hack', 'melodic', 'u-melodic', '대학연합 AI 해커톤', '해커톤', '2026-12-29T09:30:00+09:00',
+      event('ev-hack', 'melodic', 'u-melodic', '대학연합 AI 해커톤', '해커톤', STARTS['ev-hack'],
         '인스케이프 본사', '서울 노원구 화랑로 500', 37.6150, 127.0850,
         '하루 동안 팀별로 AI 과제를 개발하고 발표. 3~4명 팀 신청.'),
-      event('ev-rexa-draft', 'rexa', 'u-rexa', '렉사 단독 공연 (초안)', '공연', '2027-03-14T19:00:00+09:00',
+      event('ev-rexa-draft', 'rexa', 'u-rexa', '렉사 단독 공연 (초안)', '공연', STARTS['ev-rexa-draft'],
         '장소 미정', '', 37.62, 127.06, '아직 공개 전인 초안입니다.', 'DRAFT'),
     ],
     ticket_types: [

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
-import { bookingCount, feedEvents, managerClubIds } from '../repo'
+import { bookingCount, feedEvents, managerClubIds, publicClubs } from '../repo'
 import { APP_NAME, Empty, EventItem, MapBox, NeedLogin, PageHeader, Thumb, within } from '../components'
 import { dayKey, distanceKm, shortDate } from '../format'
 import { EventCategory, EventRow } from '../types'
@@ -93,6 +93,8 @@ export function EventsPage() {
     return `${e.title} ${e.venue_name ?? ''} ${e.address ?? ''} ${club?.name ?? ''}`.includes(q)
   }
   const list = feed.filter((e) => (category === '전체' || e.category === category) && matches(e))
+  // 검색어가 있으면 동아리도 찾는다(이름 · 학교 · 장르 · 지역)
+  const clubs = q ? publicClubs(db).filter((c) => `${c.name} ${c.school} ${c.genre} ${c.region}`.includes(q)) : []
   const sorted = [...list].sort((a, b) => {
     if (sort === 'new') return (b.published_at ?? b.created_at).localeCompare(a.published_at ?? a.created_at)
     if (sort === 'popular') return bookingCount(db, b.id) - bookingCount(db, a.id)
@@ -104,6 +106,18 @@ export function EventsPage() {
     <div className="b-page">
       <PageHeader back title={q ? `'${q}' 검색 결과` : '전체 공연'} />
       <SearchForm initial={q} onSearch={(v) => setParams(v ? { q: v } : {})} />
+      {clubs.length > 0 && (
+        <section className="b-stack">
+          <h2 className="b-h2">동아리 {clubs.length}</h2>
+          {clubs.map((c) => (
+            <Link key={c.id} to={`/app/c/${c.id}`} className="b-card b-club">
+              {c.profile_path && <Thumb src={c.profile_path} className="round" />}
+              <span className="b-grow b-stack tight"><strong>{c.name}</strong><span className="b-sub">{c.school} · {c.genre} · {c.region}</span></span>
+              <span className="b-chev">›</span>
+            </Link>
+          ))}
+        </section>
+      )}
       <div className="b-chips">
         {CATEGORIES.map((c) => (
           <button key={c} type="button" className={`b-chip${category === c ? ' active' : ''}`} onClick={() => setCategory(c)}>{c}</button>

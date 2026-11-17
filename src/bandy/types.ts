@@ -6,7 +6,7 @@
 export type Uuid = string
 export type Timestamp = string // ISO8601
 
-export type ProfileStatus = 'ACTIVE' // [확인 필요] 나머지 값
+export type ProfileStatus = 'ACTIVE' | 'SUSPENDED' | 'WITHDRAWN'
 export interface Profile {
   id: Uuid
   display_name: string
@@ -17,7 +17,7 @@ export interface Profile {
   updated_at: Timestamp
 }
 
-export type ClubStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' // ACTIVE만 문서 확인, 나머지 [확인 필요]
+export type ClubStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED'
 export interface Club {
   id: Uuid
   name: string
@@ -42,7 +42,7 @@ export interface ClubMembership {
   user_id: Uuid
   club_id: Uuid
   role: MembershipRole
-  status: 'ACTIVE'
+  status: 'ACTIVE' | 'PENDING' | 'LEFT' // PENDING = 가입 신청 대기, LEFT = 탈퇴·거절
   created_at: Timestamp
   updated_at: Timestamp
 }
