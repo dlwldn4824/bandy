@@ -1,0 +1,12 @@
+const { chromium } = require('playwright')
+;(async () => {
+  const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: Number(process.argv[4] || 2200), height: 1000 }, deviceScaleFactor: Number(process.argv[5] || 1) })
+  const errs = []; p.on('pageerror', (e) => errs.push(e.message))
+  await p.goto('file://' + process.argv[2]); await p.waitForTimeout(2500)
+  await p.evaluate(() => document.fonts.ready)
+  const bad = await p.locator('.mermaid:not([data-processed])').count()
+  const svgErr = await p.locator('text:has-text("Syntax error")').count()
+  await p.locator('.board').screenshot({ path: process.argv[3] })
+  console.log('unprocessed', bad, 'syntaxErr', svgErr, 'errors', errs)
+  await b.close()
+})()
