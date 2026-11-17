@@ -3,8 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useBandy } from '../store'
 import { Booking } from '../types'
 import { createBooking, isEventStaff, publicEvents, remaining, ticketTypesOf } from '../repo'
-import { Empty, Icon, Poster } from '../components'
-import { dateLabel, dDay, won } from '../format'
+import { Empty, PageHeader, Thumb } from '../components'
+import { dateLabel, won } from '../format'
 
 function useVisibleEvent() {
   const { eventId = '' } = useParams()
@@ -15,37 +15,11 @@ function useVisibleEvent() {
   return { event: visible ? event : undefined, staff }
 }
 
-function DetailHeader({ title }: { title?: string }) {
-  const navigate = useNavigate()
-  const { showToast } = useBandy()
-  const [liked, setLiked] = useState(false)
-  const share = async () => {
-    await navigator.clipboard?.writeText(window.location.href).catch(() => undefined)
-    showToast('공연 링크를 복사했어요.')
-  }
-  return (
-    <header className="b-top sticky">
-      <span className="b-row">
-        <button type="button" className="b-icon-btn" aria-label="뒤로 가기" onClick={() => navigate(-1)}><Icon name="back" size={16} /></button>
-        {title && <span className="b-title">{title}</span>}
-      </span>
-      {!title && (
-        <span className="b-row">
-          <button type="button" className={`b-icon-btn${liked ? ' liked' : ''}`} aria-label="관심 공연 저장" aria-pressed={liked} onClick={() => setLiked(!liked)}>
-            <Icon name="heart" size={[20, 18]} />
-          </button>
-          <button type="button" className="b-icon-btn" aria-label="공연 공유" onClick={share}><Icon name="share" size={[18, 20]} /></button>
-        </span>
-      )}
-    </header>
-  )
-}
-
-// 피그마 「공연 상세」
+// 구조도: 공연 상세 (공연 정보 · 팀/동아리) → 예매 화면
 export function EventPage() {
   const { db, me } = useBandy()
   const { event, staff } = useVisibleEvent()
-  if (!event) return <div className="b-page"><DetailHeader title="공연" /><Empty>공개된 행사가 아니에요.</Empty></div>
+  if (!event) return <div className="b-page"><PageHeader back title="공연" /><Empty>공개된 공연이 아니에요.</Empty></div>
 
   const club = db.clubs.find((c) => c.id === event.club_id)!
   const types = ticketTypesOf(db, event.id)
@@ -56,43 +30,26 @@ export function EventPage() {
 
   return (
     <div className="b-page with-dock">
-      <DetailHeader />
-      <div className="b-hero-poster">
-        <Poster event={event} />
-        <div className="b-hero-chips">
-          <span className="b-overlay-chip mint"><i />{event.category} {dDay(event.starts_at)}</span>
-          {event.venue_name && <span className="b-overlay-tag">{event.venue_name}</span>}
-        </div>
-      </div>
-
-      <section className="b-card b-pad b-stack">
-        <span className={`b-pill${open ? ' mint' : ''}`}><i />{event.status !== 'PUBLISHED' ? '초안' : open ? (free ? '신청중' : '예매중') : '매진'}</span>
-        <h1 className="b-detail-title">{event.title}</h1>
-        <div className="b-info">
-          <span className="b-info-row"><Icon name="calendar-lg" size={[15, 17]} />{dateLabel(event.starts_at)}</span>
-          <span className="b-info-row">
-            <Icon name="pin-lg" size={[13, 19]} />
-            <span className="b-grow">{event.venue_name}{event.address ? ` (${event.address})` : ''}</span>
-            <Link to="/app/map" className="b-accent-link">지도 <Icon name="chev-sm" size={[5, 8]} /></Link>
-          </span>
-          <span className="b-info-row">
-            <Icon name="money" size={[18, 13]} />
-            <span className="b-price">{types.map((t) => `${t.name} ${won(t.price_krw)}`).join(' / ')}</span>
-          </span>
-          <span className="b-info-row small">
-            <Icon name="people" size={[20, 10]} />
-            <span className="b-sub">주최:</span>
-            <Link to={`/app/c/${club.id}`} className="b-underline">{club.name}</Link>
-            <span className="b-sub">· 남은 {left}석</span>
-          </span>
-        </div>
+      <PageHeader back title="공연 상세" />
+      <Thumb src={event.poster_path} label="공연 포스터" className="wide" />
+      <section className="b-stack">
+        <span className="b-row">
+          <span className="b-status">{event.category}</span>
+          {event.status !== 'PUBLISHED' && <span className="b-status wait">초안 · 운영진만 보임</span>}
+        </span>
+        <h1>{event.title}</h1>
+        <dl className="b-info">
+          <dt>일시</dt><dd>{dateLabel(event.starts_at)}</dd>
+          <dt>장소</dt><dd>{event.venue_name}{event.address ? <span className="b-sub"><br />{event.address}</span> : null}</dd>
+          <dt>티켓</dt><dd>{types.map((t) => `${t.name} ${won(t.price_krw)}`).join(' / ')} · 남은 {left}석</dd>
+          <dt>주최</dt><dd><Link className="b-link" to={`/app/c/${club.id}`}>{club.name}</Link> <span className="b-sub">{club.school}</span></dd>
+        </dl>
       </section>
 
       {event.description && (
         <section className="b-card b-pad b-stack">
-          <h2>공연 안내</h2>
-          <p className="b-body muted">{event.description}</p>
-          <p className="b-note">{free ? '신청하면 바로 확정돼요.' : '입금자명으로 입금하면 주최 동아리가 확인한 순서로 입장번호가 부여돼요.'}</p>
+          <h2>공연 소개</h2>
+          <p className="b-body">{event.description}</p>
         </section>
       )}
 
@@ -100,17 +57,17 @@ export function EventPage() {
         <section className="b-card b-pad b-stack">
           <h2>내 예매</h2>
           {myBookings.map((b) => (
-            <p key={b.id} className="b-sub">{b.status === 'CONFIRMED' ? '입장 확정' : '입금 대기'} · {won(b.total_amount_krw)}</p>
+            <p key={b.id} className="b-sub">{b.status === 'CONFIRMED' ? '확정' : '입금 대기'} · {won(b.total_amount_krw)}</p>
           ))}
-          <Link className="b-accent-link" to="/app/tickets">내 티켓에서 보기</Link>
+          <Link className="b-link" to="/app/tickets">내 티켓에서 보기</Link>
         </section>
       )}
 
       {staff && (
         <section className="b-card b-pad b-stack">
-          <h2>운영진 메뉴</h2>
-          <Link className="b-btn ghost" to={`/app/manage/${club.id}?event=${event.id}`}>예매자 명단 · 입금 확인</Link>
-          <Link className="b-btn ghost" to={`/app/scan/${event.id}`}>QR 입장 스캔</Link>
+          <h2>공연 관리</h2>
+          <Link className="b-btn ghost" to={`/app/manage/${club.id}?event=${event.id}`}>예매자 목록 · 입금 확인 · 수정</Link>
+          <Link className="b-btn ghost" to={`/app/scan/${event.id}`}>입장 관리 (QR 스캔)</Link>
         </section>
       )}
 
@@ -123,7 +80,8 @@ export function EventPage() {
   )
 }
 
-// 피그마 「사전 예매」: 성함(입금자명) → 예매 신청하기 → 계좌 안내
+// 구조도: 예매 화면 (ticketTypeId · quantity) → 결제 → 예매 완료(bookingId 생성)
+// 결제는 11/1 결정대로 입금자명 + 주최 동아리의 입금 확인
 export function BookPage() {
   const { db, me, run, showToast } = useBandy()
   const navigate = useNavigate()
@@ -135,18 +93,15 @@ export function BookPage() {
   const [error, setError] = useState('')
   const [done, setDone] = useState<Booking | null>(null)
 
-  if (!event) return <div className="b-page"><DetailHeader title="공연 예매하기" /><Empty>예매할 수 없는 행사예요.</Empty></div>
-  if (!me) return <div className="b-page"><DetailHeader title="공연 예매하기" /><Empty>로그인이 필요해요. <Link to="/app/login">로그인</Link></Empty></div>
+  if (!event) return <div className="b-page"><PageHeader back title="예매" /><Empty>예매할 수 없는 공연이에요.</Empty></div>
+  if (!me) return <div className="b-page"><PageHeader back title="예매" /><Empty>로그인이 필요해요. <Link to="/app/login">로그인</Link></Empty></div>
 
   const selected = types.find((t) => t.id === typeId) ?? types[0]
   const free = selected?.price_krw === 0
 
   const submit = () => {
     const r = run((d) => createBooking(d, me.id, selected.id, qty, depositor))
-    if (!r.ok) {
-      setError(r.error)
-      return
-    }
+    if (!r.ok) { setError(r.error); return }
     setError('')
     if (free) {
       showToast('신청이 확정됐어요. 내 티켓에서 QR을 확인하세요.')
@@ -163,44 +118,36 @@ export function BookPage() {
 
   if (done) {
     return (
-      <div className="b-page">
-        <DetailHeader title="예매 신청 완료" />
-        <section className="b-card b-pad b-stack">
-          <span className="b-pill red"><i />{event.title}</span>
-          <h1 className="b-detail-title">입금하면 예매가 확정돼요</h1>
-          <p className="b-sub">입금자명 <b>{depositor}</b>으로 아래 계좌에 입금해 주세요. 주최 동아리가 확인하면 티켓이 발급돼요.</p>
-          <button type="button" className="b-field-box" onClick={copy}>
-            <span className="b-sub">{event.bank_name} · {event.account_holder}</span>
+      <div className="b-page with-dock">
+        <PageHeader title="예매 완료" />
+        <section className="b-stack">
+          <h1>입금하면 확정돼요</h1>
+          <p className="b-sub">{event.title}</p>
+          <p className="b-body">입금자명 <b>{depositor}</b>(으)로 아래 계좌에 입금해 주세요. 주최 동아리가 입금을 확인하면 티켓이 발급돼요.</p>
+          <button type="button" className="b-copy" onClick={copy}>
+            <span className="b-sub">{event.bank_name} · 예금주 {event.account_holder}</span>
             <strong>{event.account_number}</strong>
-            <span className="b-accent-link">눌러서 복사</span>
+            <span className="b-link">눌러서 복사</span>
           </button>
-          <div className="b-sum-row"><span>{selected.name} {qty}매</span><b>₩{done.total_amount_krw.toLocaleString('ko-KR')}</b></div>
+          <div className="b-sum"><span>{selected.name} {qty}매</span><b>{won(done.total_amount_krw)}</b></div>
         </section>
-        <div className="b-dock"><Link className="b-btn" to="/app/tickets">내 티켓에서 보기</Link></div>
+        <div className="b-dock"><Link className="b-btn" to="/app/tickets">내 티켓으로</Link></div>
       </div>
     )
   }
 
   return (
     <div className="b-page with-dock">
-      <DetailHeader title="예매" />
-      <section className="b-card b-pad b-stack">
-        <span className="b-pill red"><i />{event.title}</span>
-        <h1 className="b-detail-title">{free ? '참가 신청하기' : '공연 예매하기'}</h1>
-        <p className="b-sub small">{free ? '신청하면 바로 확정돼요.' : '예매자 본인 명의로 입금 확인 후 확정됩니다.'}</p>
-        {types.length > 1 && types.map((t) => (
+      <PageHeader back title={free ? '참가 신청' : '예매'} />
+      <section className="b-stack">
+        <p className="b-sub">{event.title} · {dateLabel(event.starts_at)}</p>
+        {types.map((t) => (
           <label key={t.id} className={`b-option${t.id === selected.id ? ' on' : ''}`}>
             <input type="radio" name="tt" checked={t.id === selected.id} onChange={() => setTypeId(t.id)} />
             <span>{t.name}</span>
             <span className="b-sub">{won(t.price_krw)} · 남은 {remaining(t)}석</span>
           </label>
         ))}
-        {!free && (
-          <label className="b-field">
-            <span>성함 (입금자명)</span>
-            <input value={depositor} onChange={(e) => setDepositor(e.target.value)} placeholder="홍길동" />
-          </label>
-        )}
         <div className="b-row between">
           <span className="b-label">수량</span>
           <span className="b-stepper">
@@ -209,11 +156,18 @@ export function BookPage() {
             <button type="button" onClick={() => setQty(Math.min(10, qty + 1))} aria-label="한 장 더하기">+</button>
           </span>
         </div>
-        <div className="b-sum-row"><span>{selected.name} {qty}매</span><b>{free ? '무료' : `₩${(selected.price_krw * qty).toLocaleString('ko-KR')}`}</b></div>
+        {!free && (
+          <label className="b-field">
+            <span>입금자명</span>
+            <input value={depositor} onChange={(e) => setDepositor(e.target.value)} placeholder="입금할 때 쓰는 이름" />
+          </label>
+        )}
+        <div className="b-sum"><span>합계</span><b>{won(selected.price_krw * qty)}</b></div>
+        {!free && <p className="b-note">예매하면 입금 계좌를 알려 드려요. 주최 동아리가 입금자명을 확인한 뒤 티켓이 발급돼요.</p>}
         {error && <p className="b-warn">{error}</p>}
       </section>
       <div className="b-dock">
-        <button type="button" className="b-btn" onClick={submit}>{free ? '신청하기' : '예매 신청하기'} →</button>
+        <button type="button" className="b-btn" onClick={submit}>{free ? '신청하기' : '예매하기'}</button>
       </div>
     </div>
   )

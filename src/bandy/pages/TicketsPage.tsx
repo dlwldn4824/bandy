@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { useBandy } from '../store'
 import { cancelBooking, qrOf } from '../repo'
-import { Empty, Icon, NeedLogin, PageHeader, Poster } from '../components'
-import { dateLabel, dayKey, won } from '../format'
+import { Empty, NeedLogin, PageHeader } from '../components'
+import { dateLabel, won } from '../format'
 import { Ticket } from '../types'
 
-const IMMINENT_MS = 24 * 3600000 // [미정] '입장 예정'으로 묶는 기준: 공연 시작 24시간 전부터
+const IMMINENT_MS = 24 * 3600000 // [미정] 입장 임박 기준. 지금은 공연 시작 24시간 전부터 '입장 예정'
+const LEGACY_SERVICE = '/performances' // 기존 서비스(공연 정보 · 셋리스트 · 채팅 · 방명록). 공연별 연결 방식은 미정
 
-// 와이어프레임 IA: 내 티켓 = 입장 예정 → 이후 공연 → 사용 완료 / 티켓 선택 시 QR 바로 표시
+// 구조도: 내 티켓 = 입장 예정 → 이후 공연 → 사용 완료 / 티켓 선택 → 티켓 상세·QR (ticketId · qrToken · checkInStatus)
 export function TicketsPage() {
   const { db, me, run, showToast } = useBandy()
   const [open, setOpen] = useState<Ticket | null>(null)
@@ -29,23 +30,20 @@ export function TicketsPage() {
     showToast(r.ok ? '예매를 취소했어요.' : r.error)
   }
 
-  const pass = (t: Ticket, dim = false) => {
+  const row = (t: Ticket, kind: 'soon' | 'later' | 'used') => {
     const ev = eventOf(t.event_id)
+    const item = db.booking_items.find((i) => i.id === t.booking_item_id)
     return (
-      <button key={t.id} type="button" className={`b-pass${dim ? ' used' : ''}`} onClick={() => !dim && setOpen(t)} disabled={dim}>
-        <span className="b-pass-head">
-          <span className="b-pass-text">
-            <span className="b-eyebrow red">MOBILE LIVE PASS</span>
+      <div key={t.id} className="b-stack">
+        <button type="button" className={`b-ticket${kind === 'used' ? ' used' : ''}`} onClick={() => kind !== 'used' && setOpen(t)} disabled={kind === 'used'}>
+          <span className="b-ticket-no">{t.entry_number}</span>
+          <span className="b-grow b-stack tight">
             <strong>{ev.title}</strong>
-            <span className="b-meta-row"><Icon name="calendar" size={[12, 13]} />{dateLabel(ev.starts_at)}</span>
+            <span className="b-sub">{dateLabel(ev.starts_at)} · {item?.ticket_type_name}</span>
           </span>
-          <Poster event={ev} className="mini" />
-        </span>
-        <span className="b-pass-entry">
-          <span className="b-entry-badge"><small>{dim ? '입장 완료' : '입금 확인 · 확정'}</small>입장번호 {t.entry_number}번</span>
-          {!dim && <span className="b-accent-link">QR 보기</span>}
-        </span>
-      </button>
+          <span className={`b-status${kind === 'used' ? '' : ' red'}`}>{kind === 'used' ? '입장 완료' : 'QR'}</span>
+        </button>
+      </div>
     )
   }
 
@@ -62,9 +60,9 @@ export function TicketsPage() {
             const pay = db.payments.find((p) => p.booking_id === b.id)!
             return (
               <article key={b.id} className="b-card b-pad b-stack">
-                <div className="b-row between"><strong>{ev.title}</strong><span className="b-status wait">입금 확인 대기 중</span></div>
+                <div className="b-row between"><strong>{ev.title}</strong><span className="b-status wait">입금 대기</span></div>
                 <p className="b-sub">{item.ticket_type_name} {item.quantity}매 · {won(b.total_amount_krw)} · 입금자명 {pay.depositor_name}</p>
-                <p className="b-note">{ev.bank_name} {ev.account_number} ({ev.account_holder})로 입금하면 주최 동아리가 확인 후 티켓을 발급해요.</p>
+                <p className="b-sub">{ev.bank_name} {ev.account_number} (예금주 {ev.account_holder})</p>
                 <button type="button" className="b-btn ghost small" onClick={() => cancel(b.id)}>예매 취소</button>
               </article>
             )
@@ -74,22 +72,22 @@ export function TicketsPage() {
 
       <section className="b-stack">
         <h2 className="b-h2">입장 예정</h2>
-        {soon.map((t) => pass(t))}
-        {soon.length === 0 && <Empty>24시간 안에 시작하는 공연이 없어요.</Empty>}
+        {soon.map((t) => row(t, 'soon'))}
+        {soon.length > 0 && <Link className="b-btn ghost" to={LEGACY_SERVICE}>공연 정보 · 셋리스트 · 채팅 (기존 서비스)</Link>}
+        {soon.length === 0 && <Empty>곧 시작하는 공연이 없어요.</Empty>}
       </section>
 
       <section className="b-stack">
         <h2 className="b-h2">이후 공연</h2>
-        {later.map((t) => pass(t))}
+        {later.map((t) => row(t, 'later'))}
         {later.length === 0 && <Empty>예정된 티켓이 없어요. <Link to="/app/events">공연 찾기</Link></Empty>}
       </section>
 
-      {used.length > 0 && (
-        <section className="b-stack">
-          <h2 className="b-h2">사용 완료</h2>
-          {used.map((t) => pass(t, true))}
-        </section>
-      )}
+      <section className="b-stack">
+        <h2 className="b-h2">사용 완료</h2>
+        {used.map((t) => row(t, 'used'))}
+        {used.length === 0 && <Empty>입장한 티켓이 없어요.</Empty>}
+      </section>
 
       {open && (() => {
         const ev = eventOf(open.event_id)
@@ -98,15 +96,14 @@ export function TicketsPage() {
         return (
           <div className="b-modal" onClick={() => setOpen(null)}>
             <div className="b-sheet b-center" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="입장 QR">
-              <span className="b-eyebrow">VIP DIGITAL ENTRY · {dayKey(ev.starts_at)}</span>
               <h2>{ev.title}</h2>
               <p className="b-sub">{dateLabel(ev.starts_at)} · {ev.venue_name}</p>
+              <p><b>입장번호 {open.entry_number}번</b></p>
               {live?.status === 'CHECKED_IN'
-                ? <p className="b-status ok big">입장 완료</p>
-                : qr && <div className="b-qr"><QRCodeSVG value={qr.token} size={208} level="M" /></div>}
-              <span className="b-entry-badge"><small>사전예약 확정</small>입장번호 {open.entry_number}번</span>
+                ? <p className="b-status ok">입장 완료</p>
+                : qr && <div className="b-qr"><QRCodeSVG value={qr.token} size={200} level="M" /></div>}
               <p className="b-note">현장에서 운영진에게 이 QR을 보여 주세요.<br />코드: <code>{qr?.token}</code></p>
-              <Link className="b-accent-link" to={`/app/e/${ev.id}`}>공연 정보 확인</Link>
+              <Link className="b-link" to={`/app/e/${ev.id}`}>공연 정보 확인</Link>
               <button type="button" className="b-btn ghost" onClick={() => setOpen(null)}>닫기</button>
             </div>
           </div>

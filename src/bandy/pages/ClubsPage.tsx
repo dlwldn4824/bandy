@@ -1,16 +1,17 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
 import {
   canSeeOpenChat, cancelExchange, createClub, managerClubIds, publicClubs, publicEvents, requestExchange, respondExchange,
 } from '../repo'
-import { Empty, EventCard, NeedLogin, PageHeader } from '../components'
+import { Empty, EventItem, ImageInput, NeedLogin, PageHeader, Thumb } from '../components'
 import { Db, EXCHANGE_KIND_LABEL, ExchangeKind } from '../types'
 import { shortDate } from '../format'
 
 export function ClubsPage() {
   const { me } = useBandy()
-  const [tab, setTab] = useState<'find' | 'inbox'>('find')
+  const [params] = useSearchParams()
+  const [tab, setTab] = useState<'find' | 'inbox'>(params.get('tab') === 'inbox' ? 'inbox' : 'find')
   return (
     <div className="b-page">
       <PageHeader title="동아리 찾기" />
@@ -48,8 +49,8 @@ function FindClubs() {
       <div className="b-list">
         {list.map((c) => (
           <Link key={c.id} to={`/app/c/${c.id}`} className="b-card b-club">
-            <span className="b-avatar">{c.name.slice(0, 1)}</span>
-            <span className="b-club-body">
+            <Thumb src={c.profile_path} label={c.name.slice(0, 1)} className="round" />
+            <span className="b-grow b-stack tight">
               <strong>{c.name}</strong>
               <span className="b-sub">{c.school} · {c.genre} · {c.region}</span>
             </span>
@@ -157,7 +158,7 @@ export function ClubPage() {
     <div className="b-page">
       <PageHeader back />
       <section className="b-club-head">
-        <span className="b-avatar big">{club.name.slice(0, 1)}</span>
+        <Thumb src={club.profile_path} label={club.name.slice(0, 1)} className="round big" />
         <h1>{club.name}</h1>
         <p className="b-sub">{club.school} · {club.genre} · {club.region}</p>
         {club.status !== 'ACTIVE' && <p className="b-warn">운영자 승인 대기 중이에요. 승인 전에는 다른 사람에게 보이지 않아요.</p>}
@@ -199,7 +200,7 @@ export function ClubPage() {
 
       <section className="b-stack">
         <h2 className="b-h2">공연</h2>
-        {events.map((e) => <EventCard key={e.id} event={e} />)}
+        <div>{events.map((e) => <EventItem key={e.id} event={e} />)}</div>
         {events.length === 0 && <Empty>공개된 행사가 없어요.</Empty>}
       </section>
       <p className="b-note">가입일 {shortDate(club.created_at)}</p>
@@ -211,12 +212,17 @@ export function NewClubPage() {
   const { me, run, showToast } = useBandy()
   const navigate = useNavigate()
   const [f, setF] = useState({ name: '', school: '', genre: '밴드', region: '노원구', introduction: '', sns_url: '', open_chat_url: '', exchange_open: true })
+  const [image, setImage] = useState<string | null>(null)
   const [error, setError] = useState('')
   if (!me) return <div className="b-page"><NeedLogin what="동아리 등록" /></div>
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value })
 
   const submit = () => {
-    const r = run((d) => createClub(d, me.id, f))
+    const r = run((d) => {
+      const club = createClub(d, me.id, f)
+      club.profile_path = image
+      return club
+    })
     if (!r.ok) {
       setError(r.error)
       return
@@ -233,7 +239,8 @@ export function NewClubPage() {
         <label className="b-field"><span>학교</span><input value={f.school} onChange={set('school')} placeholder="광운대" /></label>
         <label className="b-field"><span>장르</span><input value={f.genre} onChange={set('genre')} /></label>
         <label className="b-field"><span>지역</span><input value={f.region} onChange={set('region')} /></label>
-        <label className="b-field"><span>인스타그램 주소</span><input value={f.sns_url} onChange={set('sns_url')} placeholder="https://instagram.com/..." /></label>
+        <ImageInput label="프로필 이미지" value={image} onChange={setImage} />
+        <label className="b-field"><span>SNS 링크 (인스타그램)</span><input value={f.sns_url} onChange={set("sns_url")} placeholder="https://instagram.com/..." /></label>
         <label className="b-field"><span>오픈채팅 링크 (교류가 연결된 동아리에만 보여요)</span><input value={f.open_chat_url} onChange={set('open_chat_url')} /></label>
         <label className="b-field"><span>소개</span><textarea value={f.introduction} onChange={set('introduction')} /></label>
         <label className="b-check"><input type="checkbox" checked={f.exchange_open} onChange={(e) => setF({ ...f, exchange_open: e.target.checked })} /> 다른 동아리의 교류 신청 받기</label>

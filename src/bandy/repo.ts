@@ -8,7 +8,7 @@ import { seedDb } from './seed'
 
 export class BandyError extends Error {}
 
-const STORAGE_KEY = 'bandy-prototype-v2'
+const STORAGE_KEY = 'bandy-prototype-v3'
 const BOOKING_HOLD_DAYS = 3 // [미정] 입금 대기 기간. 11/1 기준 팀 결정 전 임시값
 const MAX_QUANTITY = 10 // [미정] 1회 최대 구매 수량
 
@@ -166,7 +166,12 @@ export function setClubStatus(db: Db, userId: Uuid | null, clubId: Uuid, status:
 }
 
 export function updateClub(db: Db, userId: Uuid | null, clubId: Uuid, patch: Partial<Pick<Club,
-  'introduction' | 'school' | 'genre' | 'region' | 'sns_url' | 'open_chat_url' | 'exchange_open'>>) {
+  'name' | 'introduction' | 'school' | 'genre' | 'region' | 'sns_url' | 'open_chat_url' | 'exchange_open' | 'profile_path'>>) {
+  if (patch.name !== undefined) {
+    patch.name = patch.name.trim()
+    if (!patch.name) throw new BandyError('동아리 이름을 입력하세요.')
+    if (db.clubs.some((c) => c.id !== clubId && c.name === patch.name)) throw new BandyError('이미 등록된 동아리 이름입니다.')
+  }
   if (!isClubManager(db, userId, clubId)) throw new BandyError('동아리 운영진만 수정할 수 있습니다.')
   const club = db.clubs.find((c) => c.id === clubId)!
   Object.assign(club, patch, { updated_at: now() })
@@ -176,7 +181,7 @@ export function updateClub(db: Db, userId: Uuid | null, clubId: Uuid, patch: Par
 export function createEvent(db: Db, userId: Uuid | null, clubId: Uuid, input: {
   title: string; category: EventRow['category']; starts_at: string; venue_name: string; address: string
   description: string; price_krw: number; capacity: number; account_number: string; bank_name: string
-  publish: boolean
+  publish: boolean; poster_path?: string | null
 }): EventRow {
   if (!isClubManager(db, userId, clubId)) throw new BandyError('동아리 운영진만 공연을 올릴 수 있습니다.')
   const club = db.clubs.find((c) => c.id === clubId)!
@@ -196,7 +201,7 @@ export function createEvent(db: Db, userId: Uuid | null, clubId: Uuid, input: {
     admission_starts_at: null, admission_ends_at: null, timezone: 'Asia/Seoul',
     venue_name: input.venue_name.trim(), address: input.address.trim(),
     latitude: 37.615 + Math.random() * 0.03, longitude: 127.055 + Math.random() * 0.03,
-    poster_path: null, status: input.publish ? 'PUBLISHED' : 'DRAFT', published_at: input.publish ? now() : null,
+    poster_path: input.poster_path ?? null, status: input.publish ? 'PUBLISHED' : 'DRAFT', published_at: input.publish ? now() : null,
     bank_name: input.bank_name.trim(), account_number: input.account_number.trim(), account_holder: club.name,
     created_at: now(), updated_at: now(),
   }
@@ -216,6 +221,52 @@ export function setEventStatus(db: Db, userId: Uuid | null, eventId: Uuid, statu
   event.status = status
   event.published_at = status === 'PUBLISHED' ? (event.published_at ?? now()) : event.published_at
   event.updated_at = now()
+}
+
+// 공연 수정 [PATCH]. 예매가 있으면 가격은 못 바꾸고, 정원은 이미 잡힌 수량 아래로 못 줄인다.
+export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
+  title: string; category: EventRow['category']; starts_at: string; venue_name: string; address: string
+  description: string; bank_name: string; account_number: string; poster_path: string | null
+  price_krw: number; capacity: number
+}) {
+  const event = db.events.find((e) => e.id === eventId)
+  if (!event || !isClubManager(db, userId, event.club_id)) throw new BandyError('공연을 찾지 못했습니다.')
+  if (!input.title.trim()) throw new BandyError('공연명을 입력하세요.')
+  if (!input.starts_at) throw new BandyError('일시를 입력하세요.')
+  const tt = db.ticket_types.find((t) => t.event_id === eventId)!
+  const hasBookings = db.bookings.some((b) => b.event_id === eventId && b.status !== 'CANCELLED')
+  if (hasBookings && input.price_krw !== tt.price_krw) throw new BandyError('예매가 있는 공연은 가격을 바꿀 수 없습니다.')
+  if (input.capacity < tt.reserved_quantity + tt.sold_quantity) throw new BandyError('이미 예매된 수량보다 정원을 줄일 수 없습니다.')
+  if (event.status === 'PUBLISHED' && !input.venue_name.trim()) throw new BandyError('공개 중인 공연은 장소가 필요합니다.')
+  Object.assign(event, {
+    title: input.title.trim(), category: input.category, starts_at: new Date(input.starts_at).toISOString(),
+    venue_name: input.venue_name.trim(), address: input.address.trim(), description: input.description.trim(),
+    bank_name: input.bank_name.trim(), account_number: input.account_number.trim(), poster_path: input.poster_path,
+    updated_at: now(),
+  })
+  Object.assign(tt, { price_krw: input.price_krw, capacity: input.capacity, updated_at: now() })
+}
+
+// 공연 삭제 [DELETE]. [미정] 예매가 있는 공연의 삭제·환불 정책이 정해지기 전에는 예매가 없을 때만 지운다.
+export function deleteEvent(db: Db, userId: Uuid | null, eventId: Uuid) {
+  const event = db.events.find((e) => e.id === eventId)
+  if (!event || !isClubManager(db, userId, event.club_id)) throw new BandyError('공연을 찾지 못했습니다.')
+  if (db.bookings.some((b) => b.event_id === eventId)) throw new BandyError('예매 기록이 있는 공연은 삭제할 수 없습니다. 비공개로 돌려 주세요.')
+  db.events = db.events.filter((e) => e.id !== eventId)
+  db.ticket_types = db.ticket_types.filter((t) => t.event_id !== eventId)
+}
+
+export function bookingCount(db: Db, eventId: Uuid) {
+  return db.bookings.filter((b) => b.event_id === eventId && b.status !== 'CANCELLED').length
+}
+
+// 계정 설정: 표시명 수정 [PATCH 회원 정보]
+export function updateProfile(db: Db, userId: Uuid | null, displayName: string) {
+  const p = db.profiles.find((x) => x.id === userId)
+  if (!p) throw new BandyError('로그인이 필요합니다.')
+  if (!displayName.trim()) throw new BandyError('이름을 입력하세요.')
+  p.display_name = displayName.trim().slice(0, 20)
+  p.updated_at = now()
 }
 
 // ───────────── 예매 · 입금 확인 ─────────────
@@ -331,12 +382,25 @@ export type CheckInResult =
   | { result: 'already_checked_in'; ticket: Ticket }
   | { result: 'invalid' }
 
-export function checkIn(db: Db, userId: Uuid | null, eventId: Uuid, token: string): CheckInResult {
-  if (!isEventStaff(db, userId, eventId)) throw new BandyError('이 공연의 운영진만 입장 처리할 수 있습니다.')
+function findTicket(db: Db, eventId: Uuid, token: string) {
   const qr = db.qr_credentials.find((q) => q.token_hash === fakeHash(token.trim()) && q.token === token.trim())
-  const ticket = qr && !qr.revoked_at && new Date(qr.expires_at) > new Date()
+  return qr && !qr.revoked_at && new Date(qr.expires_at) > new Date()
     ? db.tickets.find((t) => t.id === qr.ticket_id && t.event_id === eventId)
     : undefined
+}
+
+// QR 검증(읽기만). 운영자 흐름: 검증 → 관객 정보 확인 → 입장 처리
+export function verifyTicket(db: Db, userId: Uuid | null, eventId: Uuid, token: string): CheckInResult {
+  if (!isEventStaff(db, userId, eventId)) throw new BandyError('이 공연의 운영진만 입장 처리할 수 있습니다.')
+  const ticket = findTicket(db, eventId, token)
+  if (!ticket || ticket.status === 'CANCELLED') return { result: 'invalid' }
+  if (ticket.status === 'CHECKED_IN') return { result: 'already_checked_in', ticket }
+  return { result: 'valid', ticket }
+}
+
+export function checkIn(db: Db, userId: Uuid | null, eventId: Uuid, token: string): CheckInResult {
+  if (!isEventStaff(db, userId, eventId)) throw new BandyError('이 공연의 운영진만 입장 처리할 수 있습니다.')
+  const ticket = findTicket(db, eventId, token)
   if (!ticket || ticket.status === 'CANCELLED') return { result: 'invalid' }
   if (ticket.status === 'CHECKED_IN') return { result: 'already_checked_in', ticket }
   ticket.status = 'CHECKED_IN'
@@ -396,6 +460,11 @@ function notify(db: Db, userId: Uuid, eventId: Uuid | null, type: string, messag
   db.notifications.push({
     id: uid('nt'), user_id: userId, event_id: eventId, type, message, source_key: sourceKey, read_at: null, created_at: now(),
   })
+}
+
+export function markNotificationRead(db: Db, userId: Uuid | null, id: Uuid) {
+  const n = db.notifications.find((x) => x.id === id && x.user_id === userId)
+  if (n && !n.read_at) n.read_at = now()
 }
 
 export function markNotificationsRead(db: Db, userId: Uuid | null) {

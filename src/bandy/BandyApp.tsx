@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { BandyProvider, useBandy } from './store'
-import { EventsPage, HomePage, MapPage } from './pages/Discover'
+import { EventsPage, HomePage, MapPage, NotificationsPage } from './pages/Discover'
 import { BookPage, EventPage } from './pages/EventPage'
 import { TicketsPage } from './pages/TicketsPage'
 import { ClubPage, ClubsPage, NewClubPage } from './pages/ClubsPage'
@@ -10,7 +10,7 @@ import { ScanPage } from './pages/ScanPage'
 import { BottomBar } from './components'
 import './bandy.css'
 
-// 상세·예매·스캔·로그인은 하단 바 없이 화면 아래 고정 버튼을 쓴다(피그마 공연 상세·사전 예매).
+// 상세·예매·스캔·로그인은 하단 바 대신 화면 아래 고정 버튼을 쓴다.
 const NO_TABS = [/^\/app\/e\//, /^\/app\/scan\//, /^\/app\/login/]
 
 function Shell() {
@@ -32,6 +32,7 @@ function Shell() {
             <Route path="clubs/new" element={<NewClubPage />} />
             <Route path="c/:clubId" element={<ClubPage />} />
             <Route path="my" element={<MyPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
             <Route path="login" element={<LoginPage />} />
             <Route path="manage/:clubId" element={<ManagePage />} />
             <Route path="scan/:eventId" element={<ScanPage />} />
