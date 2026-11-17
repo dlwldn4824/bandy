@@ -78,11 +78,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
           <span className={`b-status${event.status === 'PUBLISHED' ? ' ok' : ''}`}>{STATUS_LABEL[event.status]}</span>
         </div>
         <p className="b-sub">{dateLabel(event.starts_at)} · {event.venue_name}</p>
-        <div className="b-stats">
-          <span><b>{pending.length}</b>입금 대기</span>
-          <span><b>{tickets.length}</b>발급 티켓</span>
-          <span><b>{tickets.filter((t) => t.status === 'CHECKED_IN').length}</b>입장</span>
-        </div>
+        <p className="b-sub">입금 대기 {pending.length}건 · 발급 티켓 {tickets.length}장 · 입장 {tickets.filter((t) => t.status === 'CHECKED_IN').length}장</p>
         <div className="b-row">
           <Link className="b-btn small" to={`/app/scan/${event.id}`}>입장 관리 (QR)</Link>
           <button type="button" className="b-btn ghost small" onClick={() => act((d) => setEventStatus(d, me!.id, event.id, event.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED'), event.status === 'PUBLISHED' ? '비공개로 돌렸어요.' : '공개했어요.')}>

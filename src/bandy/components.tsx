@@ -63,7 +63,6 @@ export function EventItem({ event, extra }: { event: EventRow; extra?: string })
   const live = dateBadge(event) === '진행 중'
   return (
     <Link to={`/app/e/${event.id}`} className="b-row-item">
-      <Thumb src={event.poster_path} label="포스터" />
       <span className="b-row-body">
         <span className={`b-status${live ? ' red' : ''}`}>{dateBadge(event)}</span>
         <strong>{event.title}</strong>

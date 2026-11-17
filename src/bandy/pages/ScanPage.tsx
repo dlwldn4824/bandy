@@ -63,7 +63,7 @@ export function ScanPage() {
     <div className="b-page">
       <PageHeader back title="입장 관리" />
       <p className="b-sub">{event.title}</p>
-      <div className="b-stats"><span><b>{entered}</b>입장</span><span><b>{tickets.length - entered}</b>남음</span><span><b>{tickets.length}</b>발급</span></div>
+      <p className="b-sub">발급 {tickets.length}장 · 입장 {entered}장 · 남음 {tickets.length - entered}장</p>
 
       <div id="b-reader" className={`b-reader${camera === 'on' ? ' on' : ''}`} />
       {camera !== 'on'

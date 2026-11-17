@@ -31,7 +31,7 @@ export function EventPage() {
   return (
     <div className="b-page with-dock">
       <PageHeader back title="공연 상세" />
-      <Thumb src={event.poster_path} label="공연 포스터" className="wide" />
+      {event.poster_path && <Thumb src={event.poster_path} className="wide" />}
       <section className="b-stack">
         <span className="b-row">
           <span className="b-status">{event.category}</span>

@@ -49,7 +49,7 @@ function FindClubs() {
       <div className="b-list">
         {list.map((c) => (
           <Link key={c.id} to={`/app/c/${c.id}`} className="b-card b-club">
-            <Thumb src={c.profile_path} label={c.name.slice(0, 1)} className="round" />
+            {c.profile_path && <Thumb src={c.profile_path} className="round" />}
             <span className="b-grow b-stack tight">
               <strong>{c.name}</strong>
               <span className="b-sub">{c.school} · {c.genre} · {c.region}</span>
@@ -158,7 +158,7 @@ export function ClubPage() {
     <div className="b-page">
       <PageHeader back />
       <section className="b-club-head">
-        <Thumb src={club.profile_path} label={club.name.slice(0, 1)} className="round big" />
+        {club.profile_path && <Thumb src={club.profile_path} className="round big" />}
         <h1>{club.name}</h1>
         <p className="b-sub">{club.school} · {club.genre} · {club.region}</p>
         {club.status !== 'ACTIVE' && <p className="b-warn">운영자 승인 대기 중이에요. 승인 전에는 다른 사람에게 보이지 않아요.</p>}

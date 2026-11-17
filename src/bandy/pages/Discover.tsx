@@ -50,7 +50,7 @@ export function HomePage() {
           <div className="b-promo" onScroll={(e) => setSlide(Math.round(e.currentTarget.scrollLeft / e.currentTarget.clientWidth))}>
             {promos.map((e) => (
               <Link key={e.id} to={`/app/e/${e.id}`} className="b-promo-item">
-                <Thumb src={e.poster_path} label="공연 포스터" className="wide" />
+                {e.poster_path && <Thumb src={e.poster_path} className="wide" />}
                 <span className="b-promo-meta">
                   <span className="b-stack tight">
                     <strong>{e.title}</strong>

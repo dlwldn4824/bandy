@@ -110,7 +110,7 @@ export function MyPage() {
           <section key={c.id} className="b-stack">
             <h2 className="b-h2">동아리 · {c.name} {c.status !== 'ACTIVE' && <span className="b-status wait">{c.status === 'PENDING' ? '승인 대기' : '거절됨'}</span>}</h2>
             <Link to={`/app/manage/${c.id}?tab=profile`} className="b-card b-club">
-              <Thumb src={c.profile_path} label={c.name.slice(0, 1)} className="round" />
+              {c.profile_path && <Thumb src={c.profile_path} className="round" />}
               <span className="b-grow b-stack tight"><strong>동아리 프로필</strong><span className="b-sub">{c.school} · {c.genre} · {c.region}</span></span>
               <span className="b-chev">›</span>
             </Link>

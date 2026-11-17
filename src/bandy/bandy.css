@@ -161,9 +161,6 @@
 .b-notice.unread { border-left: 3px solid var(--b-red); }
 
 /* 관리 · 스캔 */
-.b-stats { display: flex; gap: 8px; }
-.b-stats span { flex: 1; background: var(--b-soft); border-radius: 10px; padding: 8px; text-align: center; font-size: 11px; color: var(--b-muted); display: flex; flex-direction: column; }
-.b-stats b { font-size: 18px; color: var(--b-text); }
 .b-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .b-table th, .b-table td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--b-line); vertical-align: middle; }
 .b-table th { color: var(--b-muted); font-weight: 500; font-size: 12px; }
