@@ -23,7 +23,7 @@ export function ScanPage() {
     const t = token.trim()
     if (!t || busy.current || checked?.token === t) return
     busy.current = true
-    const r = await call((b) => b.verifyTicket(eventId, t))
+    const r = await call((b) => b.verifyTicket(eventId, t), { reload: false }) // 검증은 읽기만
     busy.current = false
     if (!r.ok) { showToast(r.error); return }
     setChecked({ token: t, result: r.value })

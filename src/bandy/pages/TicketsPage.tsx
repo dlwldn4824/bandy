@@ -18,7 +18,7 @@ export function TicketsPage() {
   useEffect(() => {
     if (!open) return
     let alive = true
-    call((b) => b.issueTicketQr(open.id)).then((r) => {
+    call((b) => b.issueTicketQr(open.id), { reload: false }).then((r) => {
       if (!alive) return
       if (r.ok) setQr({ ticketId: open.id, token: r.value })
       else showToast(r.error)

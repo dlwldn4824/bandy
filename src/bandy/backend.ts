@@ -6,6 +6,31 @@ import { Club, Db, EventRow, ExchangeKind } from './types'
 import * as repo from './repo'
 import { BandyError, initialDb, loadDb, saveDb } from './repo'
 
+// 서버 오류를 코드와 함께 들고 다닌다(사용자 메시지는 friendlyError에서 만든다)
+export class BackendError extends BandyError {
+  constructor(message: string, public code?: string) { super(message) }
+}
+
+const HANGUL = /[가-힣]/
+// 알 수 없는 영어 오류·네트워크 오류를 사용자용 한국어 메시지로 바꾼다. DB 함수가 낸 한국어 메시지는 그대로 쓴다.
+export function friendlyError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e ?? '')
+  const code = e instanceof BackendError ? e.code : undefined
+  if (/Failed to fetch|NetworkError|Load failed|fetch failed/i.test(msg)) return '서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.'
+  if (/Invalid login credentials/i.test(msg)) return '이메일 또는 비밀번호가 맞지 않아요.'
+  if (/already registered|already been registered/i.test(msg)) return '이미 가입된 이메일이에요.'
+  if (/Email not confirmed/i.test(msg)) return '메일 인증을 먼저 완료해 주세요.'
+  if (/Password should be at least/i.test(msg)) return '비밀번호는 6자 이상이어야 해요.'
+  if (/rate limit/i.test(msg)) return '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.'
+  if (code === 'PGRST301' || /JWT expired|invalid JWT/i.test(msg)) return '로그인이 만료됐어요. 다시 로그인해 주세요.'
+  if (code === 'PGRST202' || /Could not find the function/i.test(msg)) return '서버 기능이 아직 설치되지 않았어요. (DB migration 적용 필요)'
+  if (code === '42P01' || /relation .* does not exist/i.test(msg)) return '서버 테이블이 아직 없어요. (DB migration 적용 필요)'
+  if (HANGUL.test(msg)) return msg
+  if (code === '42501' || /permission denied/i.test(msg)) return '권한이 없어요.'
+  if (code === '23505') return '이미 처리된 요청이에요.'
+  return `알 수 없는 오류가 발생했어요.${msg ? ` (${msg})` : ''}`
+}
+
 export type CheckResult = {
   result: 'valid' | 'already_checked_in' | 'invalid'
   ticket_id?: string; entry_number?: number | null; owner_name?: string; ticket_type?: string; depositor_name?: string
@@ -151,7 +176,7 @@ class SupabaseBackend implements Backend {
 
   private async rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     const { data, error } = await this.sb.rpc(fn, args)
-    if (error) throw new BandyError(error.message)
+    if (error) throw new BackendError(error.message, error.code)
     return data as T
   }
   private async rows<T>(table: string): Promise<T[]> {
@@ -159,7 +184,7 @@ class SupabaseBackend implements Backend {
     if (error) {
       // 로그인 전에는 볼 수 없는 테이블이 있다
       if (error.code === '42501') return []
-      throw new BandyError(error.message)
+      throw new BackendError(error.message, error.code)
     }
     return (data ?? []) as T[]
   }
@@ -192,22 +217,25 @@ class SupabaseBackend implements Backend {
     return data.session?.user.id ?? null
   }
   onAuthChange(cb: () => void) {
-    const { data } = this.sb.auth.onAuthStateChange(() => cb())
+    // INITIAL_SESSION은 첫 화면 로딩과 겹치고, TOKEN_REFRESHED는 데이터가 바뀌지 않으니 다시 읽지 않는다
+    const { data } = this.sb.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') cb()
+    })
     return () => data.subscription.unsubscribe()
   }
 
   async signInPersona() { throw new BandyError('Supabase 모드에서는 이메일 또는 카카오로 로그인해요.') }
   async signInEmail(email: string, password: string) {
     const { error } = await this.sb.auth.signInWithPassword({ email, password })
-    if (error) throw new BandyError(error.message)
+    if (error) throw new BackendError(error.message, error.code)
   }
   async signUpEmail(email: string, password: string, name: string) {
     const { error } = await this.sb.auth.signUp({ email, password, options: { data: { name } } })
-    if (error) throw new BandyError(error.message)
+    if (error) throw new BackendError(error.message, error.code)
   }
   async signInKakao() {
     const { error } = await this.sb.auth.signInWithOAuth({ provider: 'kakao', options: { redirectTo: `${window.location.origin}/app` } })
-    if (error) throw new BandyError(error.message)
+    if (error) throw new BackendError(error.message, error.code)
   }
   async signOut() { await this.sb.auth.signOut() }
   async reset() { throw new BandyError('Supabase 모드에서는 데이터를 초기화하지 않아요.') }

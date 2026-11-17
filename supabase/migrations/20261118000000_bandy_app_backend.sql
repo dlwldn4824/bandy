@@ -234,6 +234,23 @@ create table if not exists public.exchange_requests (
 );
 create unique index if not exists exchange_one_pending on public.exchange_requests (from_club_id, to_club_id) where status = 'PENDING';
 
+-- ───────────────────────── 인덱스 ─────────────────────────
+-- RLS 판정 함수(is_club_manager · is_event_staff · can_view_profile)가 행마다 도는 조건과 화면의 주 조회 조건
+create index if not exists club_memberships_club_idx on public.club_memberships (club_id, user_id) where status = 'ACTIVE';
+create index if not exists bookings_user_idx on public.bookings (user_id);
+create index if not exists booking_items_booking_idx on public.booking_items (booking_id);
+create index if not exists booking_items_type_idx on public.booking_items (ticket_type_id);
+create index if not exists payments_booking_idx on public.payments (booking_id);
+create index if not exists tickets_user_idx on public.tickets (user_id);
+create index if not exists tickets_event_idx on public.tickets (event_id, status);
+create index if not exists tickets_booking_idx on public.tickets (booking_id);
+create index if not exists ticket_types_event_idx on public.ticket_types (event_id);
+create index if not exists event_staff_event_idx on public.event_staff (event_id, user_id);
+create index if not exists notifications_user_idx on public.notifications (user_id, created_at desc);
+create index if not exists exchange_from_idx on public.exchange_requests (from_club_id, status);
+create index if not exists exchange_to_idx on public.exchange_requests (to_club_id, status);
+create index if not exists qr_ticket_idx on public.qr_credentials (ticket_id);
+
 -- ───────────────────────── 가입 시 프로필 생성 ─────────────────────────
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = '' as $$

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useBandy } from '../store'
 import { isEventStaff, publicEvents, remaining, ticketTypesOf } from '../repo'
@@ -85,13 +85,14 @@ export function BookPage() {
   const { db, me, call, showToast } = useBandy()
   const navigate = useNavigate()
   const { event } = useVisibleEvent()
-  // 같은 화면에서 두 번 눌러도 예매가 하나만 생기도록 요청 키를 고정한다
-  const [requestKey] = useState(() => crypto.randomUUID())
   const [busy, setBusy] = useState(false)
   const types = event ? ticketTypesOf(db, event.id) : []
   const [typeId, setTypeId] = useState(types[0]?.id ?? '')
   const [qty, setQty] = useState(1)
   const [depositor, setDepositor] = useState(me?.display_name ?? '')
+  // 같은 내용으로 다시 눌러도(네트워크 재시도 포함) 예매가 하나만 생기도록 요청 키를 둔다.
+  // 내용을 바꾸면 새 키를 써서 '같은 키로 다른 예매' 충돌이 나지 않게 한다.
+  const requestKey = useMemo(() => crypto.randomUUID(), [typeId, qty, depositor])
   const [error, setError] = useState('')
   const [doneId, setDoneId] = useState<string | null>(null)
 
