@@ -63,7 +63,7 @@ export function ManagePage() {
 }
 
 function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () => void }) {
-  const { db, call, showToast } = useBandy()
+  const { db, call, showToast, ask } = useBandy()
   const [mode, setMode] = useState<'bookings' | 'edit'>('bookings')
   const [filter, setFilter] = useState<'pending' | 'all'>('pending')
   const event = db.events.find((e) => e.id === eventId)!
@@ -104,9 +104,9 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
           )}
           {!cancelled && <button type="button" className="b-btn ghost small" onClick={() => setMode(mode === 'edit' ? 'bookings' : 'edit')}>{mode === 'edit' ? '수정 닫기' : '수정'}</button>}
           {!cancelled && bookings.length > 0 && (
-            <button type="button" className="b-btn ghost small" onClick={() => { if (window.confirm('공연을 취소할까요? 입금 대기 예매는 취소되고 예매자 모두에게 알림이 가요. 되돌릴 수 없어요.')) act((b) => b.setEventStatus(event.id, 'CANCELLED'), '공연을 취소했어요.') }}>공연 취소</button>
+            <button type="button" className="b-btn ghost small" onClick={async () => { if (await ask('공연을 취소할까요? 입금 대기 예매는 취소되고 예매자 모두에게 알림이 가요. 되돌릴 수 없어요.')) act((b) => b.setEventStatus(event.id, 'CANCELLED'), '공연을 취소했어요.') }}>공연 취소</button>
           )}
-          <button type="button" className="b-btn ghost small" onClick={async () => { if (window.confirm('이 공연을 삭제할까요?') && await act((b) => b.deleteEvent(event.id), '삭제했어요.')) onDeleted() }}>삭제</button>
+          <button type="button" className="b-btn ghost small" onClick={async () => { if (await ask('이 공연을 삭제할까요?') && await act((b) => b.deleteEvent(event.id), '삭제했어요.')) onDeleted() }}>삭제</button>
           <Link className="b-link" to={`/app/e/${event.id}`}>공연 페이지</Link>
         </div>
       </section>
@@ -118,7 +118,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
             <article key={b.id} className="b-card b-pad b-stack b-signal">
               <div className="b-row between"><strong>{nameOf(b.user_id)} · {won(b.total_amount_krw)}</strong><span className="b-status wait">환불 대기</span></div>
               <p className="b-sub">환불 계좌: {p.refund_account} · 요청 {p.refund_requested_at ? dateLabel(p.refund_requested_at) : ''}</p>
-              <button type="button" className="b-btn small" onClick={() => { if (window.confirm(`${won(b.total_amount_krw)}을 보냈나요? 환불 완료로 바꾸고 예매자에게 알려요.`)) act((x) => x.markRefunded(b.id), '환불 완료로 바꿨어요.') }}>환불 완료</button>
+              <button type="button" className="b-btn small" onClick={async () => { if (await ask(`${won(b.total_amount_krw)}을 보냈나요? 환불 완료로 바꾸고 예매자에게 알려요.`)) act((x) => x.markRefunded(b.id), '환불 완료로 바꿨어요.') }}>환불 완료</button>
             </article>
           ))}
         </section>
@@ -307,7 +307,7 @@ function ClubForm({ clubId }: { clubId: string }) {
 
 // 부원 · 운영진: 가입 신청 수락, 회장이 운영진 지정(운영진은 입금 확인·입장 처리 가능)
 function Members({ clubId }: { clubId: string }) {
-  const { db, me, call, showToast } = useBandy()
+  const { db, me, call, showToast, ask } = useBandy()
   const members = db.club_memberships.filter((m) => m.club_id === clubId && m.status !== 'LEFT')
   const iAmOwner = members.some((m) => m.user_id === me?.id && m.role === 'OWNER' && m.status === 'ACTIVE')
   const nameOf = (uid: string) => db.profiles.find((p) => p.id === uid)?.display_name ?? '(이름 비공개)'
@@ -340,7 +340,7 @@ function Members({ clubId }: { clubId: string }) {
               <button type="button" className="b-btn ghost small" onClick={() => act((b) => b.setMemberRole(m.id, m.role === 'MANAGER' ? 'MEMBER' : 'MANAGER'), '역할을 바꿨어요.')}>
                 {m.role === 'MANAGER' ? '부원으로' : '운영진으로'}
               </button>
-              <button type="button" className="b-btn ghost small" onClick={() => { if (window.confirm('이 부원을 내보낼까요?')) act((b) => b.removeMember(m.id), '내보냈어요.') }}>내보내기</button>
+              <button type="button" className="b-btn ghost small" onClick={async () => { if (await ask('이 부원을 내보낼까요?')) act((b) => b.removeMember(m.id), '내보냈어요.') }}>내보내기</button>
             </span>
           )}
         </article>

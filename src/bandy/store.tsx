@@ -23,6 +23,9 @@ interface BandyContext {
   call: <T>(fn: (b: Backend) => Promise<T>, opts?: { reload?: boolean }) => Promise<Result<T>>
   toast: string
   showToast: (text: string) => void
+  // 앱 안 확인 창(브라우저 confirm()은 인앱 브라우저·임베드 화면에서 막히는 경우가 있어 쓰지 않는다)
+  ask: (message: string) => Promise<boolean>
+  confirmState: { message: string; resolve: (ok: boolean) => void } | null
 }
 
 const Ctx = createContext<BandyContext | null>(null)
@@ -38,6 +41,10 @@ export function BandyProvider({ children }: { children: ReactNode }) {
   const [home, setHome] = useState<HomeState>({ signed_in: false })
   const lastLoad = useRef(0)
   const [offline, setOffline] = useState(false)
+  const [confirmState, setConfirmState] = useState<{ message: string; resolve: (ok: boolean) => void } | null>(null)
+  const ask = useCallback((message: string) => new Promise<boolean>((resolve) => {
+    setConfirmState({ message, resolve: (ok) => { setConfirmState(null); resolve(ok) } })
+  }), [])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
   const seq = useRef(0)
@@ -117,7 +124,9 @@ export function BandyProvider({ children }: { children: ReactNode }) {
     call,
     toast,
     showToast: setToast,
-  }), [call, db, home, loading, offline, toast, userId])
+    ask,
+    confirmState,
+  }), [ask, call, confirmState, db, home, loading, offline, toast, userId])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

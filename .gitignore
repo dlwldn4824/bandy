@@ -37,3 +37,5 @@ yarn.lock
 *.sw?
 .env
 
+dist-bandy-artifact
+bandy-demo.html

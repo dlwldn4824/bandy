@@ -15,7 +15,7 @@ import './bandy.css'
 const NO_TABS = [/^\/app\/e\//, /^\/app\/scan\//, /^\/app\/login/]
 
 function Shell() {
-  const { toast, loading, backend } = useBandy()
+  const { toast, loading, backend, confirmState } = useBandy()
   usePwaHead()
   const { pathname } = useLocation()
   const tabs = !NO_TABS.some((r) => r.test(pathname))
@@ -48,6 +48,17 @@ function Shell() {
         </main>
         {tabs && <BottomBar />}
         {toast && <div className="b-toast" role="status">{toast}</div>}
+        {confirmState && (
+          <div className="b-modal" onClick={() => confirmState.resolve(false)}>
+            <div className="b-sheet b-stack" role="alertdialog" aria-label="확인" onClick={(e) => e.stopPropagation()}>
+              <p className="b-body">{confirmState.message}</p>
+              <div className="b-row" style={{ flexWrap: 'nowrap' }}>
+                <button type="button" className="b-btn ghost" onClick={() => confirmState.resolve(false)}>아니요</button>
+                <button type="button" className="b-btn" onClick={() => confirmState.resolve(true)}>네</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
