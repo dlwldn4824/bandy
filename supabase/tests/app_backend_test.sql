@@ -213,6 +213,8 @@ reset role;
 update public.profiles set status = 'SUSPENDED' where id = '00000000-0000-0000-0000-00000000000c';
 :as_v
 select test.fails_with($$select public.create_booking('$$ || :'tt5' || $$', 1, '이준')$$, '제한된 계정', '정지 회원은 예매 불가');
+select test.fails_with($$select public.create_club('{"name":"정지밴드"}')$$, '제한된 계정', '정지 회원은 동아리 등록 불가');
+select public.update_profile('viewer');
 reset role;
 update public.profiles set status = 'ACTIVE' where id = '00000000-0000-0000-0000-00000000000c';
 
@@ -223,8 +225,12 @@ select public.create_booking(:'tt5', 1, '이준', 'host-cancel-1') as bk_hc \gse
 reset role;
 update public.bookings set created_at = now() - interval '4 days', expires_at = now() - interval '1 day' where id = :'bk_late';
 :as_o1
-select test.fails_with($$select public.confirm_deposit('$$ || :'bk_late' || $$')$$, '만료', '기한 지난 예매는 입금 확인 거부');
+select test.ok(public.confirm_deposit(:'bk_late') = 'EXPIRED', '기한 지난 예매는 입금 확인 대신 만료로 응답');
 reset role;
+select test.ok((select status from public.bookings where id = :'bk_late') = 'EXPIRED', '만료가 되돌려지지 않고 저장됨');
+update public.bookings set status = 'PENDING_PAYMENT', updated_at = now() where id = :'bk_late';
+update public.payments set status = 'PENDING', failure_code = null where booking_id = :'bk_late';
+update public.ticket_types set reserved_quantity = reserved_quantity + 1 where id = :'tt5';
 select test.ok(public.expire_overdue_bookings() = 1, '기한 지난 예매 일괄 정리');
 :as_o1
 select public.cancel_booking(:'bk_hc');
@@ -233,6 +239,9 @@ select test.ok((select status from public.bookings where id = :'bk_late') = 'EXP
 select test.ok((select reserved_quantity from public.ticket_types where id = :'tt5') = 0, '만료·취소분 자리 반환');
 select test.ok((select count(*) from public.notifications where user_id = '00000000-0000-0000-0000-00000000000c'
                 and event_id = :'ev5' and type in ('BOOKING_EXPIRED', 'BOOKING_CANCELLED')) = 2, '만료·주최 취소 알림');
+:as_v
+select public.cancel_booking(:'bk_late');
+select test.ok((select status from public.bookings where id = :'bk_late') = 'EXPIRED', '이미 만료된 예매를 취소해도 오류 없이 그대로');
 
 -- 12-5. QR: 앞뒤 줄바꿈 허용, 취소된 공연은 입장 불가 + 대기 예매 정리
 :as_u
@@ -240,6 +249,19 @@ select id as t2 from public.tickets where booking_id = :'bk' and issue_sequence 
 select public.issue_ticket_qr(:'t2') as qr2 \gset
 :as_o1
 select test.ok(public.verify_ticket(:'ev', E'  ' || :'qr2' || E'\n') ->> 'result' = 'valid', '토큰 앞뒤 줄바꿈은 무시');
+reset role;
+update public.profiles set status = 'SUSPENDED' where id = '00000000-0000-0000-0000-00000000000b';
+:as_u
+select test.ok(length(public.issue_ticket_qr(:'t2')) > 0, '정지 회원도 이미 산 티켓 QR은 받음');
+select public.issue_ticket_qr(:'t2') as qr2 \gset
+reset role;
+update public.profiles set status = 'ACTIVE' where id = '00000000-0000-0000-0000-00000000000b';
+update public.profiles set status = 'SUSPENDED' where id = '00000000-0000-0000-0000-000000000001';
+:as_o1
+select test.fails_with($$select public.verify_ticket('$$ || :'ev' || $$', 'x')$$, '제한된 계정', '정지된 운영진은 입장 처리 불가');
+reset role;
+update public.profiles set status = 'ACTIVE' where id = '00000000-0000-0000-0000-000000000001';
+:as_o1
 :as_v
 select public.create_booking(:'tt', 1, '이준', 'pend-ev') as bk_pend \gset
 :as_o1
@@ -290,12 +312,32 @@ select public.create_booking(:'tt5', 1, '이준', 'susp-1') as bk_s \gset
 select public.set_club_status(:'c1', 'SUSPENDED');
 :as_o1
 select test.fails_with($$select public.confirm_deposit('$$ || :'bk_s' || $$')$$, '승인된 동아리만', '정지된 동아리는 입금 확인 불가');
-select test.fails_with($$select public.set_event_status('$$ || :'ev5' || $$', 'DRAFT')$$, '승인된 동아리만', '정지된 동아리는 공연 상태 변경 불가');
+select test.fails_with($$select public.update_club('$$ || :'c1' || $$', '{"introduction":"x"}')$$, '정지된 동아리', '정지된 동아리는 정보 수정 불가');
+select public.set_event_status(:'ev5', 'DRAFT');
+select test.fails_with($$select public.set_event_status('$$ || :'ev5' || $$', 'PUBLISHED')$$, '승인된 동아리만', '정지된 동아리는 공개 불가(비공개는 가능)');
+select public.set_event_status(:'ev5', 'CANCELLED');
+select test.ok((select status from public.bookings where id = :'bk_s') = 'CANCELLED', '정지된 동아리도 공연 취소로 대기 예매 정리');
 select test.ok((select message from public.notifications where type = 'CLUB_STATUS' order by created_at desc limit 1) like '%정지%', '정지 알림은 정지 문구');
 :as_v
 select test.ok((select count(*) from public.events where id = :'ev5') = 1, '정지 동아리 공연도 예매자에게 보임');
+select test.ok((select count(*) from public.notifications where type = 'EVENT_CANCELLED' and message like '[유료 공연] %') = 1, '취소 알림 문구에 공연명을 괄호로');
 :as_admin
 select public.set_club_status(:'c1', 'ACTIVE');
+
+-- 12-10. 티켓 종류가 두 개인 공연 취소: 각 종류의 잡아 둔 수량을 각각 돌려준다
+:as_o1
+select public.create_event(:'c1', '{"title":"두 종류","starts_at":"2026-12-27T19:00+09","venue_name":"홀","price_krw":3000,"capacity":5,"bank_name":"b","account_number":"1","publish":true}') as ev6 \gset
+reset role;
+insert into public.ticket_types (event_id, name, price_krw, capacity, sales_ends_at)
+  select :'ev6', '학생', 2000, 5, starts_at from public.events where id = :'ev6' returning id as tt6b \gset
+select id as tt6a from public.ticket_types where event_id = :'ev6' and name = '일반' \gset
+:as_u
+select public.create_booking(:'tt6a', 1, '김관객', 'two-a') is not null as x \gset
+select public.create_booking(:'tt6b', 2, '김관객', 'two-b') is not null as x \gset
+:as_o1
+select public.set_event_status(:'ev6', 'CANCELLED');
+reset role;
+select test.ok((select sum(reserved_quantity) from public.ticket_types where event_id = :'ev6') = 0, '두 종류 공연 취소 시 각 종류 수량 반환');
 reset role;
 select test.ok((select count(*) from public.audit_logs where action in ('CONFIRM_DEPOSIT', 'CHECK_IN')) = 2, '입금 확인·입장 감사 기록');
 \echo 'ALL TESTS PASSED'

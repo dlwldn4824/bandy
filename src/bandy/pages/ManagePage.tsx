@@ -126,7 +126,10 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
                       ? <p className="b-note">입금 기한이 지나 입금 확인을 할 수 없어요. 자리는 자동으로 풀려요.</p>
                       : (
                         <div className="b-row">
-                          <button type="button" className="b-btn small" onClick={() => act((x) => x.confirmDeposit(b.id), '입금 확인했어요. 티켓이 발급됐어요.')}>입금 확인</button>
+                          <button type="button" className="b-btn small" onClick={async () => {
+                            const r = await call((x) => x.confirmDeposit(b.id))
+                            showToast(!r.ok ? r.error : r.value === 'EXPIRED' ? '입금 기한이 지나 만료된 예매예요. 자리가 풀렸어요.' : '입금 확인했어요. 티켓이 발급됐어요.')
+                          }}>입금 확인</button>
                           <button type="button" className="b-btn ghost small" onClick={() => act((x) => x.cancelBooking(b.id), '예매를 취소했어요.')}>취소</button>
                         </div>
                       )}

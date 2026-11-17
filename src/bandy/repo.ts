@@ -8,7 +8,7 @@ import { seedDb } from './seed'
 
 export class BandyError extends Error {}
 
-const STORAGE_KEY = 'bandy-prototype-v3'
+const STORAGE_KEY = 'bandy-prototype-v4' // v4: 시연 날짜를 오늘 기준으로 바꿈(옛 저장 데이터는 새로 시작)
 const BOOKING_HOLD_DAYS = 3 // [미정] 입금 대기 기간. 11/1 기준 팀 결정 전 임시값
 const MAX_QUANTITY = 10 // [미정] 1회 최대 구매 수량
 
@@ -92,15 +92,22 @@ function checkPublishable(venue: string, startsAt: string, price: number, accoun
   if (price > 0 && !account.trim()) throw new BandyError('유료 공연은 입금 계좌가 필요합니다.')
 }
 
-function requireLogin(db: Db, userId: Uuid | null): Uuid {
+function requireLogin(_db: Db, userId: Uuid | null): Uuid {
   if (!userId) throw new BandyError('로그인이 필요합니다.')
+  return userId
+}
+
+// 정지·탈퇴 회원은 새로 만드는 일과 운영진 업무를 못 한다(이미 산 티켓 QR·본인 예매 취소·이름 수정은 됨). 서버 _require_active_profile과 같음
+function requireActiveProfile(db: Db, userId: Uuid | null): Uuid {
+  requireLogin(db, userId)
   const p = db.profiles.find((x) => x.id === userId)
   if (p && p.status !== 'ACTIVE') throw new BandyError('이용이 제한된 계정입니다.')
-  return userId
+  return userId!
 }
 
 // 쓰기 권한: 운영진 + 동아리 승인(ACTIVE). 정지된 동아리는 공연 등록·수정·공개·입금 확인이 멈춘다
 function requireActiveManager(db: Db, userId: Uuid | null, clubId: Uuid, notFound: string) {
+  requireActiveProfile(db, userId)
   if (!isClubManager(db, userId, clubId)) throw new BandyError(notFound)
   if (db.clubs.find((c) => c.id === clubId)?.status !== 'ACTIVE') throw new BandyError('승인된 동아리만 할 수 있습니다. (정지 또는 승인 전)')
 }
@@ -191,7 +198,7 @@ export function createClub(db: Db, userId: Uuid | null, input: {
   name: string; school: string; genre: string; region: string; introduction: string
   sns_url: string; open_chat_url: string; exchange_open: boolean
 }): Club {
-  requireLogin(db, userId)
+  requireActiveProfile(db, userId)
   const name = input.name.trim()
   if (!name) throw new BandyError('동아리 이름을 입력하세요.')
   if (name.length > 40) throw new BandyError('동아리 이름은 40자까지입니다.')
@@ -229,7 +236,7 @@ export function setClubStatus(db: Db, userId: Uuid | null, clubId: Uuid, status:
       REJECTED: `${club.name} 동아리 승인이 거절됐어요.`,
       PENDING: `${club.name} 동아리가 승인 대기 상태로 바뀌었어요.`,
     }[status]
-    notify(db, owner.user_id, null, 'CLUB_STATUS', message, `club-status-${clubId}-${status}-${Date.now()}`)
+    notify(db, owner.user_id, null, 'CLUB_STATUS', message, `club-status-${clubId}-${status}-${uid('n')}`)
   }
 }
 
@@ -241,7 +248,9 @@ export function updateClub(db: Db, userId: Uuid | null, clubId: Uuid, patch: Par
     if (patch.name.length > 40) throw new BandyError('동아리 이름은 40자까지입니다.')
     if (db.clubs.some((c) => c.id !== clubId && c.name === patch.name)) throw new BandyError('이미 등록된 동아리 이름입니다.')
   }
+  requireActiveProfile(db, userId)
   if (!isClubManager(db, userId, clubId)) throw new BandyError('동아리 운영진만 수정할 수 있습니다.')
+  if (db.clubs.find((c) => c.id === clubId)?.status === 'SUSPENDED') throw new BandyError('운영이 정지된 동아리는 정보를 바꿀 수 없습니다.')
   if (patch.sns_url !== undefined) patch.sns_url = checkUrl(patch.sns_url, 'SNS 링크') || null
   if (patch.open_chat_url !== undefined) patch.open_chat_url = checkUrl(patch.open_chat_url, '오픈채팅 링크')
   const club = db.clubs.find((c) => c.id === clubId)!
@@ -254,7 +263,7 @@ export function createEvent(db: Db, userId: Uuid | null, clubId: Uuid, input: {
   description: string; price_krw: number; capacity: number; account_number: string; bank_name: string
   publish: boolean; poster_path?: string | null
 }): EventRow {
-  requireLogin(db, userId)
+  requireActiveProfile(db, userId)
   requireActiveManager(db, userId, clubId, '동아리 운영진만 공연을 올릴 수 있습니다.')
   const club = db.clubs.find((c) => c.id === clubId)!
   if (!input.title.trim()) throw new BandyError('공연명을 입력하세요.')
@@ -284,14 +293,15 @@ export function createEvent(db: Db, userId: Uuid | null, clubId: Uuid, input: {
 }
 
 export function setEventStatus(db: Db, userId: Uuid | null, eventId: Uuid, status: EventRow['status']) {
-  requireLogin(db, userId)
+  requireActiveProfile(db, userId)
   const event = db.events.find((e) => e.id === eventId)
-  if (!event) throw new BandyError('공연을 찾지 못했습니다.')
-  requireActiveManager(db, userId, event.club_id, '공연을 찾지 못했습니다.')
+  if (!event || !isClubManager(db, userId, event.club_id)) throw new BandyError('공연을 찾지 못했습니다.')
+  // 공개는 승인된 동아리만. 비공개·종료·취소(판매를 멈추는 쪽)는 정지된 동아리도 할 수 있다
+  if (status === 'PUBLISHED') requireActiveManager(db, userId, event.club_id, '공연을 찾지 못했습니다.')
   if (event.status === status) return
   if (event.status === 'CANCELLED') throw new BandyError('취소된 공연은 다시 열 수 없습니다. 새로 등록해 주세요.')
-  const tt = db.ticket_types.find((t) => t.event_id === eventId)!
-  if (status === 'PUBLISHED') checkPublishable(event.venue_name ?? '', event.starts_at, tt.price_krw, event.account_number)
+  const maxPrice = Math.max(0, ...db.ticket_types.filter((t) => t.event_id === eventId).map((t) => t.price_krw))
+  if (status === 'PUBLISHED') checkPublishable(event.venue_name ?? '', event.starts_at, maxPrice, event.account_number)
   event.status = status
   event.published_at = status === 'PUBLISHED' ? (event.published_at ?? now()) : event.published_at
   event.updated_at = now()
@@ -301,8 +311,8 @@ export function setEventStatus(db: Db, userId: Uuid | null, eventId: Uuid, statu
       const wasConfirmed = b.status === 'CONFIRMED'
       if (!wasConfirmed) releaseBooking(db, b, 'CANCELLED', 'EVENT_CANCELLED')
       notify(db, b.user_id, eventId, 'EVENT_CANCELLED', wasConfirmed
-        ? `${event.title} 공연이 취소됐어요. 환불은 주최 동아리에 문의해 주세요.`
-        : `${event.title} 공연이 취소돼 예매가 취소됐어요.`, `event-cancelled-${b.id}`)
+        ? `[${event.title}] 공연이 취소됐어요. 환불은 주최 동아리에 문의해 주세요.`
+        : `[${event.title}] 공연이 취소돼 예매도 취소됐어요.`, `event-cancelled-${b.id}`)
     }
   }
 }
@@ -366,7 +376,7 @@ export function updateProfile(db: Db, userId: Uuid | null, displayName: string) 
 // ───────────── 예매 · 입금 확인 ─────────────
 export function createBooking(db: Db, userId: Uuid | null, ticketTypeId: Uuid, quantity: number, depositorName: string,
   idempotencyKey?: string): Booking {
-  requireLogin(db, userId)
+  requireActiveProfile(db, userId)
   const hash = fakeHash(`${ticketTypeId}:${quantity}:${depositorName}`)
   // 같은 요청 재전송(더블 클릭·네트워크 재시도)이면 같은 예매를 돌려준다
   const existing = idempotencyKey ? db.bookings.find((b) => b.user_id === userId && b.idempotency_key === idempotencyKey) : undefined
@@ -456,19 +466,19 @@ function confirmBookingInternal(db: Db, booking: Booking, confirmedBy: Uuid | nu
 
 // 주최 동아리 운영진의 '입금 확인'. 두 번 눌러도 티켓이 중복 발급되지 않는다.
 // 입금 확인은 주최 동아리 운영진(OWNER·MANAGER)만, 동아리가 승인 상태일 때만
-export function confirmDeposit(db: Db, userId: Uuid | null, bookingId: Uuid) {
+export function confirmDeposit(db: Db, userId: Uuid | null, bookingId: Uuid): 'CONFIRMED' | 'EXPIRED' {
   requireLogin(db, userId)
   const booking = db.bookings.find((b) => b.id === bookingId)
   const event = booking && db.events.find((e) => e.id === booking.event_id)
   if (!booking || !event) throw new BandyError('예매를 찾지 못했습니다.')
   requireActiveManager(db, userId, event.club_id, '예매를 찾지 못했습니다.')
-  if (booking.status === 'CONFIRMED') return
-  if (isOverdue(booking) || booking.status === 'EXPIRED') {
-    // 서버와 같이: 기한이 지나면 언제 눌러도 거부(서버는 이 시도를 되돌리므로 만료 처리는 다음 처리·정리 때)
-    throw new BandyError('입금 기한이 지나 만료된 예매입니다.')
-  }
+  if (booking.status === 'CONFIRMED') return 'CONFIRMED'
+  // 기한이 지났으면 확인 대신 만료로 처리하고 알려 준다(서버와 같음)
+  expireBookings(db, db.booking_items.find((i) => i.booking_id === booking.id)!.ticket_type_id)
+  if (booking.status === 'EXPIRED') return 'EXPIRED'
   if (booking.status !== 'PENDING_PAYMENT') throw new BandyError('취소된 예매입니다.')
   confirmBookingInternal(db, booking, userId)
+  return 'CONFIRMED'
 }
 
 // 예매를 풀고 잡아 둔 자리를 돌려준다(취소·만료 공통)
@@ -507,7 +517,7 @@ export function cancelBooking(db: Db, userId: Uuid | null, bookingId: Uuid) {
   if (byHost && !isClubManager(db, userId, event.club_id)) throw new BandyError('예매를 찾지 못했습니다.')
   const item = db.booking_items.find((i) => i.booking_id === booking.id)!
   expireBookings(db, item.ticket_type_id)
-  if (booking.status === 'EXPIRED') throw new BandyError('입금 기한이 지나 이미 만료된 예매입니다.')
+  if (booking.status === 'EXPIRED') return // 기한이 지나 방금 만료됨(자리 반환 완료). 취소와 결과가 같다
   if (booking.status !== 'PENDING_PAYMENT') throw new BandyError('입금 확인 전 예매만 취소할 수 있습니다.')
   releaseBooking(db, booking, 'CANCELLED', 'CANCELLED_BEFORE_DEPOSIT')
   if (byHost) {
@@ -547,6 +557,7 @@ export function issueTicketQr(db: Db, userId: Uuid | null, ticketId: Uuid) {
 
 // QR 검증(읽기만). 운영자 흐름: 검증 → 관객 정보 확인 → 입장 처리
 export function verifyTicket(db: Db, userId: Uuid | null, eventId: Uuid, token: string): CheckInResult {
+  requireActiveProfile(db, userId)
   if (!isEventStaff(db, userId, eventId)) throw new BandyError('이 공연의 운영진만 입장 처리할 수 있습니다.')
   const ticket = findTicket(db, eventId, token)
   if (!ticket || ticket.status === 'CANCELLED') return { result: 'invalid' }
@@ -555,6 +566,7 @@ export function verifyTicket(db: Db, userId: Uuid | null, eventId: Uuid, token: 
 }
 
 export function checkIn(db: Db, userId: Uuid | null, eventId: Uuid, token: string): CheckInResult {
+  requireActiveProfile(db, userId)
   if (!isEventStaff(db, userId, eventId)) throw new BandyError('이 공연의 운영진만 입장 처리할 수 있습니다.')
   const ticket = findTicket(db, eventId, token)
   if (!ticket || ticket.status === 'CANCELLED') return { result: 'invalid' }
@@ -568,7 +580,7 @@ export function checkIn(db: Db, userId: Uuid | null, eventId: Uuid, token: strin
 
 // ───────────── 교류 신청 ─────────────
 export function requestExchange(db: Db, userId: Uuid | null, fromClubId: Uuid, toClubId: Uuid, kind: ExchangeKind, message: string) {
-  requireLogin(db, userId)
+  requireActiveProfile(db, userId)
   if (!isClubManager(db, userId, fromClubId)) throw new BandyError('동아리 운영진만 교류를 신청할 수 있습니다.')
   if (fromClubId === toClubId) throw new BandyError('같은 동아리에는 신청할 수 없습니다.')
   const from = db.clubs.find((c) => c.id === fromClubId)
@@ -627,7 +639,7 @@ function clubManagers(db: Db, clubId: Uuid) {
 }
 
 export function requestClubJoin(db: Db, userId: Uuid | null, clubId: Uuid) {
-  requireLogin(db, userId)
+  requireActiveProfile(db, userId)
   const club = db.clubs.find((c) => c.id === clubId && c.status === 'ACTIVE')
   if (!club) throw new BandyError('승인된 동아리에만 가입 신청할 수 있습니다.')
   let m = db.club_memberships.find((x) => x.club_id === clubId && x.user_id === userId)
@@ -639,7 +651,7 @@ export function requestClubJoin(db: Db, userId: Uuid | null, clubId: Uuid) {
     db.club_memberships.push(m)
   }
   for (const x of clubManagers(db, clubId)) {
-    notify(db, x.user_id, null, 'CLUB_JOIN_REQUESTED', `${club.name}에 가입 신청이 왔어요.`, `join-req-${m.id}-${x.user_id}-${Date.now()}`)
+    notify(db, x.user_id, null, 'CLUB_JOIN_REQUESTED', `${club.name}에 가입 신청이 왔어요.`, `join-req-${m.id}-${x.user_id}-${uid('n')}`)
   }
   return m
 }
@@ -654,7 +666,7 @@ export function respondClubJoin(db: Db, userId: Uuid | null, membershipId: Uuid,
   m.updated_at = now()
   const club = db.clubs.find((c) => c.id === m.club_id)!
   notify(db, m.user_id, null, 'CLUB_JOIN_RESPONDED', `${club.name}${accept ? ' 가입이 수락됐어요.' : ' 가입 신청이 거절됐어요.'}`,
-    `join-res-${m.id}-${Date.now()}`)
+    `join-res-${m.id}-${uid('n')}`)
 }
 
 export function setMemberRole(db: Db, userId: Uuid | null, membershipId: Uuid, role: 'MANAGER' | 'MEMBER') {
@@ -669,7 +681,7 @@ export function setMemberRole(db: Db, userId: Uuid | null, membershipId: Uuid, r
   const club = db.clubs.find((c) => c.id === m.club_id)!
   notify(db, m.user_id, null, 'CLUB_ROLE', role === 'MANAGER'
     ? `${club.name} 운영진이 됐어요. 입금 확인과 입장 처리를 할 수 있어요.`
-    : `${club.name} 운영진에서 부원으로 바뀌었어요.`, `role-${m.id}-${role}-${Date.now()}`)
+    : `${club.name} 운영진에서 부원으로 바뀌었어요.`, `role-${m.id}-${role}-${uid('n')}`)
 }
 
 // 내보내기(회장) 또는 탈퇴(본인). 회장은 탈퇴하지 않는다

@@ -389,6 +389,16 @@ create or replace function public._require_login() returns uuid
 language plpgsql stable security definer set search_path = '' as $$
 begin
   if auth.uid() is null then raise exception '로그인이 필요합니다.' using errcode = '28000'; end if;
+  return auth.uid();
+end;
+$$;
+
+-- 정지·탈퇴 회원은 새로 만드는 일(예매·동아리 등록·공연 등록·가입·교류 신청)과 운영진 업무(입금 확인·입장 처리 등)를 못 한다.
+-- 이미 산 티켓의 QR 보기, 본인 입금 전 예매 취소, 이름 수정, 알림 읽기는 된다.
+create or replace function public._require_active_profile() returns uuid
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  perform public._require_login();
   if exists (select 1 from public.profiles where id = auth.uid() and status <> 'ACTIVE') then
     raise exception '이용이 제한된 계정입니다.' using errcode = '42501';
   end if;
@@ -446,6 +456,7 @@ $$;
 create or replace function public._require_active_manager(p_club_id uuid, p_not_found text) returns void
 language plpgsql stable security definer set search_path = '' as $$
 begin
+  perform public._require_active_profile();
   if not public.is_club_manager(p_club_id) then raise exception '%', p_not_found using errcode = 'P0002'; end if;
   if not exists (select 1 from public.clubs where id = p_club_id and status = 'ACTIVE') then
     raise exception '승인된 동아리만 할 수 있습니다. (정지 또는 승인 전)' using errcode = 'P0001';
@@ -486,7 +497,7 @@ $$;
 
 create or replace function public.create_club(p_input jsonb) returns uuid
 language plpgsql security definer set search_path = '' as $$
-declare v_uid uuid := public._require_login(); v_id uuid; v_name text := btrim(coalesce(p_input ->> 'name', ''));
+declare v_uid uuid := public._require_active_profile(); v_id uuid; v_name text := btrim(coalesce(p_input ->> 'name', ''));
 begin
   if v_name = '' then raise exception '동아리 이름을 입력하세요.' using errcode = '22023'; end if;
   if length(v_name) > 40 then raise exception '동아리 이름은 40자까지입니다.' using errcode = '22023'; end if;
@@ -510,7 +521,11 @@ create or replace function public.update_club(p_club_id uuid, p_patch jsonb) ret
 language plpgsql security definer set search_path = '' as $$
 declare v_name text;
 begin
+  perform public._require_active_profile();
   if not public.is_club_manager(p_club_id) then raise exception '동아리 운영진만 수정할 수 있습니다.' using errcode = '42501'; end if;
+  if exists (select 1 from public.clubs where id = p_club_id and status = 'SUSPENDED') then
+    raise exception '운영이 정지된 동아리는 정보를 바꿀 수 없습니다.' using errcode = 'P0001';
+  end if;
   if p_patch ? 'name' then
     v_name := btrim(p_patch ->> 'name');
     if v_name = '' then raise exception '동아리 이름을 입력하세요.' using errcode = '22023'; end if;
@@ -550,7 +565,7 @@ begin
       when 'SUSPENDED' then v_club.name || ' 동아리 운영이 정지됐어요. 공연 공개와 입금 확인이 멈춰요.'
       when 'REJECTED' then v_club.name || ' 동아리 승인이 거절됐어요.'
       else v_club.name || ' 동아리가 승인 대기 상태로 바뀌었어요.' end,
-      'club-status-' || p_club_id || '-' || p_status || '-' || extract(epoch from now())::bigint);
+      'club-status-' || p_club_id || '-' || p_status || '-' || gen_random_uuid());
   end if;
 end;
 $$;
@@ -569,7 +584,7 @@ $$;
 create or replace function public.create_event(p_club_id uuid, p_input jsonb) returns uuid
 language plpgsql security definer set search_path = '' as $$
 declare
-  v_uid uuid := public._require_login();
+  v_uid uuid := public._require_active_profile();
   v_id uuid;
   v_publish boolean := coalesce((p_input ->> 'publish')::boolean, false);
   v_price bigint := coalesce(public._to_bigint(p_input ->> 'price_krw', '가격'), 0);
@@ -652,32 +667,35 @@ $$;
 -- 공연 상태 변경. 취소하면 입금 전 예매는 정리하고 예매자에게 알린다(입금 완료분 환불은 정책 결정 뒤 동아리가 직접)
 create or replace function public.set_event_status(p_event_id uuid, p_status text) returns void
 language plpgsql security definer set search_path = '' as $$
-declare v_event public.events; v_tt public.ticket_types; r record;
+declare v_event public.events; v_price bigint; r record;
 begin
-  perform public._require_login();
+  perform public._require_active_profile();
   if p_status not in ('DRAFT', 'PUBLISHED', 'ENDED', 'CANCELLED') then raise exception '알 수 없는 공연 상태입니다.' using errcode = '22023'; end if;
   select * into v_event from public.events where id = p_event_id;
-  if not found then raise exception '공연을 찾지 못했습니다.' using errcode = 'P0002'; end if;
-  perform public._require_active_manager(v_event.club_id, '공연을 찾지 못했습니다.');
-  select * into v_tt from public.ticket_types where event_id = p_event_id order by created_at limit 1 for update;
+  if not found or not public.is_club_manager(v_event.club_id) then raise exception '공연을 찾지 못했습니다.' using errcode = 'P0002'; end if;
+  -- 공개는 승인된 동아리만. 비공개·종료·취소(판매를 멈추는 쪽)는 정지된 동아리도 할 수 있다
+  if p_status = 'PUBLISHED' then perform public._require_active_manager(v_event.club_id, '공연을 찾지 못했습니다.'); end if;
+  -- 잠금 순서: 티켓 종류(전부, id 순) → 공연 → 예매
+  perform 1 from public.ticket_types where event_id = p_event_id order by id for update;
   select * into v_event from public.events where id = p_event_id for update;
   if v_event.status = p_status then return; end if;
   if v_event.status = 'CANCELLED' then raise exception '취소된 공연은 다시 열 수 없습니다. 새로 등록해 주세요.' using errcode = 'P0001'; end if;
   if p_status = 'PUBLISHED' then
-    perform public._check_publishable(v_event.venue_name, v_event.starts_at, v_tt.price_krw, v_event.account_number);
+    select max(price_krw) into v_price from public.ticket_types where event_id = p_event_id;
+    perform public._check_publishable(v_event.venue_name, v_event.starts_at, coalesce(v_price, 0), v_event.account_number);
   end if;
   update public.events set status = p_status, published_at = case when p_status = 'PUBLISHED' then coalesce(published_at, now()) else published_at end,
     updated_at = now() where id = p_event_id;
   if p_status = 'CANCELLED' then
-    for r in select b.id, b.user_id, b.status, i.quantity from public.bookings b join public.booking_items i on i.booking_id = b.id
-             where b.event_id = p_event_id and b.status in ('PENDING_PAYMENT', 'CONFIRMED') for update of b loop
+    for r in select b.id, b.user_id, b.status, i.quantity, i.ticket_type_id from public.bookings b join public.booking_items i on i.booking_id = b.id
+             where b.event_id = p_event_id and b.status in ('PENDING_PAYMENT', 'CONFIRMED') order by b.id for update of b loop
       if r.status = 'PENDING_PAYMENT' then
         update public.bookings set status = 'CANCELLED', cancelled_at = now(), updated_at = now() where id = r.id;
         update public.payments set status = 'FAILED', failure_code = 'EVENT_CANCELLED', updated_at = now() where booking_id = r.id and status = 'PENDING';
-        update public.ticket_types set reserved_quantity = reserved_quantity - r.quantity, updated_at = now() where id = v_tt.id;
+        update public.ticket_types set reserved_quantity = reserved_quantity - r.quantity, updated_at = now() where id = r.ticket_type_id;
       end if;
-      perform public._notify(r.user_id, p_event_id, 'EVENT_CANCELLED', v_event.title || case when r.status = 'CONFIRMED'
-        then ' 공연이 취소됐어요. 환불은 주최 동아리에 문의해 주세요.' else ' 공연이 취소돼 예매가 취소됐어요.' end,
+      perform public._notify(r.user_id, p_event_id, 'EVENT_CANCELLED', '[' || v_event.title || '] ' || case when r.status = 'CONFIRMED'
+        then '공연이 취소됐어요. 환불은 주최 동아리에 문의해 주세요.' else '공연이 취소돼 예매도 취소됐어요.' end,
         'event-cancelled-' || r.id);
     end loop;
   end if;
@@ -709,7 +727,7 @@ create or replace function public.create_booking(p_ticket_type_id uuid, p_quanti
 returns uuid
 language plpgsql security definer set search_path = '' as $$
 declare
-  v_uid uuid := public._require_login();
+  v_uid uuid := public._require_active_profile();
   v_key text := coalesce(nullif(p_idempotency_key, ''), gen_random_uuid()::text);
   v_hash text := encode(extensions.digest(p_ticket_type_id::text || ':' || p_quantity || ':' || coalesce(p_depositor_name, ''), 'sha256'), 'hex');
   v_tt public.ticket_types; v_event public.events; v_existing public.bookings; v_booking uuid; v_item uuid;
@@ -774,7 +792,9 @@ end;
 $$;
 
 -- 주최 동아리의 '입금 확인'. 두 번 눌러도 티켓이 중복 발급되지 않는다.
-create or replace function public.confirm_deposit(p_booking_id uuid) returns void
+-- 결과: 'CONFIRMED' 또는 'EXPIRED'(기한이 지나 이번 호출에서 만료 처리됨 — 오류로 되돌리지 않고 만료를 저장한다)
+drop function if exists public.confirm_deposit(uuid);
+create or replace function public.confirm_deposit(p_booking_id uuid) returns text
 language plpgsql security definer set search_path = '' as $$
 declare v_b public.bookings; v_tt uuid;
 begin
@@ -787,11 +807,12 @@ begin
   perform 1 from public.ticket_types where id = v_tt for update;  -- 잠금 순서: 티켓 종류 → 예매
   perform public._expire_bookings(v_tt);  -- 기한이 지난 예매는 여기서 먼저 만료(언제 눌러도 같은 결과)
   select * into v_b from public.bookings where id = p_booking_id for update;
-  if v_b.status = 'CONFIRMED' then return; end if;
-  if v_b.status = 'EXPIRED' then raise exception '입금 기한이 지나 만료된 예매입니다.' using errcode = 'P0001'; end if;
+  if v_b.status = 'CONFIRMED' then return 'CONFIRMED'; end if;
+  if v_b.status = 'EXPIRED' then return 'EXPIRED'; end if;
   if v_b.status <> 'PENDING_PAYMENT' then raise exception '취소된 예매입니다.' using errcode = 'P0001'; end if;
   perform public._confirm_booking(p_booking_id, auth.uid());
   perform public._audit(v_b.event_id, 'CONFIRM_DEPOSIT', 'booking', p_booking_id);
+  return 'CONFIRMED';
 end;
 $$;
 
@@ -811,7 +832,7 @@ begin
   perform 1 from public.ticket_types where id = v_i.ticket_type_id for update;
   perform public._expire_bookings(v_i.ticket_type_id);
   select * into v_b from public.bookings where id = p_booking_id for update;
-  if v_b.status = 'EXPIRED' then raise exception '입금 기한이 지나 이미 만료된 예매입니다.' using errcode = 'P0001'; end if;
+  if v_b.status = 'EXPIRED' then return; end if;  -- 기한이 지나 방금 만료됨(자리 반환 완료). 취소와 결과가 같다
   if v_b.status <> 'PENDING_PAYMENT' then raise exception '입금 확인 전 예매만 취소할 수 있습니다.' using errcode = 'P0001'; end if;
   update public.bookings set status = 'CANCELLED', cancelled_at = now(), updated_at = now() where id = p_booking_id;
   update public.payments set status = 'FAILED', failure_code = 'CANCELLED_BEFORE_DEPOSIT', updated_at = now() where booking_id = p_booking_id and status = 'PENDING';
@@ -863,6 +884,7 @@ create or replace function public.verify_ticket(p_event_id uuid, p_token text) r
 language plpgsql stable security definer set search_path = '' as $$
 declare v_t public.tickets;
 begin
+  perform public._require_active_profile();
   if not public.is_event_staff(p_event_id) then raise exception '이 공연의 운영진만 입장 처리할 수 있습니다.' using errcode = '42501'; end if;
   v_t := public._ticket_by_token(p_event_id, p_token);
   if v_t.id is null or v_t.status = 'CANCELLED' then return jsonb_build_object('result', 'invalid'); end if;
@@ -875,6 +897,7 @@ create or replace function public.check_in(p_event_id uuid, p_token text) return
 language plpgsql security definer set search_path = '' as $$
 declare v_t public.tickets;
 begin
+  perform public._require_active_profile();
   if not public.is_event_staff(p_event_id) then raise exception '이 공연의 운영진만 입장 처리할 수 있습니다.' using errcode = '42501'; end if;
   v_t := public._ticket_by_token(p_event_id, p_token);
   if v_t.id is null or v_t.status = 'CANCELLED' then return jsonb_build_object('result', 'invalid'); end if;
@@ -893,7 +916,7 @@ $$;
 -- 가입 신청 → 운영진이 수락 → 회장(OWNER)이 운영진(MANAGER)으로 지정. 운영진은 입금 확인·입장 처리·공연 관리를 함께 한다.
 create or replace function public.request_club_join(p_club_id uuid) returns uuid
 language plpgsql security definer set search_path = '' as $$
-declare v_uid uuid := public._require_login(); v_m public.club_memberships; v_name text; m record;
+declare v_uid uuid := public._require_active_profile(); v_m public.club_memberships; v_name text; m record;
 begin
   select name into v_name from public.clubs where id = p_club_id and status = 'ACTIVE';
   if v_name is null then raise exception '승인된 동아리에만 가입 신청할 수 있습니다.' using errcode = 'P0001'; end if;
@@ -907,7 +930,7 @@ begin
   end if;
   for m in select user_id from public.club_memberships where club_id = p_club_id and status = 'ACTIVE' and role in ('OWNER', 'MANAGER') loop
     perform public._notify(m.user_id, null, 'CLUB_JOIN_REQUESTED', v_name || '에 가입 신청이 왔어요.',
-      'join-req-' || v_m.id || '-' || m.user_id || '-' || extract(epoch from now())::bigint);
+      'join-req-' || v_m.id || '-' || m.user_id || '-' || gen_random_uuid());
   end loop;
   return v_m.id;
 end;
@@ -926,7 +949,7 @@ begin
   select name into v_name from public.clubs where id = v_m.club_id;
   perform public._notify(v_m.user_id, null, 'CLUB_JOIN_RESPONDED',
     v_name || case when p_accept then ' 가입이 수락됐어요.' else ' 가입 신청이 거절됐어요.' end,
-    'join-res-' || p_membership_id || '-' || extract(epoch from now())::bigint);
+    'join-res-' || p_membership_id || '-' || gen_random_uuid());
 end;
 $$;
 
@@ -949,7 +972,7 @@ begin
   select name into v_name from public.clubs where id = v_m.club_id;
   perform public._notify(v_m.user_id, null, 'CLUB_ROLE', v_name || case when p_role = 'MANAGER'
     then ' 운영진이 됐어요. 입금 확인과 입장 처리를 할 수 있어요.' else ' 운영진에서 부원으로 바뀌었어요.' end,
-    'role-' || p_membership_id || '-' || p_role || '-' || extract(epoch from now())::bigint);
+    'role-' || p_membership_id || '-' || p_role || '-' || gen_random_uuid());
 end;
 $$;
 
@@ -989,7 +1012,7 @@ create or replace function public.request_exchange(p_from_club_id uuid, p_to_clu
 language plpgsql security definer set search_path = '' as $$
 declare v_id uuid; v_from text; m record;
 begin
-  perform public._require_login();
+  perform public._require_active_profile();
   if not public.is_club_manager(p_from_club_id) then raise exception '동아리 운영진만 교류를 신청할 수 있습니다.' using errcode = '42501'; end if;
   if p_from_club_id = p_to_club_id then raise exception '같은 동아리에는 신청할 수 없습니다.' using errcode = '22023'; end if;
   if p_kind is null or p_kind not in ('JOINT_SHOW', 'PRACTICE', 'WATCH_SWAP') then raise exception '교류 종류를 골라 주세요.' using errcode = '22023'; end if;
@@ -1054,6 +1077,14 @@ language sql security definer set search_path = '' as $$
   update public.notifications set read_at = now()
   where user_id = auth.uid() and read_at is null and (p_id is null or id = p_id);
 $$;
+
+-- 입금 기한 정리를 10분마다(pg_cron 확장이 켜져 있을 때만. Supabase: Database → Extensions → pg_cron)
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.schedule('bandy-expire-bookings', '*/10 * * * *', 'select public.expire_overdue_bookings()');
+  end if;
+end $$;
 
 -- ───────────────────────── 실행 권한 ─────────────────────────
 revoke execute on all functions in schema public from public, anon, authenticated;

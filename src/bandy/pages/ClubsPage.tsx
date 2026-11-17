@@ -146,6 +146,9 @@ export function ClubPage() {
   const chat = safeUrl(club.open_chat_url)
   const showChat = canSeeOpenChat(db, me?.id ?? null, club.id)
   const pendingFromMe = db.exchange_requests.some((r) => r.to_club_id === club.id && mine.includes(r.from_club_id) && r.status === 'PENDING')
+  const pendingToMe = db.exchange_requests.some((r) => r.from_club_id === club.id && mine.includes(r.to_club_id) && r.status === 'PENDING')
+  const connected = db.exchange_requests.some((r) => r.status === 'ACCEPTED'
+    && ((r.from_club_id === club.id && mine.includes(r.to_club_id)) || (r.to_club_id === club.id && mine.includes(r.from_club_id))))
 
   const send = async () => {
     const r = await call((b) => b.requestExchange(from || mine[0], club.id, kind, message))
@@ -192,7 +195,9 @@ export function ClubPage() {
           {!club.exchange_open && <p className="b-sub">지금은 교류를 받지 않는 동아리예요.</p>}
           {club.exchange_open && !me && <Link to="/app/login" className="b-btn">로그인하고 신청하기</Link>}
           {club.exchange_open && me && mine.length === 0 && <p className="b-sub">승인된 동아리의 운영진만 교류를 신청할 수 있어요.</p>}
-          {club.exchange_open && me && mine.length > 0 && (pendingFromMe
+          {me && mine.length > 0 && connected && <p className="b-sub">이미 교류 중인 동아리예요. {chat ? '위의 오픈채팅으로 연락해 보세요.' : ''}</p>}
+          {me && mine.length > 0 && !connected && pendingToMe && <p className="b-sub">이 동아리가 보낸 신청이 있어요. <Link to="/app/clubs?tab=inbox">교류 신청함</Link>에서 수락할 수 있어요.</p>}
+          {club.exchange_open && me && mine.length > 0 && !connected && !pendingToMe && (pendingFromMe
             ? <p className="b-sub">보낸 신청이 응답을 기다리고 있어요.</p>
             : (
               <>

@@ -68,7 +68,7 @@ export interface Backend {
   setEventStatus(eventId: string, status: EventRow['status']): Promise<void>
   deleteEvent(eventId: string): Promise<void>
   createBooking(ticketTypeId: string, quantity: number, depositor: string, idempotencyKey: string): Promise<string>
-  confirmDeposit(bookingId: string): Promise<void>
+  confirmDeposit(bookingId: string): Promise<'CONFIRMED' | 'EXPIRED'>
   cancelBooking(bookingId: string): Promise<void>
   issueTicketQr(ticketId: string): Promise<string>
   verifyTicket(eventId: string, token: string): Promise<CheckResult>
@@ -154,7 +154,7 @@ class LocalBackend implements Backend {
   async createBooking(ticketTypeId: string, quantity: number, depositor: string, idempotencyKey: string) {
     return this.mutate((d, u) => repo.createBooking(d, u, ticketTypeId, quantity, depositor, idempotencyKey).id)
   }
-  async confirmDeposit(bookingId: string) { this.mutate((d, u) => repo.confirmDeposit(d, u, bookingId)) }
+  async confirmDeposit(bookingId: string) { return this.mutate((d, u) => repo.confirmDeposit(d, u, bookingId)) }
   async cancelBooking(bookingId: string) { this.mutate((d, u) => repo.cancelBooking(d, u, bookingId)) }
   async issueTicketQr(ticketId: string) { return this.mutate((d, u) => repo.issueTicketQr(d, u, ticketId)) }
   async verifyTicket(eventId: string, token: string) { return this.mutate((d, u) => this.info(d, repo.verifyTicket(d, u, eventId, token))) }
@@ -257,7 +257,7 @@ class SupabaseBackend implements Backend {
       p_ticket_type_id: ticketTypeId, p_quantity: quantity, p_depositor_name: depositor, p_idempotency_key: idempotencyKey,
     })
   }
-  async confirmDeposit(bookingId: string) { await this.rpc('confirm_deposit', { p_booking_id: bookingId }) }
+  async confirmDeposit(bookingId: string) { return this.rpc<'CONFIRMED' | 'EXPIRED'>('confirm_deposit', { p_booking_id: bookingId }) }
   async cancelBooking(bookingId: string) { await this.rpc('cancel_booking', { p_booking_id: bookingId }) }
   async issueTicketQr(ticketId: string) { return this.rpc<string>('issue_ticket_qr', { p_ticket_id: ticketId }) }
   async verifyTicket(eventId: string, token: string) { return this.rpc<CheckResult>('verify_ticket', { p_event_id: eventId, p_token: token }) }

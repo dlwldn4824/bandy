@@ -34,9 +34,9 @@
 | `set_club_status(p_club_id, p_status)` | 운영자 | 승인(ACTIVE) / 거절(REJECTED) / 정지(SUSPENDED). 정지되면 공연 등록·수정·공개·입금 확인이 멈추고, 이미 발급된 티켓의 입장 처리와 입금 전 취소는 계속 됨 |
 | `create_event` · `update_event` · `set_event_status` · `delete_event` | 승인된 동아리 운영진 | 공연 등록·수정·공개·취소·삭제. 공개 조건(장소, 앞으로의 일시, 유료면 계좌)은 등록·공개 전환·공개 중 수정에 똑같이 적용. 예매가 있으면 가격 변경·삭제 불가, 예매 수량보다 정원 축소 불가. `update_event`는 보내지 않은 칸을 그대로 둠. 공연을 취소(CANCELLED)하면 입금 대기 예매는 취소되고 예매자 모두에게 알림, 다시 열 수 없음 |
 | `create_booking(p_ticket_type_id, p_quantity, p_depositor_name, p_idempotency_key)` | 로그인(정지 회원 제외) | 입금 대기 예매. 서버가 금액 계산, 정원 확인, 판매 기간(공연 시작 전까지) 확인, 입금자명 20자까지, 같은 요청 키는 동시에 와도 같은 예매 반환 |
-| `confirm_deposit(p_booking_id)` | 주최 동아리 운영진(OWNER·MANAGER) | 입금 확인 → 예매 확정 + 수량만큼 티켓(입장번호) 발급. 두 번 눌러도 안전. 입금 기한이 지난 예매는 언제 눌러도 거부 |
+| `confirm_deposit(p_booking_id)` → `'CONFIRMED'`·`'EXPIRED'` | 주최 동아리 운영진(OWNER·MANAGER) | 입금 확인 → 예매 확정 + 수량만큼 티켓(입장번호) 발급. 두 번 눌러도 안전. 입금 기한이 지난 예매는 확정하지 않고 그 자리에서 만료(자리 반환·알림)한 뒤 `'EXPIRED'`를 돌려줌 |
 | `cancel_booking(p_booking_id)` | 본인 / 주최 동아리 운영진 | 입금 전 예매 취소, 자리 반환. 주최 쪽이 취소하면 예매자에게 알림 |
-| `expire_overdue_bookings()` | 서버(service_role) | 입금 기한이 지난 예매를 한꺼번에 만료 + 알림. 예매·입금 확인·취소 때도 그 티켓 종류는 먼저 정리됨 |
+| `expire_overdue_bookings()` | 서버(service_role, pg_cron) | 입금 기한이 지난 예매를 한꺼번에 만료 + 알림. pg_cron 확장이 켜져 있으면 migration이 10분마다 실행하도록 등록함 |
 | `issue_ticket_qr(p_ticket_id)` | 티켓 주인 | QR 토큰 새로 발급(이전 QR 폐기, DB에는 해시만) |
 | `verify_ticket(p_event_id, p_token)` | 공연 운영진 | 검증만: valid / already_checked_in / invalid + 관객 정보. 취소된 공연의 QR은 invalid, 토큰 앞뒤 공백·줄바꿈 무시 |
 | `check_in(p_event_id, p_token)` | 공연 운영진 | 입장 처리. 동시에 여러 번 스캔해도 한 번만 바뀜 |
@@ -51,7 +51,7 @@
 PGHOST=<소켓 경로> PGPORT=<포트> PGUSER=postgres supabase/tests/run_backend.sh
 ```
 
-`tests/local_supabase_shim.sql`이 Supabase의 역할·`auth.users`·`auth.uid()`를 흉내 내고, `tests/app_backend_test.sql`이 98개 항목(권한 차단, 정원, 중복 요청, 만료, 입금 확인, QR 재발급·검증·입장, 교류, 수정·삭제 제한 + 2026-11-17 독립 검토 반영분: 비공개·취소 공연의 예매자 조회, 지난 공연 예매·공개 차단, 공개 조건, 입력 형식 오류 한국어 안내, 입금 기한·알림, 공연 취소, 링크 형식, 등록 남용, 교류 중복, 부원·운영진, 동아리 정지)을 확인합니다.
+`tests/local_supabase_shim.sql`이 Supabase의 역할·`auth.users`·`auth.uid()`를 흉내 내고, `tests/app_backend_test.sql`이 107개 항목(권한 차단, 정원, 중복 요청, 만료, 입금 확인, QR 재발급·검증·입장, 교류, 수정·삭제 제한 + 2026-11-17 독립 검토 반영분: 비공개·취소 공연의 예매자 조회, 지난 공연 예매·공개 차단, 공개 조건, 입력 형식 오류 한국어 안내, 입금 기한·알림, 공연 취소, 링크 형식, 등록 남용, 교류 중복, 부원·운영진, 동아리 정지)을 확인합니다.
 
 이 밖에 개발 중 확인한 것:
 - 마지막 1석에 두 사람이 동시에 예매 → 한 명만 성공
@@ -70,7 +70,10 @@ PGHOST=<소켓 경로> PGPORT=<포트> PGUSER=postgres supabase/tests/run_backen
 - 공연·동아리 이미지는 지금 data URL로 `poster_path`/`profile_path`에 저장 → Supabase Storage 업로드로 바꿔야 함
 - 주소 → 좌표 변환(카카오 Local) 미연결: 좌표가 없는 공연은 지도·거리 정렬에서 빠짐
 - 승인 대기 중인 동아리 등록은 한 사람당 1건
-- 동아리 정지 시: 새 판매·공개·입금 확인은 멈추고, 이미 발급된 티켓 입장은 유지
+- 동아리 정지 시: 공연 등록·수정·공개·입금 확인·동아리 정보 수정은 멈춤. 비공개·공연 취소·삭제, 이미 발급된 티켓 입장은 됨
+- 회원 정지 시: 예매·동아리 등록·가입·교류 신청과 운영진 업무(입금 확인·입장 처리 등)는 막힘. 이미 산 티켓 QR, 본인 입금 전 예매 취소, 이름 수정은 됨
 - 공연 취소 시 입금 완료분 환불은 앱 밖에서 동아리가 직접(알림 문구로 안내)
-- 입금 기한 만료를 제때 하려면 `expire_overdue_bookings()`를 주기 실행해야 함(예: pg_cron `*/10 * * * *`). 안 해도 예매·입금 확인·취소 때 그 공연분은 정리되고, 기한 지난 예매는 입금 확인이 거부됨
+- 입금 기한 만료를 제때 하려면 Supabase에서 pg_cron 확장을 켠 뒤 migration을 실행(또는 다시 실행)해야 함. 켜지 않으면 기한 지난 예매는 그 티켓 종류에 새 예매·입금 확인·취소가 있을 때 정리되고, 그 전까지는 잔여석이 실제보다 적게 보이고 만료 알림도 늦게 감
+- 운영진(MANAGER)도 '동아리 회원'이라 하단 가운데 버튼이 '+ 공연 등록'으로 바뀜(구조도의 회원 유형별 교체). 본인 티켓은 마이페이지 → 내 티켓(2탭). 팀 재확인 필요
+- 예매자·가입 신청자 프로필을 보는 운영진에게 그 사람의 `is_admin` 값도 보임(낮음, 정리 필요)
 - 앱은 테이블을 통째로 읽음 → Supabase 기본 응답 상한(보통 1000행)을 넘으면 목록이 잘릴 수 있음. 12월 시범 규모에서는 문제없지만 커지면 화면별 조회로 바꿔야 함
