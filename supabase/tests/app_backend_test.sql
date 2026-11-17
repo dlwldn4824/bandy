@@ -91,8 +91,10 @@ select test.fails($$select * from public.qr_credentials$$, 'QR 해시 테이블 
 select public.create_booking(:'tt', 1, '이준') as bk_v \gset
 reset role;
 update public.bookings set created_at = now() - interval '4 days', expires_at = now() - interval '1 day' where id = :'bk_v';
+:as_admin
+select public.create_booking(:'tt', 1, '운영자') as bk2 \gset
 :as_u
-select public.create_booking(:'tt', 1, '김관객') as bk2 \gset
+select test.fails($$select public.create_booking('$$ || :'tt' || $$', 1, '김관객')$$, '한 공연에 입금 대기 예매는 1건');
 select test.ok((select count(*) from public.bookings where id = :'bk_v') = 0, '관객은 남의 예매를 못 봄');
 reset role;
 select test.ok((select status from public.bookings where id = :'bk_v') = 'EXPIRED', '기한 지난 예매는 만료되고 자리 반환');
@@ -133,8 +135,10 @@ select test.ok((select count(*) from public.tickets where status = 'CHECKED_IN')
 select test.fails($$select public.issue_ticket_qr('$$ || :'t1' || $$')$$, '입장한 티켓은 QR 재발급 불가');
 
 -- 8. 취소
+:as_admin
 select public.cancel_booking(:'bk2');
 select test.ok((select status from public.bookings where id = :'bk2') = 'CANCELLED', '입금 전 취소');
+:as_u
 select test.fails($$select public.cancel_booking('$$ || :'bk' || $$')$$, '확정 예매 취소 불가');
 
 -- 9. 무료 공연 즉시 확정
@@ -221,7 +225,8 @@ update public.profiles set status = 'ACTIVE' where id = '00000000-0000-0000-0000
 -- 12-4. 입금 기한: 기한이 지나면 언제 눌러도 입금 확인 거부, 정리 함수가 만료·알림 처리
 :as_v
 select public.create_booking(:'tt5', 1, '이준', 'late-1') as bk_late \gset
-select public.create_booking(:'tt5', 1, '이준', 'host-cancel-1') as bk_hc \gset
+:as_admin
+select public.create_booking(:'tt5', 1, '운영자', 'host-cancel-1') as bk_hc \gset
 reset role;
 update public.bookings set created_at = now() - interval '4 days', expires_at = now() - interval '1 day' where id = :'bk_late';
 :as_o1
@@ -237,8 +242,8 @@ select public.cancel_booking(:'bk_hc');
 reset role;
 select test.ok((select status from public.bookings where id = :'bk_late') = 'EXPIRED', '정리 후 만료 상태');
 select test.ok((select reserved_quantity from public.ticket_types where id = :'tt5') = 0, '만료·취소분 자리 반환');
-select test.ok((select count(*) from public.notifications where user_id = '00000000-0000-0000-0000-00000000000c'
-                and event_id = :'ev5' and type in ('BOOKING_EXPIRED', 'BOOKING_CANCELLED')) = 2, '만료·주최 취소 알림');
+select test.ok((select count(*) from public.notifications where event_id = :'ev5' and type in ('BOOKING_EXPIRED', 'BOOKING_CANCELLED')
+                and user_id in ('00000000-0000-0000-0000-00000000000c', '00000000-0000-0000-0000-00000000000a')) = 2, '만료·주최 취소 알림');
 :as_v
 select public.cancel_booking(:'bk_late');
 select test.ok((select status from public.bookings where id = :'bk_late') = 'EXPIRED', '이미 만료된 예매를 취소해도 오류 없이 그대로');
@@ -333,7 +338,8 @@ insert into public.ticket_types (event_id, name, price_krw, capacity, sales_ends
 select id as tt6a from public.ticket_types where event_id = :'ev6' and name = '일반' \gset
 :as_u
 select public.create_booking(:'tt6a', 1, '김관객', 'two-a') is not null as x \gset
-select public.create_booking(:'tt6b', 2, '김관객', 'two-b') is not null as x \gset
+:as_v
+select public.create_booking(:'tt6b', 2, '이준', 'two-b') is not null as x \gset
 :as_o1
 select public.set_event_status(:'ev6', 'CANCELLED');
 reset role;
@@ -369,8 +375,10 @@ select public.create_event(:'c1', jsonb_build_object('title', '시간 시험', '
 select id as tt8 from public.ticket_types where event_id = :'ev8' \gset
 :as_u
 select public.create_booking(:'tt8', 1, '김관객', 'time-1') as bk8a \gset
-select public.create_booking(:'tt8', 1, '김관객', 'time-2') as bk8b \gset
-select test.ok((select expires_at <= (select starts_at from public.events where id = :'ev8') from public.bookings where id = :'bk8a'), '입금 기한은 공연 시작을 넘지 않음');
+:as_v
+select public.create_booking(:'tt8', 1, '이준', 'time-2') as bk8b \gset
+:as_u
+select test.ok((select expires_at <= (select ends_at from public.events where id = :'ev8') from public.bookings where id = :'bk8a'), '입금 기한은 공연 끝을 넘지 않음');
 select public.mark_deposit_sent(:'bk8a');
 reset role;
 update public.bookings set created_at = now() - interval '3 days 1 hour', expires_at = now() - interval '1 hour' where id = :'bk8a';
@@ -379,8 +387,8 @@ select test.ok(public.expire_overdue_bookings() = 0, '기한 안에 입금했다
 select test.ok(public.confirm_deposit(:'bk8a') = 'CONFIRMED', '기한 안에 알린 예매는 기한 뒤에도 입금 확인 가능');
 select public.update_event(:'ev8', jsonb_build_object('starts_at', (now() + interval '1 hour')::text, 'venue_name', '새 홀'));
 reset role;
-select test.ok((select b.expires_at <= e.starts_at from public.bookings b join public.events e on e.id = b.event_id where b.id = :'bk8b'), '공연을 앞당기면 입금 기한도 새 시작 이전으로');
-select test.ok((select count(*) from public.notifications where type = 'EVENT_CHANGED' and event_id = :'ev8') = 1, '예매자에게 일정·장소 변경 알림');
+select test.ok((select b.expires_at <= e.ends_at from public.bookings b join public.events e on e.id = b.event_id where b.id = :'bk8b'), '공연을 앞당기면 입금 기한도 새 공연 끝 이전으로');
+select test.ok((select count(*) from public.notifications where type = 'EVENT_CHANGED' and event_id = :'ev8') = 2, '예매자 두 명 모두에게 일정·장소 변경 알림');
 :as_u
 select id as t8 from public.tickets where booking_id = :'bk8a' \gset
 select public.issue_ticket_qr(:'t8') is not null as x \gset
@@ -392,7 +400,7 @@ select public.update_event(:'ev8', jsonb_build_object('starts_at', (now() + inte
 select public.issue_ticket_qr(:'t8') is not null as x \gset
 reset role;
 select test.ok((select expires_at >= (select ends_at from public.events where id = :'ev8') from public.qr_credentials where ticket_id = :'t8' and revoked_at is null), '미리 받은 QR도 공연이 끝날 때까지 유효');
-:as_u
+:as_v
 select public.mark_deposit_sent(:'bk8b');
 select public.cancel_booking(:'bk8b');
 reset role;
@@ -445,6 +453,62 @@ select public.set_event_status(:'ev9', 'CANCELLED');
 :as_v
 select public.request_refund(:'bk9b', '국민 123-45 이준');
 select test.ok((select status from public.payments where booking_id = :'bk9b') = 'REFUND_PENDING', '공연 취소 후 환불 요청');
+
+-- 16. 3차 검토 반영
+:as_o1
+select public.create_event(:'c1', jsonb_build_object('title', '현장 입금', 'starts_at', (now() + interval '1 hour')::text, 'duration_minutes', 120, 'venue_name', '홀', 'price_krw', 3000, 'capacity', 4, 'bank_name', 'b', 'account_number', '1', 'publish', true)) as ev10 \gset
+select id as tt10 from public.ticket_types where event_id = :'ev10' \gset
+:as_v
+select public.create_booking(:'tt10', 2, '이준', 'door-1') as bk10 \gset
+select test.ok((select b.expires_at = e.ends_at from public.bookings b join public.events e on e.id = b.event_id where b.id = :'bk10'), '입금 기한 = 공연 끝(현장 입금도 공연 중 확인)');
 reset role;
-select test.ok((select count(*) from public.audit_logs where action in ('CONFIRM_DEPOSIT', 'CHECK_IN')) >= 2, '입금 확인·입장 감사 기록');
+update public.events set starts_at = now() - interval '30 minutes', ends_at = now() + interval '90 minutes' where id = :'ev10';
+:as_o1
+select test.ok(public.confirm_deposit(:'bk10') = 'CONFIRMED', '공연 시작 뒤에도 공연 중이면 입금 확인 가능');
+-- '입금했어요'만 누르고 입금 안 함 → 기한 + 24시간 뒤 만료
+:as_u
+select public.create_booking(:'tt8', 1, '김관객', 'hold-1') as bk11 \gset
+select public.mark_deposit_sent(:'bk11');
+reset role;
+update public.payments set updated_at = now() - interval '11 minutes' where booking_id = :'bk11';
+:as_u
+select public.mark_deposit_sent(:'bk11');
+reset role;
+update public.payments set updated_at = now() - interval '11 minutes' where booking_id = :'bk11';
+:as_u
+select public.mark_deposit_sent(:'bk11');
+reset role;
+update public.payments set updated_at = now() - interval '11 minutes' where booking_id = :'bk11';
+:as_u
+select test.fails_with($$select public.mark_deposit_sent('$$ || :'bk11' || $$')$$, '여러 번', '입금했어요는 3번까지');
+reset role;
+update public.bookings set created_at = now() - interval '5 days', expires_at = now() - interval '23 hours' where id = :'bk11';
+select test.ok(public.expire_overdue_bookings() = 0, '알린 예매는 기한 + 24시간까지 유지');
+update public.bookings set expires_at = now() - interval '25 hours' where id = :'bk11';
+select test.ok(public.expire_overdue_bookings() = 1, '알리고 입금 안 하면 기한 + 24시간 뒤 만료');
+select test.ok((select status from public.bookings where id = :'bk11') = 'EXPIRED', '자리를 영원히 잡지 못함');
+-- 장소 띄어쓰기만 바꾸면 일정 변경 아님, 진짜 바뀌면 이전 값 보관
+:as_o1
+select coalesce((select schedule_changed_at::text from public.events where id = :'ev8'), '') as before_change \gset
+select public.update_event(:'ev8', jsonb_build_object('venue_name', '  새   홀 '));
+select test.ok(coalesce((select schedule_changed_at::text from public.events where id = :'ev8'), '') = :'before_change', '장소 띄어쓰기만 고치면 일정 변경 아님');
+select public.update_event(:'ev8', jsonb_build_object('venue_name', '다른 홀'));
+select test.ok((select previous_venue_name from public.events where id = :'ev8') = '새 홀', '바뀌기 전 장소 보관');
+-- 환불 계좌: 공연 스태프는 못 보고, 환불을 마치면 지움
+reset role;
+insert into public.event_staff (event_id, user_id) values (:'ev9', '00000000-0000-0000-0000-000000000002');
+:as_o2
+select test.ok((select count(*) from public.payments p join public.bookings b on b.id = p.booking_id where b.event_id = :'ev9') = 0, '공연 스태프는 결제·환불 계좌 못 봄');
+:as_o1
+select public.mark_refunded(:'bk9b');
+select test.ok((select refund_account from public.payments where booking_id = :'bk9b') = '', '환불을 마치면 환불 계좌 삭제');
+-- 끝난 공연 QR 발급 불가
+reset role;
+update public.events set starts_at = now() - interval '3 hours', ends_at = now() - interval '1 hour' where id = :'ev10';
+:as_v
+select id as t10 from public.tickets where booking_id = :'bk10' limit 1 \gset
+select test.fails_with($$select public.issue_ticket_qr('$$ || :'t10' || $$')$$, '끝난 공연', '끝난 공연은 QR 발급 불가');
+reset role;
+select test.ok((select count(*) from public.audit_logs where action = 'CHECK_IN') = 1
+  and (select count(*) from public.audit_logs where action = 'CONFIRM_DEPOSIT') = 6, '입금 확인 6건·입장 1건 감사 기록(테스트 시나리오와 정확히 일치)');
 \echo 'ALL TESTS PASSED'

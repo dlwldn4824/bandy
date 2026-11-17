@@ -1,7 +1,8 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Db, HomeState, Profile } from './types'
-import { Backend, createBackend, friendlyError } from './backend'
+import { Backend, createBackend, createFallbackBackend, friendlyError } from './backend'
 import { BandyError } from './repo'
+import { device } from './device'
 
 const EMPTY: Db = {
   profiles: [], clubs: [], club_memberships: [], events: [], ticket_types: [], bookings: [], booking_items: [],
@@ -16,6 +17,7 @@ interface BandyContext {
   me: Profile | null
   // 서버가 주는 홈 신호(바로 띄울 창, 배지 숫자). 데이터를 다시 읽을 때 함께 갱신된다
   home: HomeState
+  offline: boolean // 마지막 데이터 읽기가 네트워크 문제로 실패함(저장해 둔 QR만 보여 줄 수 있음)
   loading: boolean
   // 기능을 부르고, 데이터가 바뀌는 기능이면 끝난 뒤 한 번 다시 읽는다. 실패하면 사용자용 메시지를 돌려준다.
   call: <T>(fn: (b: Backend) => Promise<T>, opts?: { reload?: boolean }) => Promise<Result<T>>
@@ -24,13 +26,18 @@ interface BandyContext {
 }
 
 const Ctx = createContext<BandyContext | null>(null)
-const backend = createBackend()
+// 운영 빌드에서 서버 설정이 빠지면 데모로 열지 않고 설정 오류 화면을 보여 준다(BandyApp)
+export let configError = ''
+const backend: Backend = (() => {
+  try { return createBackend() } catch (e) { configError = e instanceof Error ? e.message : String(e); return createFallbackBackend() }
+})()
 
 export function BandyProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<Db>(EMPTY)
   const [userId, setUserId] = useState<string | null>(null)
   const [home, setHome] = useState<HomeState>({ signed_in: false })
   const lastLoad = useRef(0)
+  const [offline, setOffline] = useState(false)
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
   const seq = useRef(0)
@@ -56,7 +63,9 @@ export function BandyProvider({ children }: { children: ReactNode }) {
           // 백엔드가 매번 새 객체를 돌려주므로(데모 모드도 변경 시 통째로 교체) 여기서 다시 복사하지 않는다
           setDb(nextDb)
           setUserId(uid)
+          device.bindUser(uid)
           setHome(nextHome)
+          setOffline(false)
           lastLoad.current = Date.now()
         }
       } while (again.current)
@@ -67,14 +76,14 @@ export function BandyProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    refresh().catch((e) => { console.error(e); setLoading(false) })
-    return backend.onAuthChange(() => { refresh().catch(console.error) })
+    refresh().catch((e) => { console.error(e); setOffline(true); setLoading(false) })
+    return backend.onAuthChange(() => { refresh().catch((e) => { console.error(e); setOffline(true) }) })
   }, [refresh])
 
   // 모바일: 다른 앱(은행 앱 등)에 갔다가 돌아오면 30초 이상 지났을 때 새로 읽는다(입금 확인·티켓 발급을 바로 반영)
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && Date.now() - lastLoad.current > 30000) refresh().catch(console.error)
+      if (document.visibilityState === 'visible' && Date.now() - lastLoad.current > 30000) refresh().catch((e) => { console.error(e); setOffline(true) })
     }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('online', onVisible)
@@ -103,11 +112,12 @@ export function BandyProvider({ children }: { children: ReactNode }) {
     db,
     me: db.profiles.find((p) => p.id === userId) ?? null,
     home,
+    offline,
     loading,
     call,
     toast,
     showToast: setToast,
-  }), [call, db, home, loading, toast, userId])
+  }), [call, db, home, loading, offline, toast, userId])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

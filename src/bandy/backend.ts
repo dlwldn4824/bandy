@@ -40,6 +40,7 @@ export type EventInput = {
   title: string; category: EventRow['category']; starts_at: string; venue_name: string; address: string; description: string
   price_krw: number; capacity: number; bank_name: string; account_number: string; poster_path: string | null; publish?: boolean
   duration_minutes?: number // 진행 시간(분). 진행 중 판단·QR 유효시간·홈 신호의 기준
+  account_holder?: string // 입금 계좌의 실제 예금주(비우면 동아리 이름)
 }
 export type ClubInput = {
   name: string; school: string; genre: string; region: string; introduction: string; sns_url: string
@@ -58,6 +59,9 @@ export interface Backend {
   signUpEmail(email: string, password: string, name: string): Promise<void>
   signInKakao(next?: string): Promise<void>
   signOut(): Promise<void>
+  // 비밀번호 재설정: 메일 보내기 → 메일의 링크로 돌아오면 새 비밀번호 저장
+  sendPasswordReset(email: string): Promise<void>
+  updatePassword(password: string): Promise<void>
   reset(): Promise<void>
   // 기능 (구조도 + 11/1)
   updateProfile(name: string): Promise<void>
@@ -137,6 +141,8 @@ class LocalBackend implements Backend {
     try { localStorage.removeItem(SESSION_KEY) } catch { /* 무시 */ }
     this.emit()
   }
+  async sendPasswordReset() { throw new BandyError('데모 모드에서는 비밀번호가 없어요.') }
+  async updatePassword() { throw new BandyError('데모 모드에서는 비밀번호가 없어요.') }
   async reset() {
     this.db = initialDb()
     saveDb(this.db)
@@ -247,7 +253,8 @@ class SupabaseBackend implements Backend {
     if (error) throw new BackendError(error.message, error.code)
   }
   async signUpEmail(email: string, password: string, name: string) {
-    const { error } = await this.sb.auth.signUp({ email, password, options: { data: { name } } })
+    // 인증 메일의 링크를 누르면 로그인 화면으로 돌아온다(Supabase Auth의 Redirect URLs에 등록 필요)
+    const { error } = await this.sb.auth.signUp({ email, password, options: { data: { name }, emailRedirectTo: `${window.location.origin}/app/login` } })
     if (error) throw new BackendError(error.message, error.code)
   }
   async signInKakao(next = '/app') {
@@ -256,6 +263,15 @@ class SupabaseBackend implements Backend {
     if (error) throw new BackendError(error.message, error.code)
   }
   async signOut() { await this.sb.auth.signOut() }
+  async sendPasswordReset(email: string) {
+    // 메일의 링크를 누르면 /app/login?reset=1 로 돌아온다(Supabase Auth의 Redirect URLs에 이 주소가 있어야 함)
+    const { error } = await this.sb.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/app/login?reset=1` })
+    if (error) throw new BackendError(error.message, error.code)
+  }
+  async updatePassword(password: string) {
+    const { error } = await this.sb.auth.updateUser({ password })
+    if (error) throw new BackendError(error.message, error.code)
+  }
   async reset() { throw new BandyError('Supabase 모드에서는 데이터를 초기화하지 않아요.') }
 
   async updateProfile(name: string) { await this.rpc('update_profile', { p_display_name: name }) }
@@ -308,5 +324,12 @@ export function createBackend(): Backend {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'bandy-auth', flowType: 'pkce' },
     }))
   }
+  // 운영 빌드에서 키가 빠지면 조용히 데모(가짜 데이터)로 열리지 않게 막는다. 데모 배포는 VITE_BANDY_DEMO=true로 명시
+  if (import.meta.env.PROD && import.meta.env.VITE_BANDY_DEMO !== 'true') {
+    throw new BandyError('서버 설정이 빠졌어요. (VITE_SUPABASE_URL · VITE_SUPABASE_ANON_KEY 또는 데모 배포면 VITE_BANDY_DEMO=true)')
+  }
   return new LocalBackend()
 }
+
+// 설정 오류 화면을 띄우는 동안 쓰는 빈 데모(아무 화면도 그리지 않음)
+export function createFallbackBackend(): Backend { return new LocalBackend() }

@@ -20,7 +20,7 @@ const UNKNOWN_EVENT: Pick<EventRow, 'id' | 'title' | 'starts_at' | 'ends_at' | '
 
 // 구조도: 내 티켓 = 입장 예정 → 이후 공연 → 사용 완료 / 티켓 선택 → 티켓 상세·QR (ticketId · qrToken · checkInStatus)
 export function TicketsPage() {
-  const { db, me, home, call, showToast } = useBandy()
+  const { db, me, home, offline, call, showToast } = useBandy()
   const [refundFor, setRefundFor] = useState<string | null>(null)
   const [account, setAccount] = useState('')
   const [open, setOpen] = useState<Ticket | null>(null)
@@ -31,7 +31,8 @@ export function TicketsPage() {
   useEffect(() => {
     if (!openId || !me) return
     const t = db.tickets.find((x) => x.id === openId && x.user_id === me.id && x.status === 'ISSUED')
-    if (t) setOpen(t)
+    const ev = t && db.events.find((e) => e.id === t.event_id)
+    if (t && ev && ev.status !== 'CANCELLED' && !isEventOver(ev)) setOpen(t) // 끝났거나 취소된 공연 티켓은 열지 않음
     setParams({}, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, me?.id, db.tickets.length])
@@ -41,16 +42,41 @@ export function TicketsPage() {
   useEffect(() => {
     if (!open) return
     let alive = true
-    call((b) => b.issueTicketQr(open.id), { reload: false }).then((r) => {
+    // 전파가 약하면 요청이 끝나지 않을 수 있어 6초 안에 못 받으면 저장된 QR로 넘어간다
+    const timeout = new Promise<{ ok: false; error: string }>((res) => setTimeout(() => res({ ok: false, error: '서버에 연결하지 못했어요. (시간 초과)' }), 6000))
+    Promise.race([call((b) => b.issueTicketQr(open.id), { reload: false }), timeout]).then((r) => {
       if (!alive) return
-      if (r.ok) { setQr({ ticketId: open.id, token: r.value }); device.saveQr(open.id, r.value, eventEnd(eventOf(open.event_id))); return }
+      const ev = eventOf(open.event_id)
+      if (r.ok) {
+        setQr({ ticketId: open.id, token: r.value })
+        device.saveQr(open.id, r.value, eventEnd(ev), { title: ev.title, startsAt: ev.starts_at, entry: open.entry_number, venue: ev.venue_name })
+        return
+      }
       const cached = device.cachedQr(open.id)
-      if (cached && /연결하지 못했|인터넷/.test(r.error)) setQr({ ticketId: open.id, token: cached, offline: true })
+      if (cached && /연결하지 못했|인터넷|시간 초과/.test(r.error)) setQr({ ticketId: open.id, token: cached, offline: true })
       else showToast(r.error)
     })
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open?.id])
+  // 인터넷이 끊겨 데이터를 못 읽었으면, 이 기기에 저장해 둔 QR(최근에 열어 본 티켓)을 보여 준다
+  if (offline && (!me || db.tickets.length === 0)) {
+    const saved = device.offlineTickets()
+    return (
+      <div className="b-page">
+        <PageHeader title="내 티켓" />
+        <p className="b-warn">인터넷에 연결되지 않아 최근에 열어 본 티켓만 보여 줘요. 연결되면 자동으로 새로 불러와요.</p>
+        {saved.map((t) => (
+          <article key={t.ticketId} className="b-card b-pad b-stack b-center">
+            <strong>{t.title}</strong>
+            <span className="b-sub">{t.startsAt ? dateLabel(t.startsAt) : ''} · {t.venue} · 입장번호 {t.entry}번</span>
+            <div className="b-qr"><QRCodeSVG value={t.token} size={200} level="M" /></div>
+          </article>
+        ))}
+        {saved.length === 0 && <Empty>저장된 티켓이 없어요. 공연장에 가기 전에 티켓을 한 번 열어 두면 인터넷이 약해도 보여 줄 수 있어요.</Empty>}
+      </div>
+    )
+  }
   if (!me) return <div className="b-page"><PageHeader title="내 티켓" /><NeedLogin what="내 티켓" /></div>
 
   const eventOf = (id: string) => db.events.find((e) => e.id === id) ?? { ...UNKNOWN_EVENT, id }
@@ -128,7 +154,10 @@ export function TicketsPage() {
             return (
               <article key={c.booking_id} className="b-card b-pad b-stack b-signal">
                 <div className="b-row between"><strong>{c.title}</strong><span className="b-status red">일정 변경</span></div>
-                <p className="b-sub">바뀐 일정: {dateLabel(c.starts_at)} · {c.venue_name}</p>
+                {(c.previous_starts_at || c.previous_venue_name) && (
+                  <p className="b-sub">이전: {c.previous_starts_at ? dateLabel(c.previous_starts_at) : ''} · {c.previous_venue_name}</p>
+                )}
+                <p className="b-sub"><b>변경: {dateLabel(c.starts_at)} · {c.venue_name}</b></p>
                 {refundFor !== c.booking_id && (
                   <div className="b-row">
                     <button type="button" className="b-btn small" onClick={() => keep(c.booking_id)}>그대로 유지</button>

@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { AuthProvider } from './contexts/AuthContext'
 import { DataProvider } from './contexts/DataContext'
 import { AnalyticsProvider } from './analytics'
@@ -19,7 +19,8 @@ import Guestbook from './pages/Guestbook'
 import Products from './pages/Products'
 import Onsite from './pages/Onsite'
 import Shell from './platform/Shell'
-import BandyApp from './bandy/BandyApp'
+// 밴디(/app)는 따로 불러온다: 기존 서비스 화면에서 밴디 코드·Supabase 클라이언트가 만들어지지 않게
+const BandyApp = lazy(() => import('./bandy/BandyApp'))
 import { PlatformProvider } from './platform/store'
 import DiscoverPage from './platform/pages/DiscoverPage'
 import EventDetailPage from './platform/pages/EventDetailPage'
@@ -260,7 +261,7 @@ function App() {
     return (
       <ErrorBoundary>
         <Routes>
-          <Route path="/app/*" element={<BandyApp />} />
+          <Route path="/app/*" element={<Suspense fallback={<p style={{ padding: 24 }}>불러오는 중…</p>}><BandyApp /></Suspense>} />
         </Routes>
       </ErrorBoundary>
     )

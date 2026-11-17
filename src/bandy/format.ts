@@ -11,6 +11,14 @@ export function dateLabel(iso: string) {
   return `${s.m}.${s.day} (${s.w}) ${String(s.h).padStart(2, '0')}:${String(s.min).padStart(2, '0')}`
 }
 
+// '11.30 (월) 19:00 ~ 21:00', 자정을 넘기면 '11.30 (월) 23:00 ~ 12.1 (화) 01:00'
+export function timeRange(startIso: string, endIso: string) {
+  const a = seoul(startIso)
+  const b = seoul(endIso)
+  const end = a.y === b.y && a.m === b.m && a.day === b.day ? dateLabel(endIso).slice(-5) : dateLabel(endIso)
+  return `${dateLabel(startIso)} ~ ${end}`
+}
+
 export function shortDate(iso: string) {
   const s = seoul(iso)
   return `${s.m}.${s.day} (${s.w})`

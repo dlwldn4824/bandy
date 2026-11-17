@@ -5,7 +5,7 @@ import { loginHref } from '../convenience'
 import { device } from '../device'
 import { durationMinutes, eventEnd, hasBookingFor, isEventOver, isEventStaff, isPastEvent, publicEvents, remaining, ticketTypesOf, uid } from '../repo'
 import { Empty, PageHeader, Thumb } from '../components'
-import { dateLabel, won } from '../format'
+import { dateLabel, timeRange, won } from '../format'
 
 function useVisibleEvent() {
   const { eventId = '' } = useParams()
@@ -57,7 +57,7 @@ export function EventPage() {
         </span>
         <h1>{event.title}</h1>
         <dl className="b-info">
-          <dt>일시</dt><dd>{dateLabel(event.starts_at)} ~ {dateLabel(eventEnd(event)).slice(-5)} <span className="b-sub">({durationMinutes(event)}분)</span></dd>
+          <dt>일시</dt><dd>{timeRange(event.starts_at, eventEnd(event))} <span className="b-sub">({durationMinutes(event)}분)</span></dd>
           <dt>장소</dt><dd>{event.venue_name}{event.address ? <span className="b-sub"><br />{event.address}</span> : null}</dd>
           <dt>티켓</dt><dd>{types.map((t) => `${t.name} ${won(t.price_krw)}`).join(' / ')} · 남은 {left}석</dd>
           <dt>주최</dt><dd>{club ? <><Link className="b-link" to={`/app/c/${club.id}`}>{club.name}</Link> <span className="b-sub">{club.school}</span></> : event.account_holder}</dd>
@@ -164,6 +164,7 @@ export function BookPage() {
             <span className="b-link">눌러서 복사</span>
           </button>
           <div className="b-sum"><span>{selected.name} {qty}매</span><b>{won(done.total_amount_krw)}</b></div>
+          <p className="b-warn">입금 기한: {dateLabel(done.expires_at)}까지. 지나면 예매가 취소돼요. 입금한 뒤 '입금했어요'를 눌러 주세요(내 티켓).</p>
         </section>
         <div className="b-dock"><Link className="b-btn" to="/app/tickets">내 티켓으로</Link></div>
       </div>

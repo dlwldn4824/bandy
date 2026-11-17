@@ -17,6 +17,24 @@ export function loginHref(next?: string) {
   return `/app/login?next=${encodeURIComponent(here)}`
 }
 
+// 카카오톡·인스타그램 등 앱 안 브라우저: 로그인 유지·홈 화면 추가가 잘 안 되므로 기본 브라우저로 열도록 안내
+export function InAppBrowserNotice() {
+  const [hidden, setHidden] = useState(false)
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+  const kakao = /KAKAOTALK/i.test(ua)
+  const inApp = kakao || /Instagram|FBAN|FBAV|Line\//i.test(ua)
+  if (!inApp || hidden) return null
+  const url = typeof window !== 'undefined' ? window.location.href : ''
+  return (
+    <div className="b-inapp" role="note">
+      <span>앱 안 브라우저에서는 로그인이 풀릴 수 있어요. 기본 브라우저로 열어 주세요.</span>
+      {kakao
+        ? <a className="b-btn small" href={`kakaotalk://web/openExternal?url=${encodeURIComponent(url)}`}>열기</a>
+        : <button type="button" className="b-btn ghost small" onClick={() => setHidden(true)}>닫기</button>}
+    </div>
+  )
+}
+
 // 시작까지 남은 시간 문구
 function untilLabel(iso: string) {
   const m = Math.round((new Date(iso).getTime() - Date.now()) / 60000)
@@ -64,7 +82,10 @@ export function HomeSignals() {
           <>
             <span className="b-status red">공연 일정 변경</span>
             <h2>{changed[0].title}</h2>
-            <p className="b-sub">바뀐 일정: {dateLabel(changed[0].starts_at)} · {changed[0].venue_name}</p>
+            {(changed[0].previous_starts_at || changed[0].previous_venue_name) && (
+              <p className="b-sub">이전: {changed[0].previous_starts_at ? dateLabel(changed[0].previous_starts_at) : ''} · {changed[0].previous_venue_name}</p>
+            )}
+            <p className="b-sub"><b>변경: {dateLabel(changed[0].starts_at)} · {changed[0].venue_name}</b></p>
             <p className="b-sub">그대로 유지하거나 취소·환불을 요청할 수 있어요.</p>
             <button type="button" className="b-btn" onClick={() => { close(); navigate('/app/tickets') }}>내 티켓에서 고르기</button>
           </>

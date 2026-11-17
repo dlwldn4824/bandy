@@ -87,12 +87,24 @@ function pastDeadline(b: Booking) {
   return b.status === 'PENDING_PAYMENT' && new Date(b.expires_at).getTime() <= Date.now()
 }
 
-// 만료 대상인가: 기한이 지났고, 기한 안에 '입금했어요'를 누르지 않은 입금 대기 예매.
-// 알린 예매는 돈이 오갔을 수 있어 자동 만료하지 않고 운영진의 확인·취소를 기다린다(서버 _expire_bookings와 같음)
-export function isOverdue(b: Booking, db?: Db) {
-  if (!pastDeadline(b)) return false
-  const notified = db?.payments.find((p) => p.booking_id === b.id)?.depositor_notified_at
-  return !notified
+// 장소 비교·저장용: 앞뒤·중복 공백, 대소문자 차이는 같은 장소(서버 _norm과 같음)
+function venueText(v: string) { return v.trim().replace(/\s+/g, ' ') }
+function sameVenue(a: string | null, b: string | null) { return venueText(a ?? '').toLowerCase() === venueText(b ?? '').toLowerCase() }
+
+// 입금 대기 예매를 잡아 두는 마지막 시각(서버 _hold_until과 같음)
+//   보통: 입금 기한 / '입금했어요'를 누른 예매: 기한 + 24시간(단, 공연 끝까지) — 버튼만 누르고 입금하지 않아도 자리를 영원히 잡지 못한다
+export function holdUntil(b: Booking, db: Db) {
+  const exp = new Date(b.expires_at).getTime()
+  const notified = db.payments.find((p) => p.booking_id === b.id && p.status === 'PENDING')?.depositor_notified_at
+  if (!notified) return exp
+  const ev = db.events.find((e) => e.id === b.event_id)
+  const end = ev ? new Date(eventEnd(ev)).getTime() : exp
+  return Math.max(exp, Math.min(exp + 24 * 3600000, end))
+}
+
+// 만료 대상인가: 입금 대기인데 잡아 두는 시각이 지남
+export function isOverdue(b: Booking, db: Db) {
+  return b.status === 'PENDING_PAYMENT' && holdUntil(b, db) <= Date.now()
 }
 
 // 공연이 끝나는 시각: 주최 측이 입력한 진행 시간(ends_at). 비어 있으면 시작 + 2시간(서버 _event_end와 같음)
@@ -289,7 +301,7 @@ export function updateClub(db: Db, userId: Uuid | null, clubId: Uuid, patch: Par
 export function createEvent(db: Db, userId: Uuid | null, clubId: Uuid, input: {
   title: string; category: EventRow['category']; starts_at: string; venue_name: string; address: string
   description: string; price_krw: number; capacity: number; account_number: string; bank_name: string
-  publish: boolean; poster_path?: string | null; duration_minutes?: number
+  publish: boolean; poster_path?: string | null; duration_minutes?: number; account_holder?: string
 }): EventRow {
   requireActiveProfile(db, userId)
   requireActiveManager(db, userId, clubId, '동아리 운영진만 공연을 올릴 수 있습니다.')
@@ -309,7 +321,8 @@ export function createEvent(db: Db, userId: Uuid | null, clubId: Uuid, input: {
     venue_name: input.venue_name.trim(), address: input.address.trim(),
     latitude: 37.615 + Math.random() * 0.03, longitude: 127.055 + Math.random() * 0.03,
     poster_path: input.poster_path ?? null, status: input.publish ? 'PUBLISHED' : 'DRAFT', published_at: input.publish ? now() : null,
-    bank_name: input.bank_name.trim(), account_number: input.account_number.trim(), account_holder: club.name,
+    bank_name: input.bank_name.trim(), account_number: input.account_number.trim(),
+    account_holder: (input.account_holder?.trim() || club.name).slice(0, 40), // 실제 예금주. 없으면 동아리 이름
     created_at: now(), updated_at: now(),
   }
   db.events.push(event)
@@ -350,7 +363,7 @@ export function setEventStatus(db: Db, userId: Uuid | null, eventId: Uuid, statu
 export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
   title: string; category: EventRow['category']; starts_at: string; venue_name: string; address: string
   description: string; bank_name: string; account_number: string; poster_path: string | null
-  price_krw: number; capacity: number; duration_minutes?: number
+  price_krw: number; capacity: number; duration_minutes?: number; account_holder?: string
 }) {
   requireLogin(db, userId)
   const event = db.events.find((e) => e.id === eventId)
@@ -370,28 +383,33 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
   if (hasBookings && input.price_krw !== tt.price_krw) throw new BandyError('예매가 있는 공연은 가격을 바꿀 수 없습니다.')
   if (input.capacity < tt.reserved_quantity + tt.sold_quantity) throw new BandyError('이미 예매된 수량보다 정원을 줄일 수 없습니다.')
   const startsIso = new Date(input.starts_at).toISOString()
-  if (event.status === 'PUBLISHED' && (startsIso !== event.starts_at || input.venue_name.trim() !== event.venue_name
+  if (event.status === 'PUBLISHED' && (startsIso !== event.starts_at || !sameVenue(input.venue_name, event.venue_name)
     || input.price_krw !== tt.price_krw || input.account_number.trim() !== event.account_number)) {
     checkPublishable(input.venue_name, startsIso, input.price_krw, input.account_number)
   }
   Object.assign(event, {
     title: input.title.trim(), category: input.category, starts_at: new Date(input.starts_at).toISOString(),
-    venue_name: input.venue_name.trim(), address: input.address.trim(), description: input.description.trim(),
+    venue_name: venueText(input.venue_name), address: input.address.trim(), description: input.description.trim(),
     bank_name: input.bank_name.trim(), account_number: input.account_number.trim(), poster_path: input.poster_path,
+    account_holder: (input.account_holder?.trim() || event.account_holder).slice(0, 40),
     updated_at: now(),
   })
   event.ends_at = new Date(new Date(event.starts_at).getTime() + duration * 60000).toISOString()
   Object.assign(tt, { price_krw: input.price_krw, capacity: input.capacity, sales_ends_at: event.starts_at, updated_at: now() })
-  if (event.starts_at !== before.starts_at || event.venue_name !== before.venue_name) {
+  const venueChanged = !sameVenue(event.venue_name, before.venue_name)
+  if (event.starts_at !== before.starts_at || venueChanged) {
+    event.previous_starts_at = before.starts_at
+    event.previous_venue_name = before.venue_name
     // 이보다 먼저 예매한 사람은 유지 또는 취소·환불 요청을 고를 수 있다
     if (db.bookings.some((x) => x.event_id === eventId && (x.status === 'PENDING_PAYMENT' || x.status === 'CONFIRMED'))) event.schedule_changed_at = now()
     // 공연을 앞당기면 입금 기한도 새 시작 시각을 넘지 않게, 예매자에게 일정·장소 변경 알림(서버 update_event와 같음)
-    for (const b of db.bookings.filter((x) => x.event_id === eventId && x.status === 'PENDING_PAYMENT' && x.expires_at > event.starts_at)) {
-      b.expires_at = new Date(Math.max(new Date(event.starts_at).getTime(), new Date(b.created_at).getTime() + 60000)).toISOString()
+    const end = eventEnd(event)
+    for (const b of db.bookings.filter((x) => x.event_id === eventId && x.status === 'PENDING_PAYMENT' && x.expires_at > end)) {
+      b.expires_at = new Date(Math.max(new Date(end).getTime(), new Date(b.created_at).getTime() + 60000)).toISOString()
     }
     const parts = [
       event.starts_at !== before.starts_at ? `일시가 ${dateLabel(event.starts_at)}(으)로` : '',
-      event.venue_name !== before.venue_name ? `장소가 ${event.venue_name}(으)로` : '',
+      venueChanged ? `장소가 ${event.venue_name || '미정'}(으)로` : '',
     ].filter(Boolean).join(', ')
     const users = new Set(db.bookings.filter((x) => x.event_id === eventId && (x.status === 'PENDING_PAYMENT' || x.status === 'CONFIRMED')).map((x) => x.user_id))
     for (const u of users) {
@@ -446,6 +464,10 @@ export function createBooking(db: Db, userId: Uuid | null, ticketTypeId: Uuid, q
   if (Date.now() >= new Date(tt.sales_ends_at).getTime() || isPastEvent(event)) throw new BandyError('예매가 마감된 공연입니다.')
   if (depositorName.trim().length > MAX_DEPOSITOR) throw new BandyError(`입금자명은 ${MAX_DEPOSITOR}자까지입니다.`)
   expireBookings(db, tt.id)
+  // 한 공연에 입금 대기 예매는 한 사람당 1건
+  if (db.bookings.some((b) => b.user_id === userId && b.event_id === event.id && b.status === 'PENDING_PAYMENT')) {
+    throw new BandyError('이 공연에 입금 대기 중인 예매가 있어요. 입금하거나 취소한 뒤 다시 예매해 주세요.')
+  }
   if (remaining(tt) < quantity) throw new BandyError('남은 자리가 부족합니다.')
   const free = tt.price_krw === 0
   if (!free && !depositorName.trim()) throw new BandyError('입금자명을 입력하세요.')
@@ -453,8 +475,8 @@ export function createBooking(db: Db, userId: Uuid | null, ticketTypeId: Uuid, q
   const total = tt.price_krw * quantity
   const booking: Booking = {
     id: uid('bk'), user_id: userId!, event_id: event.id, status: 'PENDING_PAYMENT', total_amount_krw: total,
-    // 입금 기한: 3일 또는 공연 시작 중 빠른 쪽
-    expires_at: new Date(Math.min(Date.now() + BOOKING_HOLD_DAYS * 86400000, new Date(event.starts_at).getTime())).toISOString(),
+    // 입금 기한: 3일 또는 공연 끝 중 빠른 쪽(현장 입금도 공연 중 확인 가능). 예매 자체는 공연 시작에 마감
+    expires_at: new Date(Math.min(Date.now() + BOOKING_HOLD_DAYS * 86400000, new Date(eventEnd(event)).getTime())).toISOString(),
     confirmed_at: null, cancelled_at: null, idempotency_key: idempotencyKey || uid('idem'),
     request_hash: hash, created_at: now(), updated_at: now(),
   }
@@ -553,7 +575,7 @@ function expireBookings(db: Db, ticketTypeId: Uuid) {
   for (const b of db.bookings.filter((x) => ids.has(x.id) && isOverdue(x, db))) {
     releaseBooking(db, b, 'EXPIRED', 'EXPIRED')
     const ev = db.events.find((e) => e.id === b.event_id)
-    notify(db, b.user_id, b.event_id, 'BOOKING_EXPIRED', `${ev?.title ?? '공연'} 예매가 입금 기한이 지나 취소됐어요.`, `booking-expired-${b.id}`)
+    notify(db, b.user_id, b.event_id, 'BOOKING_EXPIRED', `[${ev?.title ?? '공연'}] 입금 확인이 안 돼 예매가 취소됐어요. 이미 입금했다면 주최 동아리에 문의해 주세요.`, `booking-expired-${b.id}`)
   }
 }
 
@@ -601,6 +623,8 @@ export function issueTicketQr(db: Db, userId: Uuid | null, ticketId: Uuid) {
   const t = db.tickets.find((x) => x.id === ticketId && x.user_id === userId)
   if (!t) throw new BandyError('티켓을 찾지 못했습니다.')
   if (t.status !== 'ISSUED') throw new BandyError('사용할 수 없는 티켓입니다.')
+  const tev = db.events.find((e) => e.id === t.event_id)
+  if (tev && tev.status !== 'CANCELLED' && isEventOver(tev)) throw new BandyError('이미 끝난 공연의 티켓입니다.')
   if (db.events.find((e) => e.id === t.event_id)?.status === 'CANCELLED') throw new BandyError('취소된 공연의 티켓입니다.')
   for (const q of db.qr_credentials) if (q.ticket_id === ticketId && !q.revoked_at) q.revoked_at = now()
   const token = `${t.id}.${Math.random().toString(36).slice(2, 12)}`
@@ -760,10 +784,12 @@ export function markDepositSent(db: Db, userId: Uuid | null, bookingId: Uuid) {
   if (!b || b.user_id !== userId) throw new BandyError('예매를 찾지 못했습니다.')
   if (b.status !== 'PENDING_PAYMENT' || pastDeadline(b)) throw new BandyError('입금 대기 중인 예매가 아닙니다.')
   const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'PENDING')!
-  if (pay.depositor_notified_at && Date.now() - new Date(pay.depositor_notified_at).getTime() < 10 * 60000) {
+  if ((pay.depositor_notify_count ?? 0) > 0 && Date.now() - new Date(pay.updated_at).getTime() < 10 * 60000) {
     throw new BandyError('이미 알렸어요. 잠시 후 다시 눌러 주세요.')
   }
-  pay.depositor_notified_at = now()
+  if ((pay.depositor_notify_count ?? 0) >= 3) throw new BandyError('이미 여러 번 알렸어요. 주최 동아리에 직접 문의해 주세요.')
+  pay.depositor_notified_at = pay.depositor_notified_at ?? now() // 처음 누른 시각 유지
+  pay.depositor_notify_count = (pay.depositor_notify_count ?? 0) + 1
   pay.updated_at = now()
   const ev = db.events.find((e) => e.id === b.event_id)!
   for (const m of clubManagers(db, ev.club_id)) {
@@ -823,7 +849,7 @@ export function markRefunded(db: Db, userId: Uuid | null, bookingId: Uuid) {
   if (!b || !e || !isClubManager(db, userId, e.club_id)) throw new BandyError('예매를 찾지 못했습니다.')
   const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'REFUND_PENDING')
   if (!pay) throw new BandyError('환불 대기 중인 예매가 아닙니다.')
-  Object.assign(pay, { status: 'REFUNDED', refunded_at: now(), updated_at: now() })
+  Object.assign(pay, { status: 'REFUNDED', refunded_at: now(), refund_account: '', updated_at: now() }) // 환불을 마치면 계좌 삭제
   notify(db, b.user_id, e.id, 'REFUNDED', `[${e.title}] 환불이 완료됐어요. 계좌를 확인해 주세요.`, `refunded-${b.id}`)
 }
 
@@ -844,6 +870,7 @@ export function homeState(db: Db, userId: Uuid | null): HomeState {
   } : null
   const staffEvents = db.events
     .filter((e) => e.status === 'PUBLISHED' && isClubManager(db, userId, e.club_id)
+      && db.clubs.find((c) => c.id === e.club_id)?.status === 'ACTIVE' && db.profiles.find((p) => p.id === userId)?.status !== 'SUSPENDED'
       && !isEventOver(e) && new Date(e.starts_at).getTime() <= t + 24 * H)
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     .map((e) => ({
@@ -873,6 +900,7 @@ export function homeState(db: Db, userId: Uuid | null): HomeState {
     .map(({ b, e }) => ({
       booking_id: b.id, event_id: e!.id, title: e!.title, starts_at: e!.starts_at, ends_at: e!.ends_at, venue_name: e!.venue_name,
       status: b.status as 'PENDING_PAYMENT' | 'CONFIRMED', schedule_changed_at: e!.schedule_changed_at!,
+      previous_starts_at: e!.previous_starts_at ?? null, previous_venue_name: e!.previous_venue_name ?? null,
     }))
   const managedClubs = managerClubIds(db, userId)
   const refundRequests = db.payments.filter((p) => p.status === 'REFUND_PENDING').map((p) => {

@@ -20,7 +20,7 @@ export function LoginPage() {
   const next = safeNext(params.get('next')) // 로그인 후 보던 화면으로 돌아간다
   const lastPersona = device.get().lastPersona
   const [type, setType] = useState<'personal' | 'club'>(lastPersona && PERSONA_TYPE[lastPersona] === 'club' ? 'club' : 'personal')
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'reset'>(params.get('reset') ? 'reset' : 'login')
   const [email, setEmail] = useState(device.get().lastEmail ?? '') // 이 기기에서 마지막으로 쓴 이메일
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -49,6 +49,30 @@ export function LoginPage() {
     )
   }
 
+  // 비밀번호 재설정: 메일 보내기 / 메일 링크로 돌아와 새 비밀번호 저장
+  if (mode === 'forgot' || mode === 'reset') {
+    const send = async () => {
+      const r = await call((b) => (mode === 'forgot' ? b.sendPasswordReset(email.trim()) : b.updatePassword(password)), { reload: false })
+      if (!r.ok) { setError(r.error); return }
+      setError('')
+      if (mode === 'forgot') showToast('비밀번호를 바꿀 수 있는 메일을 보냈어요.')
+      else { showToast('새 비밀번호로 바꿨어요.'); navigate('/app', { replace: true }) }
+    }
+    return (
+      <div className="b-page">
+        <PageHeader back title={mode === 'forgot' ? '비밀번호 찾기' : '새 비밀번호'} />
+        <form className="b-stack" onSubmit={(e) => { e.preventDefault(); send() }}>
+          {mode === 'forgot'
+            ? <label className="b-field"><span>가입한 이메일</span><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
+            : <label className="b-field"><span>새 비밀번호 (6자 이상)</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></label>}
+          {error && <p className="b-warn">{error}</p>}
+          <button type="submit" className="b-btn">{mode === 'forgot' ? '메일 보내기' : '저장'}</button>
+        </form>
+        <button type="button" className="b-link" onClick={() => { setMode('login'); setError('') }}>로그인으로</button>
+      </div>
+    )
+  }
+
   // Supabase: 이메일 로그인 · 가입, 카카오(Supabase Auth 제공자 설정 후)
   const submit = async () => {
     const r = await call((b) => (mode === 'login' ? b.signInEmail(email, password) : b.signUpEmail(email, password, name)))
@@ -69,6 +93,7 @@ export function LoginPage() {
         <button type="submit" className="b-btn">{mode === 'login' ? '로그인' : '가입하기'}</button>
       </form>
       <button type="button" className="b-btn ghost" onClick={async () => { const r = await call((b) => b.signInKakao(next)); if (!r.ok) setError(r.error) }}>카카오로 로그인</button>
+      {mode === 'login' && <button type="button" className="b-link" onClick={() => { setMode('forgot'); setError('') }}>비밀번호를 잊었어요</button>}
       <button type="button" className="b-link" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError('') }}>
         {mode === 'login' ? '계정이 없나요? 회원가입' : '이미 계정이 있나요? 로그인'}
       </button>

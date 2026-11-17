@@ -5,7 +5,7 @@ import { durationMinutes, eventEnd, isClubManager, isEventOver, isOverdue, isPas
 import { Backend } from '../backend'
 import { loginHref } from '../convenience'
 import { Empty, ImageInput, PageHeader } from '../components'
-import { dateLabel, won } from '../format'
+import { dateLabel, timeRange, won } from '../format'
 import { EventCategory, EventRow } from '../types'
 
 const STATUS_LABEL: Record<EventRow['status'], string> = { DRAFT: '초안', PUBLISHED: '공개', ENDED: '종료', CANCELLED: '취소' }
@@ -93,7 +93,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
           <strong>{event.title}</strong>
           <span className={`b-status${event.status === 'PUBLISHED' ? ' ok' : ''}`}>{STATUS_LABEL[event.status]}</span>
         </div>
-        <p className="b-sub">{dateLabel(event.starts_at)} ~ {dateLabel(eventEnd(event)).slice(-5)} · {event.venue_name}{isEventOver(event) ? ' · 지난 공연' : isPastEvent(event) ? ' · 진행 중' : ''}</p>
+        <p className="b-sub">{timeRange(event.starts_at, eventEnd(event))} · {event.venue_name}{isEventOver(event) ? ' · 지난 공연' : isPastEvent(event) ? ' · 진행 중' : ''}</p>
         <p className="b-sub">입금 대기 {pending.length}건 · 발급 티켓 {tickets.length}장 · 입장 {tickets.filter((t) => t.status === 'CHECKED_IN').length}장</p>
         <div className="b-row">
           <Link className="b-btn small" to={`/app/scan/${event.id}`}>입장 관리 (QR)</Link>
@@ -201,7 +201,7 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
     title: event?.title ?? '', category: (event?.category ?? '공연') as EventCategory,
     starts_at: event ? toLocal(event.starts_at) : '', venue_name: event?.venue_name ?? '', address: event?.address ?? '',
     description: event?.description ?? '', price_krw: tt?.price_krw ?? 6000, capacity: tt?.capacity ?? 100,
-    bank_name: event?.bank_name ?? '', account_number: event?.account_number ?? '',
+    bank_name: event?.bank_name ?? '', account_number: event?.account_number ?? '', account_holder: event?.account_holder ?? '',
     duration_minutes: event ? durationMinutes(event) : 120,
   })
   const [poster, setPoster] = useState<string | null>(event?.poster_path ?? null)
@@ -250,6 +250,9 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
       <div className="b-row">
         <label className="b-field"><span>입금 은행</span><input value={f.bank_name} onChange={set('bank_name')} /></label>
         <label className="b-field"><span>입금 계좌</span><input value={f.account_number} onChange={set('account_number')} /></label>
+      </div>
+      <div className="b-row">
+        <label className="b-field"><span>예금주 (비우면 동아리 이름)</span><input value={f.account_holder} onChange={set('account_holder')} maxLength={40} /></label>
       </div>
       {error && <p className="b-warn">{error}</p>}
       {event ? (

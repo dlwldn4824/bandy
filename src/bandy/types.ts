@@ -69,6 +69,8 @@ export interface EventRow {
   status: EventStatus
   published_at: Timestamp | null
   schedule_changed_at?: Timestamp | null // [편의] 일시·장소가 바뀐 시각(이전 예매자는 유지 또는 환불 요청 선택)
+  previous_starts_at?: Timestamp | null // 바뀌기 전 일시
+  previous_venue_name?: string | null // 바뀌기 전 장소
   // [11/1 추가] 입금자명 방식 결제 안내
   bank_name: string
   account_number: string
@@ -136,6 +138,7 @@ export interface Payment {
   refund_account?: string // [편의] 환불받을 계좌(예매자 입력)
   refund_requested_at?: Timestamp | null
   refunded_at?: Timestamp | null
+  depositor_notify_count?: number // '입금했어요' 누른 횟수(최대 3)
   approved_at: Timestamp | null
   failure_code: string | null
   reconciliation_required: boolean
@@ -244,6 +247,7 @@ export interface HomeState {
   changed_bookings?: Array<{
     booking_id: Uuid; event_id: Uuid; title: string; starts_at: Timestamp; ends_at: Timestamp | null; venue_name: string | null
     status: 'PENDING_PAYMENT' | 'CONFIRMED'; schedule_changed_at: Timestamp
+    previous_starts_at: Timestamp | null; previous_venue_name: string | null
   }>
   refund_requests?: Array<{ booking_id: Uuid; event_id: Uuid; club_id: Uuid; title: string; total_amount_krw: number; refund_requested_at: Timestamp }>
   unread_notifications?: number

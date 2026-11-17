@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { BandyProvider, useBandy } from './store'
+import { BandyProvider, configError, useBandy } from './store'
 import { EventsPage, HomePage, MapPage, NotificationsPage } from './pages/Discover'
 import { BookPage, EventPage } from './pages/EventPage'
 import { TicketsPage } from './pages/TicketsPage'
@@ -8,20 +8,23 @@ import { LoginPage, MyPage } from './pages/MyPage'
 import { ManagePage } from './pages/ManagePage'
 import { ScanPage } from './pages/ScanPage'
 import { BottomBar } from './components'
-import { usePwaHead } from './convenience'
+import { InAppBrowserNotice, usePwaHead } from './convenience'
 import './bandy.css'
 
 // 상세·예매·스캔·로그인은 하단 바 대신 화면 아래 고정 버튼을 쓴다.
 const NO_TABS = [/^\/app\/e\//, /^\/app\/scan\//, /^\/app\/login/]
 
 function Shell() {
-  const { toast, loading } = useBandy()
+  const { toast, loading, backend } = useBandy()
   usePwaHead()
   const { pathname } = useLocation()
   const tabs = !NO_TABS.some((r) => r.test(pathname))
   return (
     <div className="b-root">
       <div className={`b-phone${tabs ? ' with-tabs' : ''}`}>
+        {/* 데모(브라우저 저장소)로 돌 때는 항상 표시: 실제 예매로 오해하지 않게 */}
+        {backend.mode === 'local' && <div className="b-demo-bar">시연용 데모예요 · 실제 예매·결제가 아니에요</div>}
+        <InAppBrowserNotice />
         <main className="b-main">
           {loading ? <p className="b-empty">불러오는 중…</p> : (
           <Routes>
@@ -51,6 +54,9 @@ function Shell() {
 }
 
 export default function BandyApp() {
+  if (configError) {
+    return <div className="b-root"><div className="b-phone"><main className="b-main"><p className="b-warn">{configError}</p></main></div></div>
+  }
   return (
     <BandyProvider>
       <Shell />

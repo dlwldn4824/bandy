@@ -3,11 +3,13 @@
 const KEY = 'bandy-device'
 
 type DeviceInfo = {
+  owner?: string // 개인 정보(QR·입금자명)를 남긴 사용자. 다른 계정으로 바뀌면 지운다(공용 기기)
   lastEmail?: string // 마지막 로그인 이메일(다음 로그인 때 미리 채움)
   lastPersona?: string // 데모: 마지막 시연 역할
   depositorName?: string // 마지막 입금자명(다음 예매 때 미리 채움)
   dismissed?: Record<string, number> // 홈 신호 창을 닫은 기록(같은 창을 계속 띄우지 않기 위해)
-  qr?: Record<string, { token: string; at: number; until?: number }> // 티켓별 마지막 QR(전파가 약한 공연장에서 다시 열 때 사용)
+  // 티켓별 마지막 QR(전파가 약한 공연장에서 다시 열 때 사용). 화면에 보여 줄 공연 정보도 함께
+  qr?: Record<string, { token: string; at: number; until?: number; title?: string; startsAt?: string; entry?: number | null; venue?: string | null }>
 }
 
 function read(): DeviceInfo {
@@ -33,17 +35,30 @@ export const device = {
     write({ dismissed: { ...fresh, [key]: Date.now() } })
   },
   // QR 유효시간은 서버 기준 '24시간'과 '공연 끝 시각' 중 긴 쪽(최대 7일). 저장해 둔 것도 그 안에서만 쓴다(1시간 여유를 둠)
-  saveQr(ticketId: string, token: string, eventEndsAt?: string) {
+  saveQr(ticketId: string, token: string, eventEndsAt?: string, meta?: { title: string; startsAt: string; entry: number | null; venue: string | null }) {
     const now = Date.now()
     const end = eventEndsAt ? new Date(eventEndsAt).getTime() : 0
     const until = Math.max(now + 24 * 3600000, Math.min(end, now + 7 * 86400000)) - 3600000
     const q = read().qr ?? {}
     const fresh = Object.fromEntries(Object.entries(q).filter(([, v]) => (v.until ?? v.at + 23 * 3600000) > now))
-    write({ qr: { ...fresh, [ticketId]: { token, at: now, until } } })
+    write({ qr: { ...fresh, [ticketId]: { token, at: now, until, ...(meta ?? {}) } } })
   },
   cachedQr(ticketId: string) {
     const v = read().qr?.[ticketId]
     return v && (v.until ?? v.at + 23 * 3600000) > Date.now() ? v.token : null
+  },
+  // 저장해 둔 QR 전부(오프라인일 때 내 티켓 화면에 보여 줌)
+  offlineTickets() {
+    const now = Date.now()
+    return Object.entries(read().qr ?? {}).filter(([, v]) => (v.until ?? v.at + 23 * 3600000) > now && v.title)
+      .map(([ticketId, v]) => ({ ticketId, ...v }))
+  },
+  // 로그인한 사용자가 바뀌면 앞 사람의 개인 정보(QR·입금자명·닫은 창 기록)를 지운다(공용 기기)
+  bindUser(userId: string | null) {
+    if (!userId) return
+    const d = read()
+    if (d.owner && d.owner !== userId) this.clearPersonal()
+    write({ owner: userId })
   },
   // 로그아웃할 때 이 기기에 남긴 개인 정보(QR·입금자명)를 지운다. 마지막 이메일은 남긴다(다음 로그인 편의)
   clearPersonal() {
