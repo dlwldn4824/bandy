@@ -8,7 +8,7 @@ DB=bandy_test
 dropdb --if-exists "$DB"
 createdb "$DB"
 psql -v ON_ERROR_STOP=1 -q -d "$DB" -f tests/local_supabase_shim.sql
-for f in migrations/*.sql; do
+for f in reference/*.sql; do
   psql -v ON_ERROR_STOP=1 -q -d "$DB" -f "$f"
 done
 psql -v ON_ERROR_STOP=1 -d "$DB" -f tests/prototype_test.sql

@@ -19,6 +19,7 @@ import Guestbook from './pages/Guestbook'
 import Products from './pages/Products'
 import Onsite from './pages/Onsite'
 import Shell from './platform/Shell'
+import BandyApp from './bandy/BandyApp'
 import { PlatformProvider } from './platform/store'
 import DiscoverPage from './platform/pages/DiscoverPage'
 import EventDetailPage from './platform/pages/EventDetailPage'
@@ -252,6 +253,19 @@ function AppRoutes() {
 
 function App() {
   useAppHeight()
+  const { pathname } = useLocation()
+
+  // 밴디 프로토타입(/app)은 기존 단일 공연 앱의 Firebase·분석 연결 없이 따로 돈다.
+  if (pathname === '/app' || pathname.startsWith('/app/')) {
+    return (
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/app/*" element={<BandyApp />} />
+        </Routes>
+      </ErrorBoundary>
+    )
+  }
+
   return (
     <ErrorBoundary>
       <AuthProvider>

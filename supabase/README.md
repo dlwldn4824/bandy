@@ -1,6 +1,10 @@
-# Bandy Supabase 프로토타입 DB
+# Bandy Supabase 프로토타입 DB (참고안, 실행 금지)
 
-2026-11-01 회의 결정 기준의 프로토타입 스키마입니다. 10/7 설계(`docs/db-design.md`, `backend-docs` 브랜치)에서 아래를 바꿨습니다.
+> **팀 DB 기준은 노션 「밴디_Supabase_DB_설계초안_SQL기준」의 `202610140001_bandy_initial_schema.sql`(13개 테이블)입니다.**
+> 이 폴더의 `reference/prototype_schema_reference.sql`은 같은 이름의 테이블을 새로 만드는 독립 스키마라서 팀 DB에 실행하면 충돌합니다.
+> 여기서 검증한 규칙(입금 확인 → 티켓 발급, QR 중복 입장 차단, 교류 수락 후 오픈채팅 공개, 권한)은 팀 스키마 위에 **새 migration 파일**로 옮겨야 합니다.
+
+2026-11-01 회의 결정 기준으로 먼저 만들어 본 스키마입니다. 10/7 설계(`docs/db-design.md`, `backend-docs` 브랜치)에서 아래를 바꿨습니다.
 
 | 10/7 설계 | 이 스키마 |
 |---|---|
@@ -9,15 +13,13 @@
 | 교류 없음 | 교류 신청 → 수락/거절 → 수락된 동아리끼리 오픈채팅 링크 공개 |
 | QR: 서버 HMAC 서명 | 티켓마다 추측 불가능한 `qr_token`(UUID). 본인·주최 동아리만 조회 |
 
-## 적용
+## 팀 스키마에 옮길 때 더할 것 (11/1 결정)
 
-Supabase 대시보드 → SQL Editor에 `migrations/20261117000000_prototype_schema.sql` 전체를 붙여 실행합니다. (Supabase CLI를 쓰면 `supabase db push`)
-
-운영자 지정은 SQL Editor에서 한 번 실행합니다:
-
-```sql
-update public.profiles set is_admin = true where id = '<운영자 auth user id>';
-```
+- `clubs`: school, genre, region, exchange_open, open_chat_url(또는 별도 비공개 테이블)
+- 새 테이블 `exchange_requests`: 교류 신청 → 수락/거절
+- `payments`: provider에 계좌이체 값, 입금자명, 입금 확인한 운영진
+- `profiles`: 동아리를 수동 승인할 운영자 표시
+- DB 함수: 입금 확인(예매 확정 + 수량만큼 티켓·QR 발급), QR 입장(최초 1회만 변경), 교류 신청·응답
 
 ## 테이블
 
