@@ -508,7 +508,69 @@ update public.events set starts_at = now() - interval '3 hours', ends_at = now()
 :as_v
 select id as t10 from public.tickets where booking_id = :'bk10' limit 1 \gset
 select test.fails_with($$select public.issue_ticket_qr('$$ || :'t10' || $$')$$, '끝난 공연', '끝난 공연은 QR 발급 불가');
+
+-- 17. 오타 · 실수 바로잡기(FAQ 교차검증)
+:as_o1
+select public.create_event(:'c1', jsonb_build_object('title', '실수 시험', 'starts_at', (now() + interval '3 days')::text, 'venue_name', '홀', 'price_krw', 2000, 'capacity', 5, 'bank_name', '카카오뱅크', 'account_number', '3333-오타', 'publish', true)) as ev12 \gset
+select id as tt12 from public.ticket_types where event_id = :'ev12' \gset
+select test.fails_with($$select public.create_event('$$ || :'c1' || $$', jsonb_build_object('title', repeat('가', 61), 'starts_at', '2026-12-20T19:00+09', 'capacity', 5))$$, '60자', '공연명 60자 제한');
+select public.update_club(:'c1', '{"sns_url":"instagram.com/rexa_band"}');
+select test.ok((select sns_url from public.clubs where id = :'c1') = 'https://instagram.com/rexa_band', 'https 없이 쓴 SNS 주소 자동 보정');
+:as_u
+select public.create_booking(:'tt12', 2, '김관객오타', 'faq-1') as bk12 \gset
+select public.update_depositor_name(:'bk12', '김관객');
+select test.ok((select depositor_name from public.payments where booking_id = :'bk12') = '김관객', '입금 전 입금자명 수정');
+:as_v
+select test.fails_with($$select public.update_depositor_name('$$ || :'bk12' || $$', '남')$$, '찾지 못', '남의 입금자명 수정 불가');
+:as_o1
+select public.update_event(:'ev12', '{"account_number":"3333-01-1234567"}');
+:as_u
+select test.ok((select count(*) from public.notifications where type = 'ACCOUNT_CHANGED' and event_id = :'ev12') = 1, '입금 계좌가 바뀌면 입금 대기 예매자에게 알림');
+:as_o1
+select public.confirm_deposit(:'bk12');
+select public.undo_confirm_deposit(:'bk12');
+select test.ok((select status from public.bookings where id = :'bk12') = 'PENDING_PAYMENT', '잘못 누른 입금 확인 되돌리기');
+select test.ok((select count(*) from public.tickets where booking_id = :'bk12' and status = 'CANCELLED') = 2, '되돌리면 티켓 무효');
+select test.ok((select reserved_quantity = 2 and sold_quantity = 0 from public.ticket_types where id = :'tt12'), '되돌리면 수량 원상복구');
+:as_u
+select test.fails_with($$select public.update_depositor_name('$$ || :'bk12' || $$', '')$$, '1~20자', '빈 입금자명 거부');
+:as_o1
+select public.confirm_deposit(:'bk12');
+:as_u
+select id as t12 from public.tickets where booking_id = :'bk12' and status = 'ISSUED' order by issue_sequence limit 1 \gset
+select public.issue_ticket_qr(:'t12') as qr12 \gset
+:as_o1
+select public.check_in(:'ev12', :'qr12') is not null as x \gset
+select test.fails_with($$select public.undo_confirm_deposit('$$ || :'bk12' || $$')$$, '입장한', '입장한 티켓이 있으면 입금 확인 되돌리기 불가');
+select public.undo_check_in(:'t12');
+select test.ok((select status from public.tickets where id = :'t12') = 'ISSUED', '잘못 누른 입장 처리 되돌리기');
+-- 늦은 입금
+:as_v
+select public.create_booking(:'tt12', 1, '이준', 'faq-late') as bk13 \gset
 reset role;
-select test.ok((select count(*) from public.audit_logs where action = 'CHECK_IN') = 1
-  and (select count(*) from public.audit_logs where action = 'CONFIRM_DEPOSIT') = 6, '입금 확인 6건·입장 1건 감사 기록(테스트 시나리오와 정확히 일치)');
+update public.bookings set created_at = now() - interval '4 days', expires_at = now() - interval '1 hour' where id = :'bk13';
+select public.expire_overdue_bookings() >= 1 as x \gset
+:as_o1
+select public.confirm_late_deposit(:'bk13');
+select test.ok((select status from public.bookings where id = :'bk13') = 'CONFIRMED', '만료 뒤 들어온 입금을 늦은 입금으로 확인');
+select test.ok((select reserved_quantity = 0 and sold_quantity = 3 from public.ticket_types where id = :'tt12'), '늦은 입금 확인 후 수량 정확');
+-- 환불 계좌 수정
+select public.set_event_status(:'ev12', 'CANCELLED');
+:as_v
+select public.request_refund(:'bk13', '국민 123 오타');
+select public.update_refund_account(:'bk13', '국민 123-45-678 이준');
+select test.ok((select refund_account from public.payments where booking_id = :'bk13') = '국민 123-45-678 이준', '환불 계좌 오타 수정');
+-- 회장 넘기기
+:as_v
+select public.request_club_join(:'c1') as mem_v2 \gset
+:as_o1
+select public.respond_club_join(:'mem_v2', true);
+select public.transfer_ownership(:'mem_v2');
+select test.ok((select role from public.club_memberships where id = :'mem_v2') = 'OWNER'
+  and (select role from public.club_memberships where club_id = :'c1' and user_id = '00000000-0000-0000-0000-000000000001') = 'MANAGER', '회장 넘기기(이전 회장은 운영진)');
+:as_v
+select public.transfer_ownership((select id from public.club_memberships where club_id = :'c1' and user_id = '00000000-0000-0000-0000-000000000001'));
+reset role;
+select test.ok((select count(*) from public.audit_logs where action = 'CHECK_IN') = 2
+  and (select count(*) from public.audit_logs where action = 'CONFIRM_DEPOSIT') = 8, '입금 확인 8건·입장 2건 감사 기록(테스트 시나리오와 정확히 일치)');
 \echo 'ALL TESTS PASSED'

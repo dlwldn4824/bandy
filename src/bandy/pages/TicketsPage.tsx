@@ -22,6 +22,22 @@ const UNKNOWN_EVENT: Pick<EventRow, 'id' | 'title' | 'starts_at' | 'ends_at' | '
 export function TicketsPage() {
   const { db, me, home, offline, call, showToast } = useBandy()
   const [refundFor, setRefundFor] = useState<string | null>(null)
+  // 오타 고치기: 입금자명(입금 전) · 환불 계좌(환불 대기)
+  const [fixing, setFixing] = useState<{ id: string; kind: 'depositor' | 'refund'; value: string } | null>(null)
+  const saveFix = async () => {
+    if (!fixing) return
+    const r = await call((b) => (fixing.kind === 'depositor' ? b.updateDepositorName(fixing.id, fixing.value) : b.updateRefundAccount(fixing.id, fixing.value)))
+    showToast(r.ok ? '고쳤어요.' : r.error)
+    if (r.ok) setFixing(null)
+  }
+  const fixForm = (id: string, kind: 'depositor' | 'refund') => fixing?.id === id && fixing.kind === kind ? (
+    <div className="b-row" style={{ flexWrap: 'nowrap' }}>
+      <input value={fixing.value} onChange={(e) => setFixing({ ...fixing, value: e.target.value })} maxLength={kind === 'depositor' ? 20 : 60}
+        aria-label={kind === 'depositor' ? '새 입금자명' : '새 환불 계좌'} />
+      <button type="button" className="b-btn small" onClick={saveFix}>저장</button>
+      <button type="button" className="b-btn ghost small" onClick={() => setFixing(null)}>닫기</button>
+    </div>
+  ) : null
   const [account, setAccount] = useState('')
   const [open, setOpen] = useState<Ticket | null>(null)
   const [qr, setQr] = useState<{ ticketId: string; token: string; offline?: boolean } | null>(null)
@@ -192,7 +208,9 @@ export function TicketsPage() {
             return (
               <article key={b.id} className="b-card b-pad b-stack">
                 <div className="b-row between"><strong>{ev.title}</strong><span className="b-status wait">{overdue ? '기한 지남' : '입금 대기'}</span></div>
-                <p className="b-sub">{item?.ticket_type_name} {item?.quantity}매 · {won(b.total_amount_krw)} · 입금자명 {pay?.depositor_name}</p>
+                <p className="b-sub">{item?.ticket_type_name} {item?.quantity}매 · {won(b.total_amount_krw)} · 입금자명 {pay?.depositor_name}
+                  {' '}<button type="button" className="b-link" onClick={() => setFixing({ id: b.id, kind: 'depositor', value: pay?.depositor_name ?? '' })}>고치기</button></p>
+                {fixForm(b.id, 'depositor')}
                 {overdue
                   ? <p className="b-note">입금 기한({dateLabel(b.expires_at)})이 지나 예매가 취소돼요. 다시 예매해 주세요.</p>
                   : (
@@ -235,9 +253,13 @@ export function TicketsPage() {
         <section className="b-stack">
           <h2 className="b-h2">환불</h2>
           {refunds.map(({ b, p }) => (
-            <article key={b.id} className="b-card b-pad b-row between">
-              <span className="b-stack tight"><strong>{eventOf(b.event_id).title}</strong><span className="b-sub">{won(b.total_amount_krw)} · {p!.refund_account}</span></span>
-              <span className={`b-status${p!.status === 'REFUNDED' ? ' ok' : ' wait'}`}>{p!.status === 'REFUNDED' ? '환불 완료' : '환불 대기'}</span>
+            <article key={b.id} className="b-card b-pad b-stack">
+              <div className="b-row between">
+                <span className="b-stack tight"><strong>{eventOf(b.event_id).title}</strong><span className="b-sub">{won(b.total_amount_krw)}{p!.refund_account ? ` · ${p!.refund_account}` : ''}</span></span>
+                <span className={`b-status${p!.status === 'REFUNDED' ? ' ok' : ' wait'}`}>{p!.status === 'REFUNDED' ? '환불 완료' : '환불 대기'}</span>
+              </div>
+              {p!.status === 'REFUND_PENDING' && !fixing && <button type="button" className="b-link" onClick={() => setFixing({ id: b.id, kind: 'refund', value: p!.refund_account ?? '' })}>환불 계좌 고치기</button>}
+              {fixForm(b.id, 'refund')}
             </article>
           ))}
         </section>

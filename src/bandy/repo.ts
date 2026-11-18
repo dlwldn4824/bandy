@@ -72,8 +72,22 @@ export function safeUrl(url: string | null | undefined) {
   return URL_RE.test(v) ? v : null
 }
 
+// 글자 수 제한(서버 _event_limits · _club_limits와 같음)
+export const LIMITS = {
+  event: { title: [60, '공연명'], venue_name: [60, '장소'], address: [120, '주소'], description: [2000, '공연 소개'], bank_name: [20, '입금 은행'], account_number: [30, '입금 계좌'], account_holder: [40, '예금주'] },
+  club: { name: [40, '동아리 이름'], school: [30, '학교'], genre: [30, '장르'], region: [30, '지역'], introduction: [1000, '소개'] },
+} as const
+function checkLengths(input: Record<string, unknown>, limits: Record<string, readonly [number, string]>) {
+  for (const [k, [max, label]] of Object.entries(limits)) {
+    const v = input[k]
+    if (typeof v === 'string' && v.length > max) throw new BandyError(`${label}은(는) ${max}자까지 쓸 수 있어요.`)
+  }
+}
+
 function checkUrl(url: string | null | undefined, label: string) {
-  const v = (url ?? '').trim()
+  let v = (url ?? '').trim()
+  // 'instagram.com/abc'처럼 앞부분 없이 쓴 주소는 https://를 붙인다(다른 스킴은 그대로 거부)
+  if (v && !/^[a-z][a-z0-9+.-]*:/i.test(v) && /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/|$)/i.test(v)) v = `https://${v}`
   if (v && (!URL_RE.test(v) || v.length > 300)) throw new BandyError(`${label}은(는) http:// 또는 https://로 시작하는 주소만 쓸 수 있습니다.`)
   return v
 }
@@ -241,7 +255,7 @@ export function createClub(db: Db, userId: Uuid | null, input: {
   requireActiveProfile(db, userId)
   const name = input.name.trim()
   if (!name) throw new BandyError('동아리 이름을 입력하세요.')
-  if (name.length > 40) throw new BandyError('동아리 이름은 40자까지입니다.')
+  checkLengths(input as Record<string, unknown>, LIMITS.club)
   if (db.clubs.some((c) => c.name === name)) throw new BandyError('이미 등록된 동아리 이름입니다.')
   // [임시] 승인 대기 중인 등록은 한 사람당 1건
   if (db.clubs.some((c) => c.status === 'PENDING' && isOwner(db, userId, c.id))) {
@@ -290,6 +304,7 @@ export function updateClub(db: Db, userId: Uuid | null, clubId: Uuid, patch: Par
   }
   requireActiveProfile(db, userId)
   if (!isClubManager(db, userId, clubId)) throw new BandyError('동아리 운영진만 수정할 수 있습니다.')
+  checkLengths(patch as Record<string, unknown>, LIMITS.club)
   if (db.clubs.find((c) => c.id === clubId)?.status === 'SUSPENDED') throw new BandyError('운영이 정지된 동아리는 정보를 바꿀 수 없습니다.')
   if (patch.sns_url !== undefined) patch.sns_url = checkUrl(patch.sns_url, 'SNS 링크') || null
   if (patch.open_chat_url !== undefined) patch.open_chat_url = checkUrl(patch.open_chat_url, '오픈채팅 링크')
@@ -307,6 +322,7 @@ export function createEvent(db: Db, userId: Uuid | null, clubId: Uuid, input: {
   requireActiveManager(db, userId, clubId, '동아리 운영진만 공연을 올릴 수 있습니다.')
   const club = db.clubs.find((c) => c.id === clubId)!
   if (!input.title.trim()) throw new BandyError('공연명을 입력하세요.')
+  checkLengths(input as Record<string, unknown>, LIMITS.event)
   if (!input.starts_at) throw new BandyError('일시를 입력하세요.')
   if (Number.isNaN(new Date(input.starts_at).getTime())) throw new BandyError('일시 형식이 올바르지 않습니다.')
   if (!Number.isFinite(input.capacity) || input.capacity <= 0 || input.capacity > 100000) throw new BandyError('정원은 1~100000 사이여야 합니다.')
@@ -371,12 +387,13 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
   requireActiveManager(db, userId, event.club_id, '공연을 찾지 못했습니다.')
   if (event.status === 'CANCELLED') throw new BandyError('취소된 공연은 수정할 수 없습니다.')
   if (!input.title.trim()) throw new BandyError('공연명을 입력하세요.')
+  checkLengths(input as Record<string, unknown>, LIMITS.event)
   if (!input.starts_at) throw new BandyError('일시를 입력하세요.')
   if (Number.isNaN(new Date(input.starts_at).getTime())) throw new BandyError('일시 형식이 올바르지 않습니다.')
   if (!Number.isFinite(input.capacity) || input.capacity <= 0 || input.capacity > 100000) throw new BandyError('정원은 1~100000 사이여야 합니다.')
   if (!Number.isFinite(input.price_krw) || input.price_krw < 0) throw new BandyError('가격은 0원 이상이어야 합니다.')
   const tt = db.ticket_types.find((t) => t.event_id === eventId)!
-  const before = { starts_at: event.starts_at, venue_name: event.venue_name }
+  const before = { starts_at: event.starts_at, venue_name: event.venue_name, account_number: event.account_number, bank_name: event.bank_name }
   // 진행 시간: 보내면 그대로, 안 보내면 기존 진행 시간 유지
   const duration = checkDuration(input.duration_minutes, durationMinutes(event))
   const hasBookings = db.bookings.some((b) => b.event_id === eventId && b.status !== 'CANCELLED')
@@ -396,6 +413,13 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
   })
   event.ends_at = new Date(new Date(event.starts_at).getTime() + duration * 60000).toISOString()
   Object.assign(tt, { price_krw: input.price_krw, capacity: input.capacity, sales_ends_at: event.starts_at, updated_at: now() })
+  // 입금 계좌를 고치면 아직 입금 전인 예매자에게 새 계좌를 알린다
+  if (event.account_number !== before.account_number || event.bank_name !== before.bank_name) {
+    for (const b of db.bookings.filter((x) => x.event_id === eventId && x.status === 'PENDING_PAYMENT')) {
+      notify(db, b.user_id, eventId, 'ACCOUNT_CHANGED', `[${event.title}] 입금 계좌가 바뀌었어요. 입금 전이면 내 티켓에서 새 계좌를 확인해 주세요.`,
+        `account-changed-${b.id}-${event.bank_name}-${event.account_number}`)
+    }
+  }
   const venueChanged = !sameVenue(event.venue_name, before.venue_name)
   if (event.starts_at !== before.starts_at || venueChanged) {
     event.previous_starts_at = before.starts_at
@@ -514,10 +538,12 @@ function confirmBookingInternal(db: Db, booking: Booking, confirmedBy: Uuid | nu
 
   const used = db.tickets.filter((t) => t.event_id === booking.event_id).map((t) => t.entry_number ?? 0)
   let next = (used.length ? Math.max(...used) : 0) + 1
+  // 입금 확인을 되돌렸다가 다시 확인하면 순번을 이어서 발급
+  const seqBase = Math.max(0, ...db.tickets.filter((t) => t.booking_item_id === item.id).map((t) => t.issue_sequence))
   for (let seq = 1; seq <= item.quantity; seq += 1) {
     const ticket: Ticket = {
       id: uid('tk'), booking_id: booking.id, booking_item_id: item.id, user_id: booking.user_id,
-      event_id: booking.event_id, issue_sequence: seq, entry_number: next, status: 'ISSUED', seat_info: null,
+      event_id: booking.event_id, issue_sequence: seqBase + seq, entry_number: next, status: 'ISSUED', seat_info: null,
       issued_at: now(), ticket_received_at: null, checked_in_at: null, checked_in_by: null,
       created_at: now(), updated_at: now(),
     }
@@ -774,6 +800,98 @@ export function removeMember(db: Db, userId: Uuid | null, membershipId: Uuid) {
   if (!m || !(m.user_id === userId || isOwner(db, userId, m.club_id))) throw new BandyError('부원을 찾지 못했습니다.')
   if (m.role === 'OWNER') throw new BandyError('회장은 탈퇴하거나 내보낼 수 없습니다.')
   Object.assign(m, { status: 'LEFT', role: 'MEMBER', updated_at: now() })
+}
+
+// ───────────── 오타 · 실수 바로잡기 (서버 함수와 같은 규칙) ─────────────
+export function updateDepositorName(db: Db, userId: Uuid | null, bookingId: Uuid, name: string) {
+  requireLogin(db, userId)
+  const b = db.bookings.find((x) => x.id === bookingId)
+  if (!b || b.user_id !== userId) throw new BandyError('예매를 찾지 못했습니다.')
+  if (b.status !== 'PENDING_PAYMENT') throw new BandyError('입금 확인 전 예매만 입금자명을 고칠 수 있어요.')
+  const v = name.trim()
+  if (!v || v.length > 20) throw new BandyError('입금자명은 1~20자로 입력하세요.')
+  const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'PENDING')
+  if (pay) Object.assign(pay, { depositor_name: v, updated_at: now() })
+}
+
+export function updateRefundAccount(db: Db, userId: Uuid | null, bookingId: Uuid, account: string) {
+  requireLogin(db, userId)
+  const b = db.bookings.find((x) => x.id === bookingId)
+  if (!b || b.user_id !== userId) throw new BandyError('예매를 찾지 못했습니다.')
+  const v = account.trim()
+  if (v.length < 5 || v.length > 60) throw new BandyError('환불받을 계좌(은행 · 계좌번호 · 예금주)를 적어 주세요.')
+  const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'REFUND_PENDING')
+  if (!pay) throw new BandyError('환불 대기 중인 예매만 계좌를 고칠 수 있어요.')
+  Object.assign(pay, { refund_account: v, updated_at: now() })
+}
+
+// 운영진: 잘못 누른 입금 확인 되돌리기(입장한 티켓이 없을 때)
+export function undoConfirmDeposit(db: Db, userId: Uuid | null, bookingId: Uuid) {
+  requireLogin(db, userId)
+  const b = db.bookings.find((x) => x.id === bookingId)
+  const e = b && db.events.find((x) => x.id === b.event_id)
+  if (!b || !e) throw new BandyError('예매를 찾지 못했습니다.')
+  requireActiveManager(db, userId, e.club_id, '예매를 찾지 못했습니다.')
+  if (b.status !== 'CONFIRMED' || b.total_amount_krw === 0) throw new BandyError('입금 확인된 유료 예매만 되돌릴 수 있어요.')
+  const tickets = db.tickets.filter((t) => t.booking_id === b.id)
+  if (tickets.some((t) => t.status === 'CHECKED_IN')) throw new BandyError('이미 입장한 티켓이 있어 되돌릴 수 없어요.')
+  const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'SUCCEEDED')
+  if (!pay) throw new BandyError('환불이 진행 중인 예매는 되돌릴 수 없어요.')
+  const item = db.booking_items.find((i) => i.booking_id === b.id)!
+  const tt = db.ticket_types.find((t) => t.id === item.ticket_type_id)!
+  for (const t of tickets) if (t.status === 'ISSUED') Object.assign(t, { status: 'CANCELLED', updated_at: now() })
+  for (const q of db.qr_credentials) if (tickets.some((t) => t.id === q.ticket_id) && !q.revoked_at) q.revoked_at = now()
+  const keep = Math.max(new Date(b.expires_at).getTime(), Math.min(Date.now() + 24 * 3600000, new Date(eventEnd(e)).getTime()))
+  Object.assign(b, { status: 'PENDING_PAYMENT', confirmed_at: null, expires_at: new Date(keep).toISOString(), updated_at: now() })
+  Object.assign(pay, { status: 'PENDING', approved_at: null, confirmed_by: null, updated_at: now() })
+  tt.sold_quantity -= item.quantity
+  tt.reserved_quantity += item.quantity
+  notify(db, b.user_id, e.id, 'DEPOSIT_UNCONFIRMED', `[${e.title}] 입금 확인이 취소됐어요(운영진 확인 착오). 입금했다면 주최 동아리에 문의해 주세요.`, `deposit-undo-${b.id}-${uid('n')}`)
+}
+
+// 운영진: 기한이 지나 만료된 뒤 들어온 입금 확인(자리가 남고 공연이 끝나기 전)
+export function confirmLateDeposit(db: Db, userId: Uuid | null, bookingId: Uuid) {
+  requireLogin(db, userId)
+  const b = db.bookings.find((x) => x.id === bookingId)
+  const e = b && db.events.find((x) => x.id === b.event_id)
+  if (!b || !e) throw new BandyError('예매를 찾지 못했습니다.')
+  requireActiveManager(db, userId, e.club_id, '예매를 찾지 못했습니다.')
+  if (b.status !== 'EXPIRED') throw new BandyError('만료된 예매만 늦은 입금으로 확인할 수 있어요.')
+  if (e.status === 'CANCELLED' || isEventOver(e)) throw new BandyError('취소됐거나 끝난 공연이에요. 입금액은 돌려주세요.')
+  const item = db.booking_items.find((i) => i.booking_id === b.id)!
+  const tt = db.ticket_types.find((t) => t.id === item.ticket_type_id)!
+  if (remaining(tt) < item.quantity) throw new BandyError('남은 자리가 없어 확인할 수 없어요. 입금액은 돌려주세요.')
+  tt.reserved_quantity += item.quantity
+  b.status = 'PENDING_PAYMENT'
+  const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'FAILED' && p.failure_code === 'EXPIRED')
+  if (pay) Object.assign(pay, { status: 'PENDING', failure_code: null })
+  confirmBookingInternal(db, b, userId)
+}
+
+// 운영진: 잘못 누른 입장 처리 되돌리기(공연이 끝나기 전)
+export function undoCheckIn(db: Db, userId: Uuid | null, ticketId: Uuid) {
+  requireActiveProfile(db, userId)
+  const t = db.tickets.find((x) => x.id === ticketId)
+  if (!t || !isEventStaff(db, userId, t.event_id)) throw new BandyError('티켓을 찾지 못했습니다.')
+  if (t.status !== 'CHECKED_IN') throw new BandyError('입장 처리된 티켓이 아니에요.')
+  const e = db.events.find((x) => x.id === t.event_id)
+  if (e && isEventOver(e)) throw new BandyError('끝난 공연의 입장 기록은 바꿀 수 없어요.')
+  Object.assign(t, { status: 'ISSUED', checked_in_at: null, checked_in_by: null, updated_at: now() })
+}
+
+// 회장 넘기기: 다른 부원에게 회장을 넘기고 자신은 운영진이 된다
+export function transferOwnership(db: Db, userId: Uuid | null, membershipId: Uuid) {
+  requireActiveProfile(db, userId)
+  const m = db.club_memberships.find((x) => x.id === membershipId)
+  if (!m) throw new BandyError('부원을 찾지 못했습니다.')
+  const me = db.club_memberships.find((x) => x.club_id === m.club_id && x.user_id === userId && x.role === 'OWNER' && x.status === 'ACTIVE')
+  if (!me) throw new BandyError('회장만 넘길 수 있습니다.')
+  if (m.id === me.id) throw new BandyError('이미 회장이에요.')
+  if (m.status !== 'ACTIVE') throw new BandyError('가입한 부원에게만 넘길 수 있어요.')
+  Object.assign(me, { role: 'MANAGER', updated_at: now() })
+  Object.assign(m, { role: 'OWNER', updated_at: now() })
+  const club = db.clubs.find((c) => c.id === m.club_id)!
+  notify(db, m.user_id, null, 'CLUB_ROLE', `${club.name} 회장이 됐어요.`, `owner-${m.id}-${uid('n')}`)
 }
 
 // ───────────── 사용자 편의(모바일) ─────────────

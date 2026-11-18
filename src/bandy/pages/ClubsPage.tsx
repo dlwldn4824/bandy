@@ -253,14 +253,14 @@ export function NewClubPage() {
     <div className="b-page">
       <PageHeader back title="동아리 등록" />
       <div className="b-card b-pad b-stack">
-        <label className="b-field"><span>동아리 이름</span><input value={f.name} onChange={set('name')} /></label>
-        <label className="b-field"><span>학교</span><input value={f.school} onChange={set('school')} placeholder="광운대" /></label>
-        <label className="b-field"><span>장르</span><input value={f.genre} onChange={set('genre')} /></label>
-        <label className="b-field"><span>지역</span><input value={f.region} onChange={set('region')} /></label>
+        <label className="b-field"><span>동아리 이름</span><input value={f.name} onChange={set('name')} maxLength={40} /></label>
+        <label className="b-field"><span>학교</span><input value={f.school} onChange={set('school')} placeholder="광운대" maxLength={30} /></label>
+        <label className="b-field"><span>장르</span><input value={f.genre} onChange={set('genre')} maxLength={30} /></label>
+        <label className="b-field"><span>지역</span><input value={f.region} onChange={set('region')} maxLength={30} /></label>
         <ImageInput label="프로필 이미지" value={image} onChange={setImage} />
         <label className="b-field"><span>SNS 링크 (인스타그램)</span><input value={f.sns_url} onChange={set("sns_url")} placeholder="https://instagram.com/..." /></label>
         <label className="b-field"><span>오픈채팅 링크 (교류가 연결된 동아리에만 보여요)</span><input value={f.open_chat_url} onChange={set('open_chat_url')} /></label>
-        <label className="b-field"><span>소개</span><textarea value={f.introduction} onChange={set('introduction')} /></label>
+        <label className="b-field"><span>소개</span><textarea value={f.introduction} onChange={set('introduction')} maxLength={1000} /></label>
         <label className="b-check"><input type="checkbox" checked={f.exchange_open} onChange={(e) => setF({ ...f, exchange_open: e.target.checked })} /> 다른 동아리의 교류 신청 받기</label>
         <p className="b-note">처음에는 운영자가 인스타그램을 보고 직접 승인해요.</p>
         {error && <p className="b-warn">{error}</p>}

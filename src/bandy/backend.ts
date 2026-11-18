@@ -94,6 +94,13 @@ export interface Backend {
   ackEventChange(bookingId: string): Promise<void>
   requestRefund(bookingId: string, refundAccount: string): Promise<void>
   markRefunded(bookingId: string): Promise<void>
+  // 오타 · 실수 바로잡기
+  updateDepositorName(bookingId: string, name: string): Promise<void>
+  updateRefundAccount(bookingId: string, account: string): Promise<void>
+  undoConfirmDeposit(bookingId: string): Promise<void>
+  confirmLateDeposit(bookingId: string): Promise<void>
+  undoCheckIn(ticketId: string): Promise<void>
+  transferOwnership(membershipId: string): Promise<void>
 }
 
 // ───────────────────────── 브라우저 데모 ─────────────────────────
@@ -190,6 +197,12 @@ class LocalBackend implements Backend {
   async ackEventChange(bookingId: string) { this.mutate((d, u) => repo.ackEventChange(d, u, bookingId)) }
   async requestRefund(bookingId: string, refundAccount: string) { this.mutate((d, u) => repo.requestRefund(d, u, bookingId, refundAccount)) }
   async markRefunded(bookingId: string) { this.mutate((d, u) => repo.markRefunded(d, u, bookingId)) }
+  async updateDepositorName(bookingId: string, name: string) { this.mutate((d, u) => repo.updateDepositorName(d, u, bookingId, name)) }
+  async updateRefundAccount(bookingId: string, account: string) { this.mutate((d, u) => repo.updateRefundAccount(d, u, bookingId, account)) }
+  async undoConfirmDeposit(bookingId: string) { this.mutate((d, u) => repo.undoConfirmDeposit(d, u, bookingId)) }
+  async confirmLateDeposit(bookingId: string) { this.mutate((d, u) => repo.confirmLateDeposit(d, u, bookingId)) }
+  async undoCheckIn(ticketId: string) { this.mutate((d, u) => repo.undoCheckIn(d, u, ticketId)) }
+  async transferOwnership(membershipId: string) { this.mutate((d, u) => repo.transferOwnership(d, u, membershipId)) }
 }
 
 // ───────────────────────── Supabase ─────────────────────────
@@ -313,6 +326,12 @@ class SupabaseBackend implements Backend {
   async ackEventChange(bookingId: string) { await this.rpc('ack_event_change', { p_booking_id: bookingId }) }
   async requestRefund(bookingId: string, refundAccount: string) { await this.rpc('request_refund', { p_booking_id: bookingId, p_refund_account: refundAccount }) }
   async markRefunded(bookingId: string) { await this.rpc('mark_refunded', { p_booking_id: bookingId }) }
+  async updateDepositorName(bookingId: string, name: string) { await this.rpc('update_depositor_name', { p_booking_id: bookingId, p_name: name }) }
+  async updateRefundAccount(bookingId: string, account: string) { await this.rpc('update_refund_account', { p_booking_id: bookingId, p_refund_account: account }) }
+  async undoConfirmDeposit(bookingId: string) { await this.rpc('undo_confirm_deposit', { p_booking_id: bookingId }) }
+  async confirmLateDeposit(bookingId: string) { await this.rpc('confirm_late_deposit', { p_booking_id: bookingId }) }
+  async undoCheckIn(ticketId: string) { await this.rpc('undo_check_in', { p_ticket_id: ticketId }) }
+  async transferOwnership(membershipId: string) { await this.rpc('transfer_ownership', { p_membership_id: membershipId }) }
 }
 
 export function createBackend(): Backend {

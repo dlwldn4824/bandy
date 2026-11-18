@@ -162,7 +162,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
           ) : (
             // 구조도: 예매자 목록 = 이름 · ticketType · bookingStatus · checkInStatus (발급 티켓 기준)
             <table className="b-table">
-              <thead><tr><th>입장번호</th><th>이름</th><th>티켓</th><th>예매</th><th>입장</th></tr></thead>
+              <thead><tr><th>입장번호</th><th>이름</th><th>티켓</th><th>예매</th><th>입장</th><th></th></tr></thead>
               <tbody>
                 {tickets.map((t) => (
                   <tr key={t.id}>
@@ -171,6 +171,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
                     <td>{db.booking_items.find((i) => i.id === t.booking_item_id)?.ticket_type_name}</td>
                     <td><span className="b-status ok">확정</span></td>
                     <td>{t.status === 'CHECKED_IN' ? <span className="b-status ok">입장</span> : <span className="b-status">대기</span>}</td>
+                    <td>{t.status === 'CHECKED_IN' && <button type="button" className="b-link" onClick={async () => { if (await ask(`입장번호 ${t.entry_number}번의 입장 처리를 취소할까요?`)) act((x) => x.undoCheckIn(t.id), '입장 처리를 취소했어요.') }}>입장 취소</button>}</td>
                   </tr>
                 ))}
                 {pending.map((b) => (
@@ -186,6 +187,25 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
             </table>
           )}
           {filter === 'all' && bookings.length === 0 && <Empty>아직 예매가 없어요.</Empty>}
+          {filter === 'all' && (
+            <>
+              {/* 실수 바로잡기: 잘못 누른 입금 확인 되돌리기, 기한 뒤 들어온 입금 확인 */}
+              {bookings.filter((b) => b.status === 'CONFIRMED' && b.total_amount_krw > 0).length > 0 && <h2 className="b-h2">확정된 예매</h2>}
+              {bookings.filter((b) => b.status === 'CONFIRMED' && b.total_amount_krw > 0).map((b) => (
+                <article key={b.id} className="b-card b-pad b-row between">
+                  <span className="b-sub">{nameOf(b.user_id)} · 입금자명 {db.payments.find((p) => p.booking_id === b.id)?.depositor_name} · {won(b.total_amount_krw)}</span>
+                  <button type="button" className="b-link" onClick={async () => { if (await ask('입금 확인을 취소할까요? 티켓이 무효가 되고 입금 대기로 돌아가요. 예매자에게 알림이 가요.')) act((x) => x.undoConfirmDeposit(b.id), '입금 확인을 취소했어요.') }}>입금 확인 취소</button>
+                </article>
+              ))}
+              {db.bookings.filter((b) => b.event_id === eventId && b.status === 'EXPIRED').length > 0 && <h2 className="b-h2">기한 지나 만료된 예매</h2>}
+              {db.bookings.filter((b) => b.event_id === eventId && b.status === 'EXPIRED').map((b) => (
+                <article key={b.id} className="b-card b-pad b-row between">
+                  <span className="b-sub">{nameOf(b.user_id)} · 입금자명 {db.payments.find((p) => p.booking_id === b.id)?.depositor_name} · {won(b.total_amount_krw)}</span>
+                  <button type="button" className="b-btn ghost small" onClick={async () => { if (await ask('기한이 지난 뒤 입금이 들어왔나요? 자리가 남아 있으면 확정하고 티켓을 발급해요.')) act((x) => x.confirmLateDeposit(b.id), '늦은 입금을 확인했어요. 티켓이 발급됐어요.') }}>늦은 입금 확인</button>
+                </article>
+              ))}
+            </>
+          )}
         </>
       )}
     </div>
@@ -225,7 +245,7 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
 
   return (
     <section className="b-card b-pad b-stack">
-      <label className="b-field"><span>공연명</span><input value={f.title} onChange={set('title')} /></label>
+      <label className="b-field"><span>공연명</span><input value={f.title} onChange={set('title')} maxLength={60} /></label>
       <div className="b-field">
         <span>분류</span>
         <div className="b-chips">
@@ -239,17 +259,17 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
         <label className="b-field"><span>진행 시간 (분)</span><input type="number" min={10} max={1440} step={10} value={f.duration_minutes} onChange={set('duration_minutes')} /></label>
       </div>
       {event && <p className="b-note">일시나 장소를 바꾸면 예매자에게 알림이 가고, 예매자는 유지하거나 취소·환불을 요청할 수 있어요.</p>}
-      <label className="b-field"><span>장소</span><input value={f.venue_name} onChange={set('venue_name')} /></label>
-      <label className="b-field"><span>주소 (지도 위치)</span><input value={f.address} onChange={set('address')} /></label>
-      <label className="b-field"><span>공연 소개</span><textarea value={f.description} onChange={set('description')} /></label>
+      <label className="b-field"><span>장소</span><input value={f.venue_name} onChange={set('venue_name')} maxLength={60} /></label>
+      <label className="b-field"><span>주소 (지도 위치)</span><input value={f.address} onChange={set('address')} maxLength={120} /></label>
+      <label className="b-field"><span>공연 소개</span><textarea value={f.description} onChange={set('description')} maxLength={2000} /></label>
       <ImageInput label="포스터" value={poster} onChange={setPoster} />
       <div className="b-row">
         <label className="b-field"><span>가격 (원, 무료는 0)</span><input type="number" min={0} step={500} value={f.price_krw} onChange={set('price_krw')} /></label>
         <label className="b-field"><span>정원</span><input type="number" min={1} value={f.capacity} onChange={set('capacity')} /></label>
       </div>
       <div className="b-row">
-        <label className="b-field"><span>입금 은행</span><input value={f.bank_name} onChange={set('bank_name')} /></label>
-        <label className="b-field"><span>입금 계좌</span><input value={f.account_number} onChange={set('account_number')} /></label>
+        <label className="b-field"><span>입금 은행</span><input value={f.bank_name} onChange={set('bank_name')} maxLength={20} /></label>
+        <label className="b-field"><span>입금 계좌</span><input value={f.account_number} onChange={set('account_number')} maxLength={30} /></label>
       </div>
       <div className="b-row">
         <label className="b-field"><span>예금주 (비우면 동아리 이름)</span><input value={f.account_holder} onChange={set('account_holder')} maxLength={40} /></label>
@@ -287,14 +307,14 @@ function ClubForm({ clubId }: { clubId: string }) {
   }
   return (
     <section className="b-card b-pad b-stack">
-      <label className="b-field"><span>동아리 이름</span><input value={f.name} onChange={set('name')} /></label>
+      <label className="b-field"><span>동아리 이름</span><input value={f.name} onChange={set('name')} maxLength={40} /></label>
       <ImageInput label="프로필 이미지" value={image} onChange={setImage} />
       <div className="b-row">
-        <label className="b-field"><span>학교</span><input value={f.school} onChange={set('school')} /></label>
-        <label className="b-field"><span>장르</span><input value={f.genre} onChange={set('genre')} /></label>
+        <label className="b-field"><span>학교</span><input value={f.school} onChange={set('school')} maxLength={30} /></label>
+        <label className="b-field"><span>장르</span><input value={f.genre} onChange={set('genre')} maxLength={30} /></label>
       </div>
-      <label className="b-field"><span>지역</span><input value={f.region} onChange={set('region')} /></label>
-      <label className="b-field"><span>소개</span><textarea value={f.introduction} onChange={set('introduction')} /></label>
+      <label className="b-field"><span>지역</span><input value={f.region} onChange={set('region')} maxLength={30} /></label>
+      <label className="b-field"><span>소개</span><textarea value={f.introduction} onChange={set('introduction')} maxLength={1000} /></label>
       <label className="b-field"><span>SNS 링크</span><input value={f.sns_url} onChange={set('sns_url')} placeholder="https://instagram.com/..." /></label>
       <label className="b-field"><span>오픈채팅 링크 (교류가 수락된 동아리에만 보여요)</span><input value={f.open_chat_url} onChange={set('open_chat_url')} /></label>
       <label className="b-check"><input type="checkbox" checked={f.exchange_open} onChange={(e) => setF({ ...f, exchange_open: e.target.checked })} /> 다른 동아리의 교류 신청 받기</label>
@@ -341,6 +361,7 @@ function Members({ clubId }: { clubId: string }) {
                 {m.role === 'MANAGER' ? '부원으로' : '운영진으로'}
               </button>
               <button type="button" className="b-btn ghost small" onClick={async () => { if (await ask('이 부원을 내보낼까요?')) act((b) => b.removeMember(m.id), '내보냈어요.') }}>내보내기</button>
+              <button type="button" className="b-btn ghost small" onClick={async () => { if (await ask('회장을 넘길까요? 나는 운영진이 돼요.')) act((b) => b.transferOwnership(m.id), '회장을 넘겼어요.') }}>회장 넘기기</button>
             </span>
           )}
         </article>
