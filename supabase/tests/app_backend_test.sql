@@ -349,7 +349,7 @@ select test.ok((select sum(reserved_quantity) from public.ticket_types where eve
 :as_anon
 select test.ok((public.my_home_state() ->> 'signed_in')::boolean = false, '비로그인 홈 신호');
 :as_o1
-select public.create_event(:'c1', jsonb_build_object('title', '오늘 공연', 'starts_at', (now() + interval '2 hours')::text, 'venue_name', '홀', 'price_krw', 1000, 'capacity', 10, 'bank_name', '카카오뱅크', 'account_number', '3333-77', 'publish', true)) as ev7 \gset
+select public.create_event(:'c1', jsonb_build_object('title', '오늘 공연', 'starts_at', (now() + interval '2 hours')::text, 'presale_ends_at', (now() + interval '2 hours')::text, 'venue_name', '홀', 'price_krw', 1000, 'capacity', 10, 'bank_name', '카카오뱅크', 'account_number', '3333-77', 'publish', true)) as ev7 \gset
 select id as tt7 from public.ticket_types where event_id = :'ev7' \gset
 select test.ok(public.my_home_state() ->> 'prompt' = 'STAFF_TODAY', '운영진: 오늘 공연 → 입장 관리 신호');
 :as_v
@@ -456,7 +456,7 @@ select test.ok((select status from public.payments where booking_id = :'bk9b') =
 
 -- 16. 3차 검토 반영
 :as_o1
-select public.create_event(:'c1', jsonb_build_object('title', '현장 입금', 'starts_at', (now() + interval '1 hour')::text, 'duration_minutes', 120, 'venue_name', '홀', 'price_krw', 3000, 'capacity', 4, 'bank_name', 'b', 'account_number', '1', 'publish', true)) as ev10 \gset
+select public.create_event(:'c1', jsonb_build_object('title', '현장 입금', 'starts_at', (now() + interval '1 hour')::text, 'presale_ends_at', (now() + interval '1 hour')::text, 'duration_minutes', 120, 'venue_name', '홀', 'price_krw', 3000, 'capacity', 4, 'bank_name', 'b', 'account_number', '1', 'publish', true)) as ev10 \gset
 select id as tt10 from public.ticket_types where event_id = :'ev10' \gset
 :as_v
 select public.create_booking(:'tt10', 2, '이준', 'door-1') as bk10 \gset
@@ -570,6 +570,34 @@ select test.ok((select role from public.club_memberships where id = :'mem_v2') =
   and (select role from public.club_memberships where club_id = :'c1' and user_id = '00000000-0000-0000-0000-000000000001') = 'MANAGER', '회장 넘기기(이전 회장은 운영진)');
 :as_v
 select public.transfer_ownership((select id from public.club_memberships where club_id = :'c1' and user_id = '00000000-0000-0000-0000-000000000001'));
+
+-- 18. 사전 예매 마감 · 현장 판매(11/18 팀 논의)
+:as_o1
+select public.create_event(:'c1', jsonb_build_object('title', '당일 공연', 'starts_at', (now() + interval '3 hours')::text, 'venue_name', '홀', 'price_krw', 5000, 'capacity', 3, 'bank_name', 'b', 'account_number', '1', 'publish', true)) as ev14 \gset
+select id as tt14 from public.ticket_types where event_id = :'ev14' \gset
+reset role;
+select test.ok((select sales_ends_at from public.ticket_types where id = :'tt14') = public._default_presale_end((select starts_at from public.events where id = :'ev14')), '사전 예매 기본 마감 = 공연 전날 24시');
+:as_u
+select test.fails_with($$select public.create_booking('$$ || :'tt14' || $$', 1, '김관객')$$, '사전 예매가 마감', '당일에는 온라인 사전 예매 마감');
+:as_o1
+select public.record_onsite_sale(:'ev14', 2, 'CASH', '현장 손님') as on1 \gset
+select test.ok((select count(*) from public.tickets where booking_id = :'on1' and status = 'CHECKED_IN') = 2, '현장 판매는 바로 입장 처리');
+select test.ok((select provider from public.payments where booking_id = :'on1') = 'ONSITE_CASH', '결제 수단 = 현장 현금으로 구분');
+select test.ok((select channel from public.bookings where id = :'on1') = 'ONSITE', '판매 경로 = 현장');
+select test.fails_with($$select public.record_onsite_sale('$$ || :'ev14' || $$', 2, 'TRANSFER')$$, '남은 자리', '현장 판매도 정원 안에서');
+select test.fails_with($$select public.record_onsite_sale('$$ || :'ev14' || $$', 1, 'CARD')$$, '결제 수단', '현금 · 이체만');
+select public.record_onsite_sale(:'ev14', 1, 'TRANSFER') as on2 \gset
+select public.cancel_onsite_sale(:'on2');
+select test.ok((select sold_quantity from public.ticket_types where id = :'tt14') = 2, '잘못 등록한 현장 판매 취소 → 자리 반환');
+select test.ok(coalesce((public.my_home_state() -> 'next_ticket'), 'null'::jsonb) = 'null'::jsonb, '현장 판매 티켓은 운영진의 내 티켓에 안 잡힘');
+:as_u
+select test.fails_with($$select public.record_onsite_sale('$$ || :'ev14' || $$', 1, 'CASH')$$, '찾지 못', '관객은 현장 판매 등록 불가');
+:as_o1
+select public.create_event(:'c1', jsonb_build_object('title', '다음 주 공연', 'starts_at', (now() + interval '7 days')::text, 'venue_name', '홀', 'price_krw', 0, 'capacity', 3, 'publish', true)) as ev15 \gset
+select test.fails_with($$select public.record_onsite_sale('$$ || :'ev15' || $$', 1, 'CASH')$$, '당일부터', '현장 판매는 공연 당일부터');
+select public.update_event(:'ev15', jsonb_build_object('presale_ends_at', (now() + interval '3 days')::text));
+select test.ok((select sales_ends_at from public.ticket_types where event_id = :'ev15') <= now() + interval '3 days', '운영진이 사전 예매 마감을 직접 입력');
+select test.fails_with($$select public.update_event('$$ || :'ev15' || $$', jsonb_build_object('presale_ends_at', (now() + interval '8 days')::text))$$, '공연 시작 전', '사전 예매 마감은 공연 시작 전');
 reset role;
 select test.ok((select count(*) from public.audit_logs where action = 'CHECK_IN') = 2
   and (select count(*) from public.audit_logs where action = 'CONFIRM_DEPOSIT') = 8, '입금 확인 8건·입장 2건 감사 기록(테스트 시나리오와 정확히 일치)');

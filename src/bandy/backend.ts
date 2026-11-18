@@ -41,6 +41,8 @@ export type EventInput = {
   price_krw: number; capacity: number; bank_name: string; account_number: string; poster_path: string | null; publish?: boolean
   duration_minutes?: number // 진행 시간(분). 진행 중 판단·QR 유효시간·홈 신호의 기준
   account_holder?: string // 입금 계좌의 실제 예금주(비우면 동아리 이름)
+  presale_ends_at?: string | null // 사전 예매 마감(빈 값 = 공연 전날 24시)
+  onsite_ends_at?: string | null // 현장 판매 종료(빈 값 = 공연 시작 + 3시간)
 }
 export type ClubInput = {
   name: string; school: string; genre: string; region: string; introduction: string; sns_url: string
@@ -101,6 +103,9 @@ export interface Backend {
   confirmLateDeposit(bookingId: string): Promise<void>
   undoCheckIn(ticketId: string): Promise<void>
   transferOwnership(membershipId: string): Promise<void>
+  // 현장 판매(운영진)
+  recordOnsiteSale(eventId: string, quantity: number, method: 'CASH' | 'TRANSFER', buyerName: string): Promise<void>
+  cancelOnsiteSale(bookingId: string): Promise<void>
 }
 
 // ───────────────────────── 브라우저 데모 ─────────────────────────
@@ -203,6 +208,10 @@ class LocalBackend implements Backend {
   async confirmLateDeposit(bookingId: string) { this.mutate((d, u) => repo.confirmLateDeposit(d, u, bookingId)) }
   async undoCheckIn(ticketId: string) { this.mutate((d, u) => repo.undoCheckIn(d, u, ticketId)) }
   async transferOwnership(membershipId: string) { this.mutate((d, u) => repo.transferOwnership(d, u, membershipId)) }
+  async recordOnsiteSale(eventId: string, quantity: number, method: 'CASH' | 'TRANSFER', buyerName: string) {
+    this.mutate((d, u) => { repo.recordOnsiteSale(d, u, eventId, quantity, method, buyerName) })
+  }
+  async cancelOnsiteSale(bookingId: string) { this.mutate((d, u) => repo.cancelOnsiteSale(d, u, bookingId)) }
 }
 
 // ───────────────────────── Supabase ─────────────────────────
@@ -332,6 +341,10 @@ class SupabaseBackend implements Backend {
   async confirmLateDeposit(bookingId: string) { await this.rpc('confirm_late_deposit', { p_booking_id: bookingId }) }
   async undoCheckIn(ticketId: string) { await this.rpc('undo_check_in', { p_ticket_id: ticketId }) }
   async transferOwnership(membershipId: string) { await this.rpc('transfer_ownership', { p_membership_id: membershipId }) }
+  async recordOnsiteSale(eventId: string, quantity: number, method: 'CASH' | 'TRANSFER', buyerName: string) {
+    await this.rpc('record_onsite_sale', { p_event_id: eventId, p_quantity: quantity, p_method: method, p_buyer_name: buyerName })
+  }
+  async cancelOnsiteSale(bookingId: string) { await this.rpc('cancel_onsite_sale', { p_booking_id: bookingId }) }
 }
 
 export function createBackend(): Backend {

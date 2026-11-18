@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useBandy } from '../store'
-import { durationMinutes, eventEnd, isClubManager, isEventOver, isOverdue, isPastEvent } from '../repo'
+import { DEFAULT_ONSITE_HOURS, durationMinutes, eventEnd, isClubManager, isEventOver, isOverdue, isPastEvent, onsiteEnd, onsiteOpen, presaleEnd } from '../repo'
 import { Backend } from '../backend'
 import { loginHref } from '../convenience'
 import { Empty, ImageInput, PageHeader } from '../components'
@@ -79,6 +79,21 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
     .map((b) => ({ b, p: db.payments.find((p) => p.booking_id === b.id && p.status === 'REFUND_PENDING') }))
     .filter((x): x is { b: typeof x.b; p: NonNullable<typeof x.p> } => !!x.p)
   const nameOf = (uid: string) => db.profiles.find((p) => p.id === uid)?.display_name ?? '-'
+  const payOf = (bookingId: string) => db.payments.find((p) => p.booking_id === bookingId)
+  const isOnsite = (bookingId: string) => db.bookings.find((b) => b.id === bookingId)?.channel === 'ONSITE'
+  // 티켓 주인 이름: 현장 판매는 '현장 · 구매자 이름'
+  const holderOf = (bookingId: string, uid: string) => isOnsite(bookingId) ? `현장${payOf(bookingId)?.depositor_name ? ` · ${payOf(bookingId)!.depositor_name}` : ''}` : nameOf(uid)
+  // 판매 집계: 사전 예매(계좌이체) / 현장 현금 / 현장 이체
+  const confirmed = bookings.filter((b) => b.status === 'CONFIRMED')
+  const sum = (pred: (b: typeof confirmed[number]) => boolean) => {
+    const list = confirmed.filter(pred)
+    return { n: list.reduce((k, b) => k + (db.booking_items.find((i) => i.booking_id === b.id)?.quantity ?? 0), 0), won: list.reduce((k, b) => k + b.total_amount_krw, 0) }
+  }
+  const online = sum((b) => (b.channel ?? 'ONLINE') === 'ONLINE')
+  const cash = sum((b) => payOf(b.id)?.provider === 'ONSITE_CASH')
+  const transfer = sum((b) => payOf(b.id)?.provider === 'ONSITE_TRANSFER')
+  const onsiteSales = confirmed.filter((b) => b.channel === 'ONSITE')
+  const [sale, setSale] = useState<{ qty: number; method: 'CASH' | 'TRANSFER'; name: string }>({ qty: 1, method: 'CASH', name: '' })
 
   const act = async (fn: (b: Backend) => Promise<unknown>, ok: string) => {
     const r = await call(fn)
@@ -95,6 +110,8 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
         </div>
         <p className="b-sub">{timeRange(event.starts_at, eventEnd(event))} · {event.venue_name}{isEventOver(event) ? ' · 지난 공연' : isPastEvent(event) ? ' · 진행 중' : ''}</p>
         <p className="b-sub">입금 대기 {pending.length}건 · 발급 티켓 {tickets.length}장 · 입장 {tickets.filter((t) => t.status === 'CHECKED_IN').length}장</p>
+        <p className="b-sub">판매: 사전 예매 {online.n}장 {won(online.won)} · 현장 현금 {cash.n}장 {won(cash.won)} · 현장 이체 {transfer.n}장 {won(transfer.won)}</p>
+        <p className="b-note">사전 예매 마감 {dateLabel(presaleEnd(event))} · 현장 판매 공연 당일 ~ {dateLabel(onsiteEnd(event))}</p>
         <div className="b-row">
           <Link className="b-btn small" to={`/app/scan/${event.id}`}>입장 관리 (QR)</Link>
           {!cancelled && (
@@ -110,6 +127,38 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
           <Link className="b-link" to={`/app/e/${event.id}`}>공연 페이지</Link>
         </div>
       </section>
+
+      {/* 현장 판매(11/18 팀 논의): 당일 0시 ~ 현장 판매 종료. 등록하면 바로 입장 처리 */}
+      {!cancelled && event.status === 'PUBLISHED' && (
+        <section className="b-card b-pad b-stack">
+          <h2>현장 판매</h2>
+          {onsiteOpen(event) ? (
+            <>
+              <div className="b-row between">
+                <span className="b-stepper">
+                  <button type="button" onClick={() => setSale({ ...sale, qty: Math.max(1, sale.qty - 1) })} aria-label="한 장 빼기">−</button>
+                  <b>{sale.qty}</b>
+                  <button type="button" onClick={() => setSale({ ...sale, qty: Math.min(20, sale.qty + 1) })} aria-label="한 장 더하기">+</button>
+                </span>
+                <span className="b-seg mini">
+                  <button type="button" className={sale.method === 'CASH' ? 'on' : ''} onClick={() => setSale({ ...sale, method: 'CASH' })}>현금</button>
+                  <button type="button" className={sale.method === 'TRANSFER' ? 'on' : ''} onClick={() => setSale({ ...sale, method: 'TRANSFER' })}>계좌이체</button>
+                </span>
+              </div>
+              <input value={sale.name} onChange={(e) => setSale({ ...sale, name: e.target.value })} maxLength={20} placeholder="구매자 이름 (선택, 이체면 입금자명)" aria-label="구매자 이름" />
+              <button type="button" className="b-btn" onClick={async () => {
+                if (await act((x) => x.recordOnsiteSale(event.id, sale.qty, sale.method, sale.name), `현장 판매 ${sale.qty}장을 등록하고 입장 처리했어요.`)) setSale({ qty: 1, method: sale.method, name: '' })
+              }}>현장 판매 등록 · 입장</button>
+              {onsiteSales.map((b) => (
+                <div key={b.id} className="b-row between">
+                  <span className="b-sub">{holderOf(b.id, b.user_id)} · {db.booking_items.find((i) => i.booking_id === b.id)?.quantity}장 · {payOf(b.id)?.provider === 'ONSITE_CASH' ? '현금' : '이체'} · {won(b.total_amount_krw)}</span>
+                  <button type="button" className="b-link" onClick={async () => { if (await ask('이 현장 판매를 취소할까요? 받은 돈은 현장에서 돌려주세요.')) act((x) => x.cancelOnsiteSale(b.id), '현장 판매를 취소했어요.') }}>취소</button>
+                </div>
+              ))}
+            </>
+          ) : <p className="b-sub">현장 판매는 공연 당일 0시부터 {dateLabel(onsiteEnd(event))}까지 등록할 수 있어요.</p>}
+        </section>
+      )}
 
       {refundPending.length > 0 && (
         <section className="b-stack">
@@ -167,7 +216,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
                 {tickets.map((t) => (
                   <tr key={t.id}>
                     <td>{t.entry_number}</td>
-                    <td>{nameOf(t.user_id)}</td>
+                    <td>{holderOf(t.booking_id, t.user_id)}</td>
                     <td>{db.booking_items.find((i) => i.id === t.booking_item_id)?.ticket_type_name}</td>
                     <td><span className="b-status ok">확정</span></td>
                     <td>{t.status === 'CHECKED_IN' ? <span className="b-status ok">입장</span> : <span className="b-status">대기</span>}</td>
@@ -190,8 +239,8 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
           {filter === 'all' && (
             <>
               {/* 실수 바로잡기: 잘못 누른 입금 확인 되돌리기, 기한 뒤 들어온 입금 확인 */}
-              {bookings.filter((b) => b.status === 'CONFIRMED' && b.total_amount_krw > 0).length > 0 && <h2 className="b-h2">확정된 예매</h2>}
-              {bookings.filter((b) => b.status === 'CONFIRMED' && b.total_amount_krw > 0).map((b) => (
+              {bookings.filter((b) => b.status === 'CONFIRMED' && b.total_amount_krw > 0 && b.channel !== 'ONSITE').length > 0 && <h2 className="b-h2">확정된 사전 예매</h2>}
+              {bookings.filter((b) => b.status === 'CONFIRMED' && b.total_amount_krw > 0 && b.channel !== 'ONSITE').map((b) => (
                 <article key={b.id} className="b-card b-pad b-row between">
                   <span className="b-sub">{nameOf(b.user_id)} · 입금자명 {db.payments.find((p) => p.booking_id === b.id)?.depositor_name} · {won(b.total_amount_krw)}</span>
                   <button type="button" className="b-link" onClick={async () => { if (await ask('입금 확인을 취소할까요? 티켓이 무효가 되고 입금 대기로 돌아가요. 예매자에게 알림이 가요.')) act((x) => x.undoConfirmDeposit(b.id), '입금 확인을 취소했어요.') }}>입금 확인 취소</button>
@@ -223,6 +272,9 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
     description: event?.description ?? '', price_krw: tt?.price_krw ?? 6000, capacity: tt?.capacity ?? 100,
     bank_name: event?.bank_name ?? '', account_number: event?.account_number ?? '', account_holder: event?.account_holder ?? '',
     duration_minutes: event ? durationMinutes(event) : 120,
+    // 사전 예매 마감(빈 칸 = 공연 전날 24시), 현장 판매: 공연 시작 후 몇 시간까지(기본 3)
+    presale_ends_at: event?.presale_ends_at ? toLocal(event.presale_ends_at) : '',
+    onsite_hours: event?.onsite_ends_at ? Math.round((new Date(event.onsite_ends_at).getTime() - new Date(event.starts_at).getTime()) / 3600000) : DEFAULT_ONSITE_HOURS,
   })
   const [poster, setPoster] = useState<string | null>(event?.poster_path ?? null)
   const [error, setError] = useState('')
@@ -232,6 +284,9 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
     const input = {
       ...f, starts_at: f.starts_at ? `${f.starts_at}:00+09:00` : '', price_krw: Number(f.price_krw), capacity: Number(f.capacity),
       duration_minutes: Number(f.duration_minutes),
+      presale_ends_at: f.presale_ends_at ? `${f.presale_ends_at}:00+09:00` : null,
+      onsite_ends_at: f.starts_at && Number(f.onsite_hours) !== DEFAULT_ONSITE_HOURS
+        ? new Date(new Date(`${f.starts_at}:00+09:00`).getTime() + Number(f.onsite_hours) * 3600000).toISOString() : null,
       poster_path: poster, publish,
     }
     const r = await call(async (b) => {
@@ -257,6 +312,10 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
       <div className="b-row">
         <label className="b-field"><span>시작 일시</span><input type="datetime-local" value={f.starts_at} onChange={set('starts_at')} /></label>
         <label className="b-field"><span>진행 시간 (분)</span><input type="number" min={10} max={1440} step={10} value={f.duration_minutes} onChange={set('duration_minutes')} /></label>
+      </div>
+      <div className="b-row">
+        <label className="b-field"><span>사전 예매 마감 (비우면 공연 전날 24시)</span><input type="datetime-local" value={f.presale_ends_at} onChange={set('presale_ends_at')} /></label>
+        <label className="b-field"><span>현장 판매: 공연 시작 후 몇 시간까지</span><input type="number" min={0} max={24} value={f.onsite_hours} onChange={set('onsite_hours')} /></label>
       </div>
       {event && <p className="b-note">일시나 장소를 바꾸면 예매자에게 알림이 가고, 예매자는 유지하거나 취소·환불을 요청할 수 있어요.</p>}
       <label className="b-field"><span>장소</span><input value={f.venue_name} onChange={set('venue_name')} maxLength={60} /></label>

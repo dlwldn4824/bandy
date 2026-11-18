@@ -96,7 +96,9 @@ export function TicketsPage() {
   if (!me) return <div className="b-page"><PageHeader title="내 티켓" /><NeedLogin what="내 티켓" /></div>
 
   const eventOf = (id: string) => db.events.find((e) => e.id === id) ?? { ...UNKNOWN_EVENT, id }
-  const tickets = db.tickets.filter((t) => t.user_id === me.id && t.status !== 'CANCELLED')
+  // 운영진이 등록한 현장 판매 티켓은 그 운영진의 '내 티켓'이 아니다
+  const onsiteIds = new Set(db.bookings.filter((b) => b.channel === 'ONSITE').map((b) => b.id))
+  const tickets = db.tickets.filter((t) => t.user_id === me.id && t.status !== 'CANCELLED' && !onsiteIds.has(t.booking_id))
     .sort((a, b) => eventOf(a.event_id).starts_at.localeCompare(eventOf(b.event_id).starts_at) || a.issue_sequence - b.issue_sequence)
   // 취소된 공연·끝난 공연(입력한 진행 시간 기준)의 미사용 티켓은 '지난·취소'로 따로 모은다. 공연 중에 늦게 와도 QR을 열 수 있다
   const closed = (t: Ticket) => { const ev = eventOf(t.event_id); return ev.status === 'CANCELLED' || isEventOver(ev) }

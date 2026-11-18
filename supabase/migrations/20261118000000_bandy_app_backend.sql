@@ -90,6 +90,9 @@ alter table public.events add column if not exists schedule_changed_at timestamp
 -- 바뀌기 전 일시·장소(예매자가 무엇이 바뀌었는지 비교)
 alter table public.events add column if not exists previous_starts_at timestamptz;
 alter table public.events add column if not exists previous_venue_name text;
+-- [11/18 팀 논의] 사전 예매(온라인) 마감과 현장 판매 종료. 비우면 기본값(사전: 공연 전날 24시 / 현장: 공연 시작 + 3시간)
+alter table public.events add column if not exists presale_ends_at timestamptz;
+alter table public.events add column if not exists onsite_ends_at timestamptz;
 -- 끝 시각은 시작보다 뒤
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'events_ends_after_starts') then
@@ -133,6 +136,13 @@ create table if not exists public.bookings (
 create index if not exists bookings_event_idx on public.bookings (event_id, status);
 -- [편의] 예매자가 일정 변경을 확인하고 '유지'를 고른 시각
 alter table public.bookings add column if not exists change_ack_at timestamptz;
+-- 판매 경로: ONLINE(사전 예매) / ONSITE(운영진이 현장 판매 등록. 예매자 계정 없음, 등록한 운영진 이름으로 기록)
+alter table public.bookings add column if not exists channel text not null default 'ONLINE';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'bookings_channel_check') then
+    alter table public.bookings add constraint bookings_channel_check check (channel in ('ONLINE', 'ONSITE'));
+  end if;
+end $$;
 
 create table if not exists public.booking_items (
   id uuid primary key default gen_random_uuid(),
@@ -640,6 +650,17 @@ language sql immutable set search_path = '' as $$
   select lower(regexp_replace(btrim(coalesce(p_text, '')), '\s+', ' ', 'g'));
 $$;
 
+-- 사전 예매 마감 기본값: 공연 전날 24시(= 공연 당일 0시, 한국 시간)
+create or replace function public._default_presale_end(p_starts timestamptz) returns timestamptz
+language sql immutable set search_path = '' as $$
+  select (date_trunc('day', p_starts at time zone 'Asia/Seoul')) at time zone 'Asia/Seoul';
+$$;
+-- 현장 판매 창: 공연 당일 0시 ~ (입력값 또는 공연 시작 + 3시간)
+create or replace function public._onsite_end(p_starts timestamptz, p_onsite_ends timestamptz) returns timestamptz
+language sql immutable set search_path = '' as $$
+  select coalesce(p_onsite_ends, p_starts + interval '3 hours');
+$$;
+
 -- 진행 시간(분) 입력 검사: 10분 ~ 24시간
 create or replace function public._duration(p_text text, p_default integer) returns interval
 language plpgsql immutable set search_path = '' as $$
@@ -671,6 +692,8 @@ declare
   v_capacity bigint := coalesce(public._to_bigint(p_input ->> 'capacity', '정원'), 0);
   v_starts timestamptz := public._to_ts(p_input ->> 'starts_at');
   v_duration interval := public._duration(p_input ->> 'duration_minutes', 120);  -- 진행 시간(기본 2시간)
+  v_presale timestamptz := public._to_ts(p_input ->> 'presale_ends_at');
+  v_onsite timestamptz := public._to_ts(p_input ->> 'onsite_ends_at');
   v_club public.clubs;
 begin
   perform public._require_active_manager(p_club_id, '동아리 운영진만 공연을 올릴 수 있습니다.');
@@ -692,8 +715,12 @@ begin
     -- 예금주: 입력한 실제 예금주(개인 계좌일 수 있음). 없으면 동아리 이름
     left(coalesce(nullif(btrim(coalesce(p_input ->> 'account_holder', '')), ''), v_club.name), 40))
   returning id into v_id;
+  if v_presale is not null and v_presale > v_starts then raise exception '사전 예매 마감은 공연 시작 전이어야 해요.' using errcode = '22023'; end if;
+  if v_onsite is not null and v_onsite < v_starts then raise exception '현장 판매 종료는 공연 시작 뒤여야 해요.' using errcode = '22023'; end if;
+  update public.events set presale_ends_at = v_presale, onsite_ends_at = v_onsite where id = v_id;
+  -- 티켓 종류의 판매 마감 = 사전 예매 마감(입력값 또는 공연 전날 24시)
   insert into public.ticket_types (event_id, name, price_krw, capacity, sales_ends_at)
-  values (v_id, case when v_price > 0 then '일반' else '참가 신청' end, v_price, v_capacity, v_starts);
+  values (v_id, case when v_price > 0 then '일반' else '참가 신청' end, v_price, v_capacity, coalesce(v_presale, public._default_presale_end(v_starts)));
   perform public._audit(v_id, 'CREATE', 'event', v_id);
   return v_id;
 end;
@@ -720,6 +747,11 @@ begin
   -- 진행 시간을 보내면 그대로, 안 보내면 기존 진행 시간을 유지한 채 시작 시각에 맞춰 옮긴다
   v_ends := v_starts + coalesce(public._duration(p_input ->> 'duration_minutes', null),
                                 public._event_end(v_event.starts_at, v_event.ends_at) - v_event.starts_at);
+  -- 사전 예매 마감 · 현장 판매 종료: 보내면 그 값(빈 값 = 기본), 안 보내면 그대로
+  if p_input ? 'presale_ends_at' then v_event.presale_ends_at := public._to_ts(p_input ->> 'presale_ends_at'); end if;
+  if p_input ? 'onsite_ends_at' then v_event.onsite_ends_at := public._to_ts(p_input ->> 'onsite_ends_at'); end if;
+  if v_event.presale_ends_at is not null and v_event.presale_ends_at > v_starts then raise exception '사전 예매 마감은 공연 시작 전이어야 해요.' using errcode = '22023'; end if;
+  if v_event.onsite_ends_at is not null and v_event.onsite_ends_at < v_starts then raise exception '현장 판매 종료는 공연 시작 뒤여야 해요.' using errcode = '22023'; end if;
   v_venue := case when p_input ? 'venue_name' then regexp_replace(btrim(coalesce(p_input ->> 'venue_name', '')), '\s+', ' ', 'g') else v_event.venue_name end;
   v_account := case when p_input ? 'account_number' then btrim(coalesce(p_input ->> 'account_number', '')) else v_event.account_number end;
   if p_input ? 'title' and btrim(coalesce(p_input ->> 'title', '')) = '' then raise exception '공연명을 입력하세요.' using errcode = '22023'; end if;
@@ -741,6 +773,7 @@ begin
     description = case when p_input ? 'description' then p_input ->> 'description' else description end,
     category = case when p_input ? 'category' then p_input ->> 'category' else category end,
     starts_at = v_starts, ends_at = v_ends, venue_name = v_venue,
+    presale_ends_at = v_event.presale_ends_at, onsite_ends_at = v_event.onsite_ends_at,
     previous_starts_at = case when v_starts is distinct from v_event.starts_at or public._norm(v_venue) <> public._norm(v_event.venue_name)
       then v_event.starts_at else previous_starts_at end,
     previous_venue_name = case when v_starts is distinct from v_event.starts_at or public._norm(v_venue) <> public._norm(v_event.venue_name)
@@ -756,7 +789,8 @@ begin
     poster_path = case when p_input ? 'poster_path' then p_input ->> 'poster_path' else poster_path end,
     updated_at = now()
   where id = p_event_id;
-  update public.ticket_types set price_krw = v_price, capacity = v_capacity, sales_ends_at = v_starts, updated_at = now() where id = v_tt.id;
+  update public.ticket_types set price_krw = v_price, capacity = v_capacity,
+    sales_ends_at = coalesce(v_event.presale_ends_at, public._default_presale_end(v_starts)), updated_at = now() where id = v_tt.id;
   if v_starts is distinct from v_event.starts_at or public._norm(v_venue) <> public._norm(v_event.venue_name) then
     -- 공연을 앞당기면 입금 기한도 새 공연 끝을 넘지 않게(예매 시각보다는 뒤)
     update public.bookings set expires_at = greatest(least(expires_at, v_ends), created_at + interval '1 minute'), updated_at = now()
@@ -865,7 +899,9 @@ begin
     raise exception '지금 예매할 수 없는 공연입니다.' using errcode = 'P0001';
   end if;
   if now() < v_tt.sales_starts_at then raise exception '아직 예매가 열리지 않았습니다.' using errcode = 'P0001'; end if;
-  if now() >= v_tt.sales_ends_at or now() >= v_event.starts_at then raise exception '예매가 마감된 공연입니다.' using errcode = 'P0001'; end if;
+  if now() >= v_tt.sales_ends_at or now() >= v_event.starts_at then
+    raise exception '온라인 사전 예매가 마감됐어요. 현장에서 구매해 주세요.' using errcode = 'P0001';
+  end if;
   if length(btrim(coalesce(p_depositor_name, ''))) > 20 then raise exception '입금자명은 20자까지입니다.' using errcode = '22023'; end if;
   perform public._expire_bookings(v_tt.id);
   -- 한 공연에 입금 대기 예매는 한 사람당 1건(입금 안 하고 여러 건으로 자리를 잡지 못하게)
@@ -1324,6 +1360,67 @@ begin
 end;
 $$;
 
+-- ───── 현장 판매 (11/18 팀 논의: 사전 예매는 하루 전까지, 현장은 당일) ─────
+-- 운영진이 입구에서 현장 판매를 등록: 결제 수단(현장 현금 / 현장 이체)을 기록하고, 티켓을 바로 입장 처리한다.
+-- 판매 창: 공연 당일 0시 ~ 현장 판매 종료(기본 공연 시작 + 3시간). 정원은 사전 예매와 함께 센다
+create or replace function public.record_onsite_sale(p_event_id uuid, p_quantity integer, p_method text, p_buyer_name text default '') returns uuid
+language plpgsql security definer set search_path = '' as $$
+declare v_uid uuid := auth.uid(); v_e public.events; v_tt public.ticket_types; v_b uuid; v_i uuid; v_next integer;
+begin
+  perform public._require_login();
+  select * into v_e from public.events where id = p_event_id;
+  if not found then raise exception '공연을 찾지 못했습니다.' using errcode = 'P0002'; end if;
+  perform public._require_active_manager(v_e.club_id, '공연을 찾지 못했습니다.');
+  if p_method not in ('CASH', 'TRANSFER') then raise exception '결제 수단(현금 · 이체)을 골라 주세요.' using errcode = '22023'; end if;
+  if p_quantity is null or p_quantity < 1 or p_quantity > 20 then raise exception '수량은 1~20장이에요.' using errcode = '22023'; end if;
+  if length(btrim(coalesce(p_buyer_name, ''))) > 20 then raise exception '구매자 이름은 20자까지예요.' using errcode = '22023'; end if;
+  if v_e.status <> 'PUBLISHED' then raise exception '공개 중인 공연만 현장 판매할 수 있어요.' using errcode = 'P0001'; end if;
+  if now() < public._default_presale_end(v_e.starts_at) then raise exception '현장 판매는 공연 당일부터 할 수 있어요.' using errcode = 'P0001'; end if;
+  if now() > public._onsite_end(v_e.starts_at, v_e.onsite_ends_at) then raise exception '현장 판매 시간이 끝났어요.' using errcode = 'P0001'; end if;
+  select * into v_tt from public.ticket_types where event_id = p_event_id order by created_at limit 1 for update;  -- 잠금 순서: 티켓 종류 → 공연
+  perform public._expire_bookings(v_tt.id);
+  select * into v_tt from public.ticket_types where id = v_tt.id;
+  if v_tt.capacity - v_tt.reserved_quantity - v_tt.sold_quantity < p_quantity then raise exception '남은 자리가 부족해요.' using errcode = 'P0001'; end if;
+  perform 1 from public.events where id = p_event_id for update;
+  insert into public.bookings (user_id, event_id, status, total_amount_krw, expires_at, confirmed_at, idempotency_key, request_hash, channel)
+  values (v_uid, p_event_id, 'CONFIRMED', v_tt.price_krw * p_quantity, now() + interval '1 minute', now(), 'onsite-' || gen_random_uuid(), 'onsite', 'ONSITE')
+  returning id into v_b;
+  insert into public.booking_items (booking_id, event_id, user_id, ticket_type_id, quantity, unit_price_krw, ticket_type_name)
+  values (v_b, p_event_id, v_uid, v_tt.id, p_quantity, v_tt.price_krw, '현장 판매') returning id into v_i;
+  insert into public.payments (booking_id, provider, provider_order_id, status, depositor_name, confirmed_by, approved_at)
+  values (v_b, case p_method when 'CASH' then 'ONSITE_CASH' else 'ONSITE_TRANSFER' end, 'BANDY-ON-' || upper(left(replace(v_b::text, '-', ''), 12)),
+          'SUCCEEDED', btrim(coalesce(p_buyer_name, '')), v_uid, now());
+  update public.ticket_types set sold_quantity = sold_quantity + p_quantity, updated_at = now() where id = v_tt.id;
+  select coalesce(max(entry_number), 0) + 1 into v_next from public.tickets where event_id = p_event_id;
+  insert into public.tickets (booking_id, booking_item_id, user_id, event_id, issue_sequence, entry_number, status, checked_in_at, checked_in_by)
+  select v_b, v_i, v_uid, p_event_id, g, v_next + g - 1, 'CHECKED_IN', now(), v_uid from generate_series(1, p_quantity) g;
+  perform public._audit(p_event_id, 'ONSITE_SALE', 'booking', v_b);
+  return v_b;
+end;
+$$;
+
+-- 잘못 등록한 현장 판매 취소(현장 판매 시간 안에서). 돈은 현장에서 돌려준다
+create or replace function public.cancel_onsite_sale(p_booking_id uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+declare v_b public.bookings; v_i public.booking_items; v_e public.events;
+begin
+  perform public._require_login();
+  select * into v_b from public.bookings where id = p_booking_id;
+  if not found or v_b.channel <> 'ONSITE' then raise exception '현장 판매 기록을 찾지 못했습니다.' using errcode = 'P0002'; end if;
+  select * into v_e from public.events where id = v_b.event_id;
+  perform public._require_active_manager(v_e.club_id, '현장 판매 기록을 찾지 못했습니다.');
+  select * into v_i from public.booking_items where booking_id = p_booking_id;
+  perform 1 from public.ticket_types where id = v_i.ticket_type_id for update;
+  select * into v_b from public.bookings where id = p_booking_id for update;
+  if v_b.status <> 'CONFIRMED' then raise exception '이미 취소한 기록이에요.' using errcode = 'P0001'; end if;
+  update public.bookings set status = 'CANCELLED', cancelled_at = now(), updated_at = now() where id = p_booking_id;
+  update public.tickets set status = 'CANCELLED', updated_at = now() where booking_id = p_booking_id;
+  update public.payments set status = 'REFUNDED', refunded_at = now(), updated_at = now() where booking_id = p_booking_id;
+  update public.ticket_types set sold_quantity = sold_quantity - v_i.quantity, updated_at = now() where id = v_i.ticket_type_id;
+  perform public._audit(v_e.id, 'CANCEL_ONSITE_SALE', 'booking', p_booking_id);
+end;
+$$;
+
 -- ───── 오타 · 실수 바로잡기 ─────
 -- 예매자: 입금 전 예매의 입금자명 고치기(운영진이 통장과 맞춰 볼 이름)
 create or replace function public.update_depositor_name(p_booking_id uuid, p_name text) returns void
@@ -1365,7 +1462,7 @@ begin
   select * into v_i from public.booking_items where booking_id = p_booking_id;
   perform 1 from public.ticket_types where id = v_i.ticket_type_id for update;  -- 잠금 순서: 티켓 종류 → 예매 → 티켓
   select * into v_b from public.bookings where id = p_booking_id for update;
-  if v_b.status <> 'CONFIRMED' or v_b.total_amount_krw = 0 then raise exception '입금 확인된 유료 예매만 되돌릴 수 있어요.' using errcode = 'P0001'; end if;
+  if v_b.status <> 'CONFIRMED' or v_b.total_amount_krw = 0 or v_b.channel <> 'ONLINE' then raise exception '입금 확인된 유료 사전 예매만 되돌릴 수 있어요.' using errcode = 'P0001'; end if;
   perform 1 from public.tickets where booking_id = p_booking_id order by id for update;
   if exists (select 1 from public.tickets where booking_id = p_booking_id and status = 'CHECKED_IN') then
     raise exception '이미 입장한 티켓이 있어 되돌릴 수 없어요.' using errcode = 'P0001';
@@ -1466,7 +1563,7 @@ begin
   select to_jsonb(x) into v_ticket from (
     select t.id as ticket_id, e.id as event_id, e.title, e.starts_at, e.venue_name, t.entry_number,
            (select count(*) from public.tickets t2 where t2.event_id = e.id and t2.user_id = v_uid and t2.status = 'ISSUED') as ticket_count
-    from public.tickets t join public.events e on e.id = t.event_id
+    from public.tickets t join public.events e on e.id = t.event_id join public.bookings bk on bk.id = t.booking_id and bk.channel = 'ONLINE'
     where t.user_id = v_uid and t.status = 'ISSUED' and e.status in ('PUBLISHED', 'DRAFT', 'ENDED')
       and e.starts_at <= now() + interval '24 hours' and public._event_end(e.starts_at, e.ends_at) > now()  -- 공연이 끝날 때까지
     order by e.starts_at, t.entry_number limit 1) x;
@@ -1533,6 +1630,7 @@ grant execute on function
 to authenticated;
 grant execute on function public.expire_overdue_bookings() to service_role;
 grant execute on function public.my_home_state() to anon, authenticated;
+grant execute on function public.record_onsite_sale(uuid, integer, text, text), public.cancel_onsite_sale(uuid) to authenticated;
 grant execute on function public.mark_deposit_sent(uuid), public.ack_event_change(uuid), public.request_refund(uuid, text),
   public.mark_refunded(uuid), public.update_depositor_name(uuid, text), public.update_refund_account(uuid, text),
   public.undo_confirm_deposit(uuid), public.confirm_late_deposit(uuid), public.undo_check_in(uuid), public.transfer_ownership(uuid) to authenticated;

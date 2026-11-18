@@ -129,6 +129,26 @@ export function eventEnd(e: Pick<EventRow, 'starts_at' | 'ends_at'>) {
 export function durationMinutes(e: Pick<EventRow, 'starts_at' | 'ends_at'>) {
   return Math.round((new Date(eventEnd(e)).getTime() - new Date(e.starts_at).getTime()) / 60000)
 }
+// 사전 예매 마감 기본값: 공연 전날 24시(= 공연 당일 0시, 한국 시간). 서버 _default_presale_end와 같음
+export function defaultPresaleEnd(startsAt: string) {
+  const kst = new Date(new Date(startsAt).getTime() + 9 * 3600000)
+  return new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()) - 9 * 3600000).toISOString()
+}
+export function presaleEnd(e: Pick<EventRow, 'starts_at' | 'presale_ends_at'>) { return e.presale_ends_at ?? defaultPresaleEnd(e.starts_at) }
+// 현장 판매 창: 공연 당일 0시 ~ (입력값 또는 공연 시작 + 3시간)
+export const DEFAULT_ONSITE_HOURS = 3
+export function onsiteEnd(e: Pick<EventRow, 'starts_at' | 'onsite_ends_at'>) {
+  return e.onsite_ends_at ?? new Date(new Date(e.starts_at).getTime() + DEFAULT_ONSITE_HOURS * 3600000).toISOString()
+}
+export function onsiteOpen(e: Pick<EventRow, 'starts_at' | 'onsite_ends_at'>) {
+  const t = Date.now()
+  return t >= new Date(defaultPresaleEnd(e.starts_at)).getTime() && t <= new Date(onsiteEnd(e)).getTime()
+}
+function checkSalesWindow(startsAt: string, presale?: string | null, onsite?: string | null) {
+  if (presale && new Date(presale).getTime() > new Date(startsAt).getTime()) throw new BandyError('사전 예매 마감은 공연 시작 전이어야 해요.')
+  if (onsite && new Date(onsite).getTime() < new Date(startsAt).getTime()) throw new BandyError('현장 판매 종료는 공연 시작 뒤여야 해요.')
+}
+
 // 끝났는가: 끝 시각 전까지는 '진행 중'이라 티켓 QR을 열 수 있다
 export function isEventOver(e: Pick<EventRow, 'starts_at' | 'ends_at'>) {
   return new Date(eventEnd(e)).getTime() <= Date.now()
@@ -317,6 +337,7 @@ export function createEvent(db: Db, userId: Uuid | null, clubId: Uuid, input: {
   title: string; category: EventRow['category']; starts_at: string; venue_name: string; address: string
   description: string; price_krw: number; capacity: number; account_number: string; bank_name: string
   publish: boolean; poster_path?: string | null; duration_minutes?: number; account_holder?: string
+  presale_ends_at?: string | null; onsite_ends_at?: string | null
 }): EventRow {
   requireActiveProfile(db, userId)
   requireActiveManager(db, userId, clubId, '동아리 운영진만 공연을 올릴 수 있습니다.')
@@ -339,13 +360,16 @@ export function createEvent(db: Db, userId: Uuid | null, clubId: Uuid, input: {
     poster_path: input.poster_path ?? null, status: input.publish ? 'PUBLISHED' : 'DRAFT', published_at: input.publish ? now() : null,
     bank_name: input.bank_name.trim(), account_number: input.account_number.trim(),
     account_holder: (input.account_holder?.trim() || club.name).slice(0, 40), // 실제 예금주. 없으면 동아리 이름
+    presale_ends_at: input.presale_ends_at ? new Date(input.presale_ends_at).toISOString() : null,
+    onsite_ends_at: input.onsite_ends_at ? new Date(input.onsite_ends_at).toISOString() : null,
     created_at: now(), updated_at: now(),
   }
+  checkSalesWindow(event.starts_at, event.presale_ends_at, event.onsite_ends_at)
   db.events.push(event)
   db.ticket_types.push({
     id: uid('tt'), event_id: event.id, name: input.price_krw > 0 ? '일반' : '참가 신청',
     price_krw: input.price_krw, capacity: input.capacity, reserved_quantity: 0, sold_quantity: 0,
-    sales_starts_at: now(), sales_ends_at: event.starts_at, status: 'ACTIVE', created_at: now(), updated_at: now(),
+    sales_starts_at: now(), sales_ends_at: presaleEnd(event), status: 'ACTIVE', created_at: now(), updated_at: now(),
   })
   return event
 }
@@ -380,6 +404,7 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
   title: string; category: EventRow['category']; starts_at: string; venue_name: string; address: string
   description: string; bank_name: string; account_number: string; poster_path: string | null
   price_krw: number; capacity: number; duration_minutes?: number; account_holder?: string
+  presale_ends_at?: string | null; onsite_ends_at?: string | null
 }) {
   requireLogin(db, userId)
   const event = db.events.find((e) => e.id === eventId)
@@ -412,7 +437,11 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
     updated_at: now(),
   })
   event.ends_at = new Date(new Date(event.starts_at).getTime() + duration * 60000).toISOString()
-  Object.assign(tt, { price_krw: input.price_krw, capacity: input.capacity, sales_ends_at: event.starts_at, updated_at: now() })
+  // 사전 예매 마감 · 현장 판매 종료: 보내면 그 값(빈 값 = 기본), 안 보내면 그대로
+  if (input.presale_ends_at !== undefined) event.presale_ends_at = input.presale_ends_at ? new Date(input.presale_ends_at).toISOString() : null
+  if (input.onsite_ends_at !== undefined) event.onsite_ends_at = input.onsite_ends_at ? new Date(input.onsite_ends_at).toISOString() : null
+  checkSalesWindow(event.starts_at, event.presale_ends_at, event.onsite_ends_at)
+  Object.assign(tt, { price_krw: input.price_krw, capacity: input.capacity, sales_ends_at: presaleEnd(event), updated_at: now() })
   // 입금 계좌를 고치면 아직 입금 전인 예매자에게 새 계좌를 알린다
   if (event.account_number !== before.account_number || event.bank_name !== before.bank_name) {
     for (const b of db.bookings.filter((x) => x.event_id === eventId && x.status === 'PENDING_PAYMENT')) {
@@ -485,7 +514,7 @@ export function createBooking(db: Db, userId: Uuid | null, ticketTypeId: Uuid, q
     throw new BandyError(`수량은 1~${MAX_QUANTITY}장입니다.`)
   }
   if (Date.now() < new Date(tt.sales_starts_at).getTime()) throw new BandyError('아직 예매가 열리지 않았습니다.')
-  if (Date.now() >= new Date(tt.sales_ends_at).getTime() || isPastEvent(event)) throw new BandyError('예매가 마감된 공연입니다.')
+  if (Date.now() >= new Date(tt.sales_ends_at).getTime() || isPastEvent(event)) throw new BandyError('온라인 사전 예매가 마감됐어요. 현장에서 구매해 주세요.')
   if (depositorName.trim().length > MAX_DEPOSITOR) throw new BandyError(`입금자명은 ${MAX_DEPOSITOR}자까지입니다.`)
   expireBookings(db, tt.id)
   // 한 공연에 입금 대기 예매는 한 사람당 1건
@@ -802,6 +831,70 @@ export function removeMember(db: Db, userId: Uuid | null, membershipId: Uuid) {
   Object.assign(m, { status: 'LEFT', role: 'MEMBER', updated_at: now() })
 }
 
+// ───────────── 현장 판매 (11/18 팀 논의) ─────────────
+// 운영진이 입구에서 현장 판매를 등록: 결제 수단(현장 현금 / 현장 이체) 기록 + 티켓 바로 입장 처리. 서버 record_onsite_sale과 같음
+export function isOnsiteTicket(db: Db, t: Ticket) {
+  return db.bookings.find((b) => b.id === t.booking_id)?.channel === 'ONSITE'
+}
+
+export function recordOnsiteSale(db: Db, userId: Uuid | null, eventId: Uuid, quantity: number, method: 'CASH' | 'TRANSFER', buyerName = '') {
+  requireLogin(db, userId)
+  const e = db.events.find((x) => x.id === eventId)
+  if (!e) throw new BandyError('공연을 찾지 못했습니다.')
+  requireActiveManager(db, userId, e.club_id, '공연을 찾지 못했습니다.')
+  if (method !== 'CASH' && method !== 'TRANSFER') throw new BandyError('결제 수단(현금 · 이체)을 골라 주세요.')
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) throw new BandyError('수량은 1~20장이에요.')
+  if (buyerName.trim().length > 20) throw new BandyError('구매자 이름은 20자까지예요.')
+  if (e.status !== 'PUBLISHED') throw new BandyError('공개 중인 공연만 현장 판매할 수 있어요.')
+  if (Date.now() < new Date(defaultPresaleEnd(e.starts_at)).getTime()) throw new BandyError('현장 판매는 공연 당일부터 할 수 있어요.')
+  if (Date.now() > new Date(onsiteEnd(e)).getTime()) throw new BandyError('현장 판매 시간이 끝났어요.')
+  const tt = db.ticket_types.find((x) => x.event_id === eventId)!
+  expireBookings(db, tt.id)
+  if (remaining(tt) < quantity) throw new BandyError('남은 자리가 부족해요.')
+  const booking: Booking = {
+    id: uid('bk'), user_id: userId!, event_id: eventId, status: 'CONFIRMED', total_amount_krw: tt.price_krw * quantity,
+    expires_at: new Date(Date.now() + 60000).toISOString(), confirmed_at: now(), cancelled_at: null,
+    idempotency_key: uid('onsite'), request_hash: 'onsite', channel: 'ONSITE', created_at: now(), updated_at: now(),
+  }
+  db.bookings.push(booking)
+  const item = { id: uid('bi'), booking_id: booking.id, event_id: eventId, user_id: userId!, ticket_type_id: tt.id,
+    quantity, unit_price_krw: tt.price_krw, ticket_type_name: '현장 판매', created_at: now() }
+  db.booking_items.push(item)
+  db.payments.push({
+    id: uid('pay'), booking_id: booking.id, provider: method === 'CASH' ? 'ONSITE_CASH' : 'ONSITE_TRANSFER', environment: 'TEST',
+    provider_order_id: `BANDY-ON-${booking.id.slice(-8).toUpperCase()}`, provider_payment_key: null, status: 'SUCCEEDED',
+    depositor_name: buyerName.trim(), confirmed_by: userId, approved_at: now(), failure_code: null, reconciliation_required: false,
+    created_at: now(), updated_at: now(),
+  })
+  tt.sold_quantity += quantity
+  const used = db.tickets.filter((x) => x.event_id === eventId).map((x) => x.entry_number ?? 0)
+  let next = (used.length ? Math.max(...used) : 0) + 1
+  for (let seq = 1; seq <= quantity; seq += 1) {
+    db.tickets.push({
+      id: uid('tk'), booking_id: booking.id, booking_item_id: item.id, user_id: userId!, event_id: eventId, issue_sequence: seq,
+      entry_number: next, status: 'CHECKED_IN', seat_info: null, issued_at: now(), ticket_received_at: null,
+      checked_in_at: now(), checked_in_by: userId, created_at: now(), updated_at: now(),
+    })
+    next += 1
+  }
+  return booking
+}
+
+export function cancelOnsiteSale(db: Db, userId: Uuid | null, bookingId: Uuid) {
+  requireLogin(db, userId)
+  const b = db.bookings.find((x) => x.id === bookingId)
+  if (!b || b.channel !== 'ONSITE') throw new BandyError('현장 판매 기록을 찾지 못했습니다.')
+  const e = db.events.find((x) => x.id === b.event_id)!
+  requireActiveManager(db, userId, e.club_id, '현장 판매 기록을 찾지 못했습니다.')
+  if (b.status !== 'CONFIRMED') throw new BandyError('이미 취소한 기록이에요.')
+  const item = db.booking_items.find((i) => i.booking_id === b.id)!
+  Object.assign(b, { status: 'CANCELLED', cancelled_at: now(), updated_at: now() })
+  for (const t of db.tickets) if (t.booking_id === b.id) Object.assign(t, { status: 'CANCELLED', updated_at: now() })
+  const pay = db.payments.find((p) => p.booking_id === b.id)
+  if (pay) Object.assign(pay, { status: 'REFUNDED', refunded_at: now(), updated_at: now() })
+  db.ticket_types.find((t) => t.id === item.ticket_type_id)!.sold_quantity -= item.quantity
+}
+
 // ───────────── 오타 · 실수 바로잡기 (서버 함수와 같은 규칙) ─────────────
 export function updateDepositorName(db: Db, userId: Uuid | null, bookingId: Uuid, name: string) {
   requireLogin(db, userId)
@@ -832,7 +925,7 @@ export function undoConfirmDeposit(db: Db, userId: Uuid | null, bookingId: Uuid)
   const e = b && db.events.find((x) => x.id === b.event_id)
   if (!b || !e) throw new BandyError('예매를 찾지 못했습니다.')
   requireActiveManager(db, userId, e.club_id, '예매를 찾지 못했습니다.')
-  if (b.status !== 'CONFIRMED' || b.total_amount_krw === 0) throw new BandyError('입금 확인된 유료 예매만 되돌릴 수 있어요.')
+  if (b.status !== 'CONFIRMED' || b.total_amount_krw === 0 || (b.channel ?? 'ONLINE') !== 'ONLINE') throw new BandyError('입금 확인된 유료 사전 예매만 되돌릴 수 있어요.')
   const tickets = db.tickets.filter((t) => t.booking_id === b.id)
   if (tickets.some((t) => t.status === 'CHECKED_IN')) throw new BandyError('이미 입장한 티켓이 있어 되돌릴 수 없어요.')
   const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'SUCCEEDED')
@@ -977,7 +1070,7 @@ export function homeState(db: Db, userId: Uuid | null): HomeState {
   const t = Date.now()
   const H = 3600000
   const evOf = (id: Uuid) => db.events.find((e) => e.id === id)
-  const mine = db.tickets.filter((x) => x.user_id === userId && x.status === 'ISSUED')
+  const mine = db.tickets.filter((x) => x.user_id === userId && x.status === 'ISSUED' && !isOnsiteTicket(db, x))
     .map((x) => ({ x, e: evOf(x.event_id) }))
     .filter(({ e }) => e && e.status !== 'CANCELLED' && !isEventOver(e) && new Date(e.starts_at).getTime() <= t + 24 * H)
     .sort((a, b) => a.e!.starts_at.localeCompare(b.e!.starts_at) || (a.x.entry_number ?? 0) - (b.x.entry_number ?? 0))

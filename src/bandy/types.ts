@@ -71,6 +71,8 @@ export interface EventRow {
   schedule_changed_at?: Timestamp | null // [편의] 일시·장소가 바뀐 시각(이전 예매자는 유지 또는 환불 요청 선택)
   previous_starts_at?: Timestamp | null // 바뀌기 전 일시
   previous_venue_name?: string | null // 바뀌기 전 장소
+  presale_ends_at?: Timestamp | null // 사전 예매(온라인) 마감. 비우면 공연 전날 24시
+  onsite_ends_at?: Timestamp | null // 현장 판매 종료. 비우면 공연 시작 + 3시간
   // [11/1 추가] 입금자명 방식 결제 안내
   bank_name: string
   account_number: string
@@ -104,6 +106,7 @@ export interface Booking {
   expires_at: Timestamp
   confirmed_at: Timestamp | null
   change_ack_at?: Timestamp | null // [편의] 일정 변경을 확인하고 '유지'를 고른 시각
+  channel?: 'ONLINE' | 'ONSITE' // 판매 경로: 사전 예매 / 운영진이 등록한 현장 판매
   cancelled_at: Timestamp | null
   idempotency_key: string
   request_hash: string
@@ -127,7 +130,7 @@ export type PaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'REFUND_PENDING
 export interface Payment {
   id: Uuid
   booking_id: Uuid
-  provider: 'BANK_TRANSFER' | 'TOSS' // [11/1 추가] 12월 공연은 BANK_TRANSFER
+  provider: 'BANK_TRANSFER' | 'TOSS' | 'ONSITE_CASH' | 'ONSITE_TRANSFER' // [11/1] 사전 예매는 BANK_TRANSFER, [11/18] 현장 판매는 ONSITE_CASH · ONSITE_TRANSFER
   environment: 'TEST' | 'LIVE'
   provider_order_id: string
   provider_payment_key: string | null

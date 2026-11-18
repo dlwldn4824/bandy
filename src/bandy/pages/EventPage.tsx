@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useBandy } from '../store'
 import { loginHref } from '../convenience'
 import { device } from '../device'
-import { durationMinutes, eventEnd, hasBookingFor, isEventOver, isEventStaff, isPastEvent, publicEvents, remaining, ticketTypesOf, uid } from '../repo'
+import { durationMinutes, eventEnd, onsiteEnd, presaleEnd, hasBookingFor, isEventOver, isEventStaff, isPastEvent, publicEvents, remaining, ticketTypesOf, uid } from '../repo'
 import { Empty, PageHeader, Thumb } from '../components'
 import { dateLabel, timeRange, won } from '../format'
 
@@ -18,10 +18,12 @@ function useVisibleEvent() {
 }
 
 // 예매 가능 여부와 버튼 문구
-function bookingState(event: { status: string; starts_at: string }, left: number) {
+function bookingState(event: { status: string; starts_at: string; presale_ends_at?: string | null }, left: number) {
   if (event.status === 'CANCELLED') return { open: false, label: '취소된 공연' }
   if (event.status !== 'PUBLISHED') return { open: false, label: '공개 전' }
   if (isPastEvent(event)) return { open: false, label: '예매 마감' }
+  // 사전 예매(온라인)는 마감 시각까지. 그 뒤는 현장 구매(11/18 팀 논의)
+  if (new Date(presaleEnd(event)).getTime() <= Date.now()) return { open: false, label: '사전 예매 마감 · 현장 구매' }
   if (left <= 0) return { open: false, label: '매진' }
   return { open: true, label: '' }
 }
@@ -60,6 +62,7 @@ export function EventPage() {
           <dt>일시</dt><dd>{timeRange(event.starts_at, eventEnd(event))} <span className="b-sub">({durationMinutes(event)}분)</span></dd>
           <dt>장소</dt><dd>{event.venue_name}{event.address ? <span className="b-sub"><br />{event.address}</span> : null}</dd>
           <dt>티켓</dt><dd>{types.map((t) => `${t.name} ${won(t.price_krw)}`).join(' / ')} · 남은 {left}석</dd>
+          <dt>판매</dt><dd>사전 예매 {dateLabel(presaleEnd(event))}까지 <span className="b-sub"><br />현장 판매 공연 당일 ~ {dateLabel(onsiteEnd(event))}</span></dd>
           <dt>주최</dt><dd>{club ? <><Link className="b-link" to={`/app/c/${club.id}`}>{club.name}</Link> <span className="b-sub">{club.school}</span></> : event.account_holder}</dd>
         </dl>
       </section>

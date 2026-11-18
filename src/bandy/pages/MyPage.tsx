@@ -136,7 +136,7 @@ export function MyPage() {
   // 부원(MEMBER)으로 가입했거나 가입 신청 중인 동아리
   const joined = db.club_memberships.filter((m) => m.user_id === me.id && m.role === 'MEMBER' && (m.status === 'ACTIVE' || m.status === 'PENDING'))
   const pendingClubs = me.is_admin ? db.clubs.filter((c) => c.status === 'PENDING') : []
-  const bookings = db.bookings.filter((b) => b.user_id === me.id && b.status !== 'CANCELLED').sort((a, b) => b.created_at.localeCompare(a.created_at))
+  const bookings = db.bookings.filter((b) => b.user_id === me.id && b.status !== 'CANCELLED' && b.channel !== 'ONSITE').sort((a, b) => b.created_at.localeCompare(a.created_at))
   const unread = db.notifications.filter((n) => n.user_id === me.id && !n.read_at).length
 
   const saveSetting = (next: NotifySettings) => {

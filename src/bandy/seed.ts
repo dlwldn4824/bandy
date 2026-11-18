@@ -44,6 +44,12 @@ function kstAt(daysFromToday: number, hh: number, mm: number) {
   return d.toISOString()
 }
 
+// 사전 예매 기본 마감: 공연 전날 24시(한국 시간)
+function presaleDefault(startsAt: string) {
+  const kst = new Date(new Date(startsAt).getTime() + 9 * 3600000)
+  return new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()) - 9 * 3600000).toISOString()
+}
+
 const STARTS: Record<string, string> = {
   'ev-rexa': kstAt(12, 19, 0),
   'ev-sound': kstAt(18, 18, 30),
@@ -55,7 +61,7 @@ const STARTS: Record<string, string> = {
 function ticketType(id: string, event_id: string, name: string, price_krw: number, capacity: number) {
   return {
     id, event_id, name, price_krw, capacity, reserved_quantity: 0, sold_quantity: 0,
-    sales_starts_at: T0, sales_ends_at: STARTS[event_id], status: 'ACTIVE' as const,
+    sales_starts_at: T0, sales_ends_at: presaleDefault(STARTS[event_id]), status: 'ACTIVE' as const,
     created_at: T0, updated_at: T0,
   }
 }
