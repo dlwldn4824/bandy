@@ -110,7 +110,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
         </div>
         <p className="b-sub">{timeRange(event.starts_at, eventEnd(event))} · {event.venue_name}{isEventOver(event) ? ' · 지난 공연' : isPastEvent(event) ? ' · 진행 중' : ''}</p>
         <p className="b-sub">입금 대기 {pending.length}건 · 발급 티켓 {tickets.length}장 · 입장 {tickets.filter((t) => t.status === 'CHECKED_IN').length}장</p>
-        <p className="b-sub">판매: 사전 예매 {online.n}장 {won(online.won)} · 현장 현금 {cash.n}장 {won(cash.won)} · 현장 이체 {transfer.n}장 {won(transfer.won)}</p>
+        <p className="b-sub">판매: 사전 예매 {online.n}장 {online.won.toLocaleString('ko-KR')}원 · 현장 현금 {cash.n}장 {cash.won.toLocaleString('ko-KR')}원 · 현장 이체 {transfer.n}장 {transfer.won.toLocaleString('ko-KR')}원</p>
         <p className="b-note">사전 예매 마감 {dateLabel(presaleEnd(event))} · 현장 판매 공연 당일 ~ {dateLabel(onsiteEnd(event))}</p>
         <div className="b-row">
           <Link className="b-btn small" to={`/app/scan/${event.id}`}>입장 관리 (QR)</Link>
