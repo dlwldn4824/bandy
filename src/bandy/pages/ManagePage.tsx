@@ -190,7 +190,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
                 const overdue = isOverdue(b, db)
                 return (
                   <article key={b.id} className="b-card b-pad b-stack">
-                    <div className="b-row between"><strong>입금자명 {pay?.depositor_name}</strong><span className="b-status wait">{overdue ? '기한 지남' : pay?.depositor_notified_at ? '입금했다고 알림' : '입금 대기'}</span></div>
+                    <div className="b-row between"><strong>입금자명 {pay?.depositor_name} <span className="b-sub">· 주문 {pay?.provider_order_id.slice(-4)}</span></strong><span className="b-status wait">{overdue ? '기한 지남' : pay?.depositor_notified_at ? '입금했다고 알림' : '입금 대기'}</span></div>
                     <p className="b-sub">{nameOf(b.user_id)} · {item?.ticket_type_name} {item?.quantity}매 · {won(b.total_amount_krw)} · 기한 {dateLabel(b.expires_at)}</p>
                     {overdue
                       ? <p className="b-note">입금 기한이 지나 입금 확인을 할 수 없어요. 자리는 자동으로 풀려요.</p>
@@ -200,7 +200,7 @@ function EventManage({ eventId, onDeleted }: { eventId: string; onDeleted: () =>
                             const r = await call((x) => x.confirmDeposit(b.id))
                             showToast(!r.ok ? r.error : r.value === 'EXPIRED' ? '입금 기한이 지나 만료된 예매예요. 자리가 풀렸어요.' : '입금 확인했어요. 티켓이 발급됐어요.')
                           }}>입금 확인</button>
-                          <button type="button" className="b-btn ghost small" onClick={() => act((x) => x.cancelBooking(b.id), '예매를 취소했어요.')}>취소</button>
+                          <button type="button" className="b-btn ghost small" onClick={async () => { if (await ask(`입금자명 ${pay?.depositor_name}의 예매를 취소할까요? 예매자에게 알림이 가고 되돌릴 수 없어요.`)) act((x) => x.cancelBooking(b.id), '예매를 취소했어요.') }}>취소</button>
                         </div>
                       )}
                   </article>
@@ -281,6 +281,10 @@ function EventForm({ clubId, event, onDone }: { clubId: string; event?: EventRow
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value })
 
   const save = async (publish: boolean) => {
+    // 빈 칸이 0으로 바뀌어 무료 공연으로 공개되는 일을 막는다
+    if (String(f.price_krw).trim() === '') { setError('가격을 입력하세요. (무료면 0)'); return }
+    if (String(f.capacity).trim() === '') { setError('정원을 입력하세요.'); return }
+    if (String(f.duration_minutes).trim() === '') { setError('진행 시간을 입력하세요. (분 단위, 예: 120)'); return }
     const input = {
       ...f, starts_at: f.starts_at ? `${f.starts_at}:00+09:00` : '', price_krw: Number(f.price_krw), capacity: Number(f.capacity),
       duration_minutes: Number(f.duration_minutes),

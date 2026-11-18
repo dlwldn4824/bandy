@@ -65,9 +65,9 @@ select test.ok((select count(*) from public.notifications where type = 'CLUB_STA
 -- 3. 공연 등록 · 수정 · 공개
 :as_o1
 select test.fails($$select public.create_event('$$ || :'c1' || $$', '{"title":"겨울 공연","starts_at":"2026-12-12T19:00+09","price_krw":6000,"capacity":3,"publish":true}')$$, '유료 공개는 장소·계좌 필요');
-select public.create_event(:'c1', '{"title":"겨울 공연","category":"공연","starts_at":"2026-12-12T19:00+09","venue_name":"라이브홀","price_krw":6000,"capacity":3,"bank_name":"카카오뱅크","account_number":"3333-00","publish":true}') as ev \gset
+select public.create_event(:'c1', '{"title":"겨울 공연","category":"공연","starts_at":"2026-12-12T19:00+09","venue_name":"라이브홀","price_krw":6000,"capacity":3,"bank_name":"카카오뱅크","account_number":"3333-00-123456","publish":true}') as ev \gset
 select id as tt from public.ticket_types where event_id = :'ev' \gset
-select public.update_event(:'ev', '{"title":"겨울 연합 공연","category":"공연","starts_at":"2026-12-12T19:00+09","venue_name":"라이브홀","price_krw":6000,"capacity":3,"bank_name":"카카오뱅크","account_number":"3333-00"}');
+select public.update_event(:'ev', '{"title":"겨울 연합 공연","category":"공연","starts_at":"2026-12-12T19:00+09","venue_name":"라이브홀","price_krw":6000,"capacity":3,"bank_name":"카카오뱅크","account_number":"3333-00-123456"}');
 select test.ok((select title from public.events where id = :'ev') = '겨울 연합 공연', '공연 수정');
 :as_o2
 select test.fails($$select public.update_event('$$ || :'ev' || $$', '{"title":"x","starts_at":"2026-12-12T19:00+09","capacity":3}')$$, '다른 동아리 공연 수정 불가');
@@ -124,7 +124,8 @@ select public.issue_ticket_qr(:'t1') as qr \gset
 select test.fails($$select public.issue_ticket_qr('$$ || :'t1' || $$')$$, '남의 티켓 QR 발급 불가');
 select test.fails($$select public.verify_ticket('$$ || :'ev' || $$', '$$ || :'qr' || $$')$$, '다른 동아리는 검증 불가');
 :as_o1
-select test.ok(public.verify_ticket(:'ev', :'old_qr') ->> 'result' = 'invalid', '재발급 전 QR은 무효');
+select test.ok(public.verify_ticket(:'ev', :'old_qr') ->> 'result' = 'valid', '다시 열기 전 QR도 유효(친구에게 보낸 QR · 저장 QR 보호)');
+select test.ok(public.verify_ticket(:'ev', upper(:'qr')) ->> 'result' = 'valid', 'QR 직접 입력은 대소문자 무시');
 select test.ok(public.verify_ticket(:'ev', :'qr') ->> 'owner_name' = 'audience', '검증: 관객 정보 확인');
 select test.ok((select status from public.tickets where id = :'t1') = 'ISSUED', '검증만으로는 입장 처리 안 됨');
 select test.ok(public.check_in(:'ev', :'qr') ->> 'result' = 'valid', '입장 처리');
@@ -175,7 +176,7 @@ select test.ok((select count(*) from public.notifications where read_at is null)
 select public.update_profile('김관객');
 select test.ok((select display_name from public.profiles where id = auth.uid()) = '김관객', '표시 이름 수정');
 :as_o1
-select public.create_event(:'c1', '{"title":"지울 공연","starts_at":"2027-01-01T19:00+09","capacity":10}') as ev3 \gset
+select public.create_event(:'c1', '{"title":"지울 공연","starts_at":"2027-01-01T19:00+09","capacity":10,"price_krw":0}') as ev3 \gset
 select public.delete_event(:'ev3');
 select test.ok((select count(*) from public.events where id = :'ev3') = 0, '예매 없는 공연 삭제');
 
@@ -191,18 +192,19 @@ select test.ok((select count(*) from public.events where id = :'ev2') = 0, '예�
 select public.set_event_status(:'ev2', 'PUBLISHED');
 
 -- 12-2. 지난 공연: 공개·예매 불가
-select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"옛 공연","starts_at":"2020-01-01T19:00+09","venue_name":"홀","capacity":5,"publish":true}')$$, '지난 일시', '과거 일시로 공개 등록 불가');
+select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"옛 공연","starts_at":"2020-01-01T19:00+09","venue_name":"홀","capacity":5,"price_krw":0,"publish":true}')$$, '지난 일시', '과거 일시로 공개 등록 불가');
 select public.create_event(:'c1', '{"title":"유료 초안","starts_at":"2026-12-20T19:00+09","venue_name":"홀","price_krw":5000,"capacity":5}') as ev5 \gset
 select id as tt5 from public.ticket_types where event_id = :'ev5' \gset
 select test.fails_with($$select public.set_event_status('$$ || :'ev5' || $$', 'PUBLISHED')$$, '입금 계좌', '계좌 없는 유료 공연은 공개 전환 불가');
-select public.update_event(:'ev5', '{"title":"유료 공연","bank_name":"카카오뱅크","account_number":"3333-55"}');
+select public.update_event(:'ev5', '{"title":"유료 공연","bank_name":"카카오뱅크","account_number":"3333-55-123456"}');
 select test.ok((select price_krw from public.ticket_types where id = :'tt5') = 5000, '가격을 안 보내면 기존 가격 유지');
 select public.set_event_status(:'ev5', 'PUBLISHED');
 select test.fails_with($$select public.update_event('$$ || :'ev5' || $$', '{"account_number":""}')$$, '입금 계좌', '공개 중 유료 공연의 계좌 삭제 불가');
 select test.fails_with($$select public.set_event_status('$$ || :'ev5' || $$', 'OPEN')$$, '알 수 없는', '없는 상태값은 한국어로 거부');
 select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"x","starts_at":"2026-12-20T19:00+09","capacity":5,"price_krw":"abc"}')$$, '숫자로', '숫자 형식 오류는 한국어 안내');
 select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"x","starts_at":"내일","capacity":5}')$$, '일시 형식', '일시 형식 오류는 한국어 안내');
-select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"x","starts_at":"2026-12-20T19:00+09","capacity":5,"latitude":"200"}')$$, '좌표', '좌표 범위 오류는 한국어 안내');
+select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"x","starts_at":"2026-12-20T19:00+09","capacity":5,"price_krw":"","venue_name":"홀","publish":true}')$$, '가격을 입력', '가격 칸을 비우면 무료로 공개되지 않고 안내');
+select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"x","starts_at":"2026-12-20T19:00+09","capacity":5,"price_krw":0,"latitude":"200"}')$$, '좌표', '좌표 범위 오류는 한국어 안내');
 reset role;
 update public.events set starts_at = now() - interval '1 hour' where id = :'ev2';
 :as_v
@@ -331,7 +333,7 @@ select public.set_club_status(:'c1', 'ACTIVE');
 
 -- 12-10. 티켓 종류가 두 개인 공연 취소: 각 종류의 잡아 둔 수량을 각각 돌려준다
 :as_o1
-select public.create_event(:'c1', '{"title":"두 종류","starts_at":"2026-12-27T19:00+09","venue_name":"홀","price_krw":3000,"capacity":5,"bank_name":"b","account_number":"1","publish":true}') as ev6 \gset
+select public.create_event(:'c1', '{"title":"두 종류","starts_at":"2026-12-27T19:00+09","venue_name":"홀","price_krw":3000,"capacity":5,"bank_name":"b","account_number":"3333-01-111111","publish":true}') as ev6 \gset
 reset role;
 insert into public.ticket_types (event_id, name, price_krw, capacity, sales_ends_at)
   select :'ev6', '학생', 2000, 5, starts_at from public.events where id = :'ev6' returning id as tt6b \gset
@@ -349,7 +351,7 @@ select test.ok((select sum(reserved_quantity) from public.ticket_types where eve
 :as_anon
 select test.ok((public.my_home_state() ->> 'signed_in')::boolean = false, '비로그인 홈 신호');
 :as_o1
-select public.create_event(:'c1', jsonb_build_object('title', '오늘 공연', 'starts_at', (now() + interval '2 hours')::text, 'presale_ends_at', (now() + interval '2 hours')::text, 'venue_name', '홀', 'price_krw', 1000, 'capacity', 10, 'bank_name', '카카오뱅크', 'account_number', '3333-77', 'publish', true)) as ev7 \gset
+select public.create_event(:'c1', jsonb_build_object('title', '오늘 공연', 'starts_at', (now() + interval '2 hours')::text, 'presale_ends_at', (now() + interval '2 hours')::text, 'venue_name', '홀', 'price_krw', 1000, 'capacity', 10, 'bank_name', '카카오뱅크', 'account_number', '3333-77-123456', 'publish', true)) as ev7 \gset
 select id as tt7 from public.ticket_types where event_id = :'ev7' \gset
 select test.ok(public.my_home_state() ->> 'prompt' = 'STAFF_TODAY', '운영진: 오늘 공연 → 입장 관리 신호');
 :as_v
@@ -371,7 +373,7 @@ select test.ok((public.my_home_state() ->> 'unread_notifications')::int >= 1, '�
 
 -- 14. 시간 기준 정합성(입금 기한 · 공연 일정 변경 · QR 유효시간)
 :as_o1
-select public.create_event(:'c1', jsonb_build_object('title', '시간 시험', 'starts_at', (now() + interval '5 days')::text, 'venue_name', '홀', 'price_krw', 5000, 'capacity', 10, 'bank_name', 'b', 'account_number', '1', 'publish', true)) as ev8 \gset
+select public.create_event(:'c1', jsonb_build_object('title', '시간 시험', 'starts_at', (now() + interval '5 days')::text, 'venue_name', '홀', 'price_krw', 5000, 'capacity', 10, 'bank_name', 'b', 'account_number', '3333-01-111111', 'publish', true)) as ev8 \gset
 select id as tt8 from public.ticket_types where event_id = :'ev8' \gset
 :as_u
 select public.create_booking(:'tt8', 1, '김관객', 'time-1') as bk8a \gset
@@ -399,7 +401,7 @@ select public.update_event(:'ev8', jsonb_build_object('starts_at', (now() + inte
 :as_u
 select public.issue_ticket_qr(:'t8') is not null as x \gset
 reset role;
-select test.ok((select expires_at >= (select ends_at from public.events where id = :'ev8') from public.qr_credentials where ticket_id = :'t8' and revoked_at is null), '미리 받은 QR도 공연이 끝날 때까지 유효');
+select test.ok((select expires_at >= (select ends_at from public.events where id = :'ev8') from public.qr_credentials where ticket_id = :'t8' and revoked_at is null order by created_at desc limit 1), '미리 받은 QR도 공연이 끝날 때까지 유효');
 :as_v
 select public.mark_deposit_sent(:'bk8b');
 select public.cancel_booking(:'bk8b');
@@ -408,7 +410,7 @@ select test.ok((select count(*) from public.notifications where type = 'BOOKING_
 
 -- 15. 진행 시간 · 일정 변경 후 유지/환불 요청 · 공연 취소 환불
 :as_o1
-select public.create_event(:'c1', jsonb_build_object('title', '진행 시간', 'starts_at', (now() + interval '2 days')::text, 'duration_minutes', 90, 'venue_name', '홀', 'price_krw', 4000, 'capacity', 10, 'bank_name', 'b', 'account_number', '1', 'publish', true)) as ev9 \gset
+select public.create_event(:'c1', jsonb_build_object('title', '진행 시간', 'starts_at', (now() + interval '2 days')::text, 'duration_minutes', 90, 'venue_name', '홀', 'price_krw', 4000, 'capacity', 10, 'bank_name', 'b', 'account_number', '3333-01-111111', 'publish', true)) as ev9 \gset
 select test.ok((select ends_at - starts_at from public.events where id = :'ev9') = interval '90 minutes', '진행 시간 90분 → 끝 시각');
 select test.fails_with($$select public.create_event('$$ || :'c1' || $$', '{"title":"x","starts_at":"2026-12-20T19:00+09","capacity":5,"duration_minutes":5}')$$, '진행 시간', '진행 시간 10분 미만 거부');
 select id as tt9 from public.ticket_types where event_id = :'ev9' \gset
@@ -451,12 +453,12 @@ select test.ok(coalesce(public.my_home_state() ->> 'prompt', '') <> 'EVENT_CHANG
 select public.confirm_deposit(:'bk9b');
 select public.set_event_status(:'ev9', 'CANCELLED');
 :as_v
-select public.request_refund(:'bk9b', '국민 123-45 이준');
+select public.request_refund(:'bk9b', '국민 123-456-78 이준');
 select test.ok((select status from public.payments where booking_id = :'bk9b') = 'REFUND_PENDING', '공연 취소 후 환불 요청');
 
 -- 16. 3차 검토 반영
 :as_o1
-select public.create_event(:'c1', jsonb_build_object('title', '현장 입금', 'starts_at', (now() + interval '1 hour')::text, 'presale_ends_at', (now() + interval '1 hour')::text, 'duration_minutes', 120, 'venue_name', '홀', 'price_krw', 3000, 'capacity', 4, 'bank_name', 'b', 'account_number', '1', 'publish', true)) as ev10 \gset
+select public.create_event(:'c1', jsonb_build_object('title', '현장 입금', 'starts_at', (now() + interval '1 hour')::text, 'presale_ends_at', (now() + interval '1 hour')::text, 'duration_minutes', 120, 'venue_name', '홀', 'price_krw', 3000, 'capacity', 4, 'bank_name', 'b', 'account_number', '3333-01-111111', 'publish', true)) as ev10 \gset
 select id as tt10 from public.ticket_types where event_id = :'ev10' \gset
 :as_v
 select public.create_booking(:'tt10', 2, '이준', 'door-1') as bk10 \gset
@@ -511,7 +513,7 @@ select test.fails_with($$select public.issue_ticket_qr('$$ || :'t10' || $$')$$, 
 
 -- 17. 오타 · 실수 바로잡기(FAQ 교차검증)
 :as_o1
-select public.create_event(:'c1', jsonb_build_object('title', '실수 시험', 'starts_at', (now() + interval '3 days')::text, 'venue_name', '홀', 'price_krw', 2000, 'capacity', 5, 'bank_name', '카카오뱅크', 'account_number', '3333-오타', 'publish', true)) as ev12 \gset
+select public.create_event(:'c1', jsonb_build_object('title', '실수 시험', 'starts_at', (now() + interval '3 days')::text, 'venue_name', '홀', 'price_krw', 2000, 'capacity', 5, 'bank_name', '카카오뱅크', 'account_number', '3333-01-오타9999', 'publish', true)) as ev12 \gset
 select id as tt12 from public.ticket_types where event_id = :'ev12' \gset
 select test.fails_with($$select public.create_event('$$ || :'c1' || $$', jsonb_build_object('title', repeat('가', 61), 'starts_at', '2026-12-20T19:00+09', 'capacity', 5))$$, '60자', '공연명 60자 제한');
 select public.update_club(:'c1', '{"sns_url":"instagram.com/rexa_band"}');
@@ -557,7 +559,8 @@ select test.ok((select reserved_quantity = 0 and sold_quantity = 3 from public.t
 -- 환불 계좌 수정
 select public.set_event_status(:'ev12', 'CANCELLED');
 :as_v
-select public.request_refund(:'bk13', '국민 123 오타');
+select public.request_refund(:'bk13', '국민 123-456 오타');
+select test.fails_with($$select public.update_refund_account('$$ || :'bk13' || $$', 'asdfg')$$, '환불받을 계좌', '숫자 없는 환불 계좌 거부');
 select public.update_refund_account(:'bk13', '국민 123-45-678 이준');
 select test.ok((select refund_account from public.payments where booking_id = :'bk13') = '국민 123-45-678 이준', '환불 계좌 오타 수정');
 -- 회장 넘기기
@@ -573,7 +576,7 @@ select public.transfer_ownership((select id from public.club_memberships where c
 
 -- 18. 사전 예매 마감 · 현장 판매(11/18 팀 논의)
 :as_o1
-select public.create_event(:'c1', jsonb_build_object('title', '당일 공연', 'starts_at', (now() + interval '3 hours')::text, 'venue_name', '홀', 'price_krw', 5000, 'capacity', 3, 'bank_name', 'b', 'account_number', '1', 'publish', true)) as ev14 \gset
+select public.create_event(:'c1', jsonb_build_object('title', '당일 공연', 'starts_at', (now() + interval '5 minutes')::text  /* 한국 시간 23:55 이후에는 다음 날이 되어 실패할 수 있음 */, 'venue_name', '홀', 'price_krw', 5000, 'capacity', 3, 'bank_name', 'b', 'account_number', '3333-01-111111', 'publish', true)) as ev14 \gset
 select id as tt14 from public.ticket_types where event_id = :'ev14' \gset
 reset role;
 select test.ok((select sales_ends_at from public.ticket_types where id = :'tt14') = public._default_presale_end((select starts_at from public.events where id = :'ev14')), '사전 예매 기본 마감 = 공연 전날 24시');
@@ -598,7 +601,85 @@ select test.fails_with($$select public.record_onsite_sale('$$ || :'ev15' || $$',
 select public.update_event(:'ev15', jsonb_build_object('presale_ends_at', (now() + interval '3 days')::text));
 select test.ok((select sales_ends_at from public.ticket_types where event_id = :'ev15') <= now() + interval '3 days', '운영진이 사전 예매 마감을 직접 입력');
 select test.fails_with($$select public.update_event('$$ || :'ev15' || $$', jsonb_build_object('presale_ends_at', (now() + interval '8 days')::text))$$, '공연 시작 전', '사전 예매 마감은 공연 시작 전');
+
+-- 19. FAQ 교차검증(독립 에이전트 75개 시나리오) 반영
+:as_o1
+select public.create_event(:'c1', jsonb_build_object('title', '무료 시험', 'starts_at', (now() + interval '4 days')::text, 'venue_name', '홀', 'price_krw', 0, 'capacity', 30, 'publish', true)) as ev16 \gset
+select id as tt16 from public.ticket_types where event_id = :'ev16' \gset
+select test.fails_with($$select public.create_event('$$ || :'c1' || $$', jsonb_build_object('title', '먼 미래', 'starts_at', '2099-01-01T19:00+09', 'venue_name', '홀', 'price_krw', 0, 'capacity', 5, 'publish', true))$$, '2년 안', '2099년 같은 연도 오타 공개 막음');
+select test.fails_with($$select public.create_event('$$ || :'c1' || $$', jsonb_build_object('title', '계좌 오타', 'starts_at', (now() + interval '4 days')::text, 'venue_name', '홀', 'price_krw', 1000, 'capacity', 5, 'account_number', 'abc', 'publish', true))$$, '숫자 6자리', '계좌번호 형식 검사');
+:as_u
+select public.create_booking(:'tt16', 6, '', 'free-1') as bk16 \gset
+select test.fails_with($$select public.create_booking('$$ || :'tt16' || $$', 5, '', 'free-2')$$, '10장까지', '한 사람이 한 공연에 10장까지(무료 반복 신청 독점 방지)');
+select public.cancel_booking(:'bk16');
+select test.ok((select status from public.bookings where id = :'bk16') = 'CANCELLED', '무료 신청은 확정 뒤에도 본인이 취소');
+reset role;
+select test.ok((select sold_quantity from public.ticket_types where id = :'tt16') = 0, '무료 신청 취소 → 자리 반환');
+-- QR 분실 대비 전부 무효
+:as_u
+select public.create_booking(:'tt16', 1, '', 'free-3') as bk16b \gset
+select id as t16 from public.tickets where booking_id = :'bk16b' \gset
+select public.issue_ticket_qr(:'t16') as q16 \gset
+select public.revoke_ticket_qrs(:'t16');
+:as_o1
+select test.ok(public.verify_ticket(:'ev16', :'q16') ->> 'result' = 'invalid', '"이전 QR 모두 무효"를 누르면 퍼진 QR 무효');
+-- 비공개 전환 알림, 끝난 공연 취소 막기
+select public.set_event_status(:'ev16', 'DRAFT');
+select public.set_event_status(:'ev16', 'PUBLISHED');
+:as_u
+select test.ok((select count(*) from public.notifications where type = 'EVENT_HIDDEN' and event_id = :'ev16') = 1, '비공개로 바뀌면 예매자 알림');
+reset role;
+update public.events set starts_at = now() - interval '3 hours', ends_at = now() - interval '1 hour' where id = :'ev16';
+:as_o1
+select test.fails_with($$select public.set_event_status('$$ || :'ev16' || $$', 'CANCELLED')$$, '끝난 공연은 취소', '끝난 공연 취소 막음(노쇼 환불 방지)');
+select public.update_event(:'ev16', '{"venue_name":"홀 2층"}');
+select test.ok((select venue_name from public.events where id = :'ev16') = '홀 2층', '공연 시작 뒤에도 장소·계좌 오타는 고칠 수 있음');
+-- 이름 길이, 입금했어요 기한 문구
+:as_u
+select test.fails_with($$select public.update_profile(repeat('가', 21))$$, '20자까지', '이름 20자 넘으면 안내(조용히 자르지 않음)');
+-- 동아리 이름: 보이지 않는 문자·띄어쓰기만 다른 사칭
+:as_v
+select test.fails_with($$select public.create_club(jsonb_build_object('name', '렉' || chr(8203) || '사'))$$, '이미 등록된', '보이지 않는 문자를 넣은 같은 이름 막음');
+select test.fails_with($$select public.create_club('{"name":"렉 사"}')$$, '이미 등록된', '띄어쓰기만 다른 같은 이름 막음');
+-- 거절된 동아리 다시 신청
+select public.create_club('{"name":"재신청밴드"}') as c9 \gset
+:as_admin
+select public.set_club_status(:'c9', 'REJECTED');
+:as_v
+select test.ok(public.create_club('{"name":"재신청밴드","introduction":"보완했어요"}') = :'c9'::uuid, '거절된 내 동아리를 같은 이름으로 다시 신청');
+reset role;
+select test.ok((select status from public.clubs where id = :'c9') = 'PENDING', '다시 승인 대기');
+-- 교류: 거절 뒤 7일, 수락한 교류 끊기
+:as_o2
+select public.update_club(:'c2', '{"exchange_open":true}');
+:as_admin
+select public.set_club_status(:'c3', 'ACTIVE');
+:as_u
+select public.update_club(:'c3', '{"exchange_open":true}');
+select public.request_exchange(:'c3', :'c2', 'PRACTICE') as ex3 \gset
+:as_o2
+select public.respond_exchange(:'ex3', false);
+:as_u
+select test.fails_with($$select public.request_exchange('$$ || :'c3' || $$', '$$ || :'c2' || $$', 'PRACTICE')$$, '7일', '거절된 교류는 7일 뒤 재신청');
+:as_o2
+select public.cancel_exchange((select id from public.exchange_requests where status = 'ACCEPTED' and :'c2' in (from_club_id, to_club_id) limit 1));
+select test.ok((select count(*) from public.exchange_requests where status = 'ACCEPTED' and :'c2' in (from_club_id, to_club_id)) = 0, '수락한 교류 끊기(받은 쪽도 가능)');
+-- 동아리 정지 → 예매자 알림 · 환불 요청
+:as_o2
+select public.create_event(:'c2', jsonb_build_object('title', '정지 시험', 'starts_at', (now() + interval '5 days')::text, 'venue_name', '홀', 'price_krw', 1000, 'capacity', 5, 'bank_name', 'b', 'account_number', '3333-01-222222', 'publish', true)) as ev17 \gset
+:as_u
+select public.create_booking((select id from public.ticket_types where event_id = :'ev17'), 1, '김관객', 'susp-x') as bk17 \gset
+:as_o2
+select public.confirm_deposit(:'bk17');
+:as_admin
+select public.set_club_status(:'c2', 'SUSPENDED');
+:as_u
+select test.ok((select count(*) from public.notifications where type = 'CLUB_SUSPENDED' and event_id = :'ev17') = 1, '동아리 정지 → 예매자 알림');
+select public.request_refund(:'bk17', '카카오뱅크 3333-01-123456 김관객');
+select test.ok((select status from public.payments where booking_id = :'bk17') = 'REFUND_PENDING', '정지된 동아리 공연은 환불 요청 가능');
+:as_admin
+select public.set_club_status(:'c2', 'ACTIVE');
 reset role;
 select test.ok((select count(*) from public.audit_logs where action = 'CHECK_IN') = 2
-  and (select count(*) from public.audit_logs where action = 'CONFIRM_DEPOSIT') = 8, '입금 확인 8건·입장 2건 감사 기록(테스트 시나리오와 정확히 일치)');
+  and (select count(*) from public.audit_logs where action = 'CONFIRM_DEPOSIT') = 9, '입금 확인 9건·입장 2건 감사 기록(테스트 시나리오와 정확히 일치)');
 \echo 'ALL TESTS PASSED'

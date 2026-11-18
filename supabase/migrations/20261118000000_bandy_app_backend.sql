@@ -214,7 +214,8 @@ create table if not exists public.qr_credentials (
   created_at timestamptz not null default now(),
   check (expires_at > created_at)
 );
-create unique index if not exists qr_one_active on public.qr_credentials (ticket_id) where revoked_at is null;
+-- [11/18] 티켓을 다시 열어도 이전 QR을 무효로 하지 않는다(티켓은 한 번만 입장 처리되므로 안전). 그래서 '티켓당 유효 QR 1개' 인덱스는 없앤다
+drop index if exists public.qr_one_active;
 
 create table if not exists public.event_staff (
   id uuid primary key default gen_random_uuid(),
@@ -478,10 +479,20 @@ begin
   -- 'instagram.com/abc'처럼 앞부분 없이 쓴 주소는 https://를 붙여 준다(javascript: 같은 다른 스킴은 그대로 거부)
   if v <> '' and v !~* '^[a-z][a-z0-9+.-]*:' and v ~* '^[a-z0-9-]+(\.[a-z0-9-]+)+(/|$)' then v := 'https://' || v; end if;
   if v <> '' and (v !~* '^https?://[^\s/]+' or length(v) > 300) then
-    raise exception '%은(는) http:// 또는 https://로 시작하는 주소만 쓸 수 있습니다.', p_label using errcode = '22023';
+    raise exception '% 주소를 확인해 주세요. (http:// 또는 https://로 시작하는 주소)', p_label using errcode = '22023';
   end if;
   return v;
 end;
+$$;
+
+-- 동아리 이름 정리: 보이지 않는 문자(폭 없는 공백 등) 제거, 공백 하나로. 비교용 키는 공백 없이 소문자
+create or replace function public._club_name(p_name text) returns text
+language sql immutable set search_path = '' as $$
+  select regexp_replace(btrim(regexp_replace(coalesce(p_name, ''), '[\u200B-\u200D\u2060\uFEFF\u00AD]', '', 'g')), '\s+', ' ', 'g');
+$$;
+create or replace function public._club_key(p_name text) returns text
+language sql immutable set search_path = '' as $$
+  select lower(regexp_replace(public._club_name(p_name), '\s', '', 'g'));
 $$;
 
 -- 글자 수 제한: 너무 긴 입력(붙여넣기 실수 등)을 한국어로 막는다. p_limits = {"칸 이름": [최대 글자, "화면 이름"]}
@@ -547,18 +558,29 @@ create or replace function public.update_profile(p_display_name text) returns vo
 language plpgsql security definer set search_path = '' as $$
 begin
   perform public._require_login();
-  if length(btrim(p_display_name)) = 0 then raise exception '이름을 입력하세요.' using errcode = '22023'; end if;
+  if length(btrim(coalesce(p_display_name, ''))) = 0 then raise exception '이름을 입력하세요.' using errcode = '22023'; end if;
+  if length(btrim(p_display_name)) > 20 then raise exception '이름은 20자까지예요.' using errcode = '22023'; end if;
   update public.profiles set display_name = left(btrim(p_display_name), 20), updated_at = now() where id = auth.uid();
 end;
 $$;
 
 create or replace function public.create_club(p_input jsonb) returns uuid
 language plpgsql security definer set search_path = '' as $$
-declare v_uid uuid := public._require_active_profile(); v_id uuid; v_name text := btrim(coalesce(p_input ->> 'name', ''));
+declare v_uid uuid := public._require_active_profile(); v_id uuid; v_name text := public._club_name(p_input ->> 'name'); v_old public.clubs;
 begin
   if v_name = '' then raise exception '동아리 이름을 입력하세요.' using errcode = '22023'; end if;
   perform public._check_lengths(p_input, public._club_limits());
-  if exists (select 1 from public.clubs where name = v_name) then raise exception '이미 등록된 동아리 이름입니다.' using errcode = '23505'; end if;
+  -- 거절된 내 동아리를 같은 이름으로 다시 신청하면 그 동아리를 승인 대기로 되돌린다(재심사)
+  select * into v_old from public.clubs where public._club_key(name) = public._club_key(v_name) and status = 'REJECTED' and created_by = v_uid;
+  if found then
+    update public.clubs set status = 'PENDING', name = v_name, introduction = p_input ->> 'introduction',
+      sns_url = nullif(public._check_url(p_input ->> 'sns_url', 'SNS 링크'), ''), school = btrim(coalesce(p_input ->> 'school', '')),
+      genre = btrim(coalesce(p_input ->> 'genre', '')), region = btrim(coalesce(p_input ->> 'region', '')), updated_at = now() where id = v_old.id;
+    return v_old.id;
+  end if;
+  if exists (select 1 from public.clubs where public._club_key(name) = public._club_key(v_name)) then
+    raise exception '이미 등록된 동아리 이름입니다. (띄어쓰기·대소문자만 다른 이름도 같은 이름으로 봐요)' using errcode = '23505';
+  end if;
   -- [임시] 승인 대기 중인 등록은 한 사람당 1건(운영자가 수동 승인하므로 반복 등록 방지)
   if exists (select 1 from public.clubs where created_by = v_uid and status = 'PENDING') then
     raise exception '승인 대기 중인 동아리가 있어요. 승인 후에 추가로 등록할 수 있어요.' using errcode = 'P0001';
@@ -585,10 +607,10 @@ begin
     raise exception '운영이 정지된 동아리는 정보를 바꿀 수 없습니다.' using errcode = 'P0001';
   end if;
   if p_patch ? 'name' then
-    v_name := btrim(p_patch ->> 'name');
+    v_name := public._club_name(p_patch ->> 'name');
     if v_name = '' then raise exception '동아리 이름을 입력하세요.' using errcode = '22023'; end if;
     if length(v_name) > 40 then raise exception '동아리 이름은 40자까지입니다.' using errcode = '22023'; end if;
-    if exists (select 1 from public.clubs where name = v_name and id <> p_club_id) then raise exception '이미 등록된 동아리 이름입니다.' using errcode = '23505'; end if;
+    if exists (select 1 from public.clubs where public._club_key(name) = public._club_key(v_name) and id <> p_club_id) then raise exception '이미 등록된 동아리 이름입니다.' using errcode = '23505'; end if;
   end if;
   update public.clubs set
     name = coalesce(v_name, name),
@@ -624,6 +646,15 @@ begin
       when 'REJECTED' then v_club.name || ' 동아리 승인이 거절됐어요.'
       else v_club.name || ' 동아리가 승인 대기 상태로 바뀌었어요.' end,
       'club-status-' || p_club_id || '-' || p_status || '-' || gen_random_uuid());
+  end if;
+  -- 정지·거절되면 아직 끝나지 않은 공연의 예매자에게 알린다(환불 요청 가능)
+  if p_status in ('SUSPENDED', 'REJECTED') then
+    perform public._notify(x.user_id, x.event_id, 'CLUB_SUSPENDED',
+      '[' || x.title || '] 주최 동아리 운영이 중지돼 입금 확인·입장이 어려울 수 있어요. 내 티켓에서 환불을 요청할 수 있어요.',
+      'club-suspended-' || x.event_id || '-' || x.user_id || '-' || gen_random_uuid())
+    from (select distinct b.user_id, e.id as event_id, e.title from public.bookings b join public.events e on e.id = b.event_id
+          where e.club_id = p_club_id and b.status in ('PENDING_PAYMENT', 'CONFIRMED') and b.channel = 'ONLINE'
+            and public._event_end(e.starts_at, e.ends_at) > now()) x;
   end if;
 end;
 $$;
@@ -678,7 +709,11 @@ language plpgsql stable set search_path = '' as $$
 begin
   if btrim(coalesce(p_venue, '')) = '' then raise exception '공개하려면 장소가 필요합니다.' using errcode = '22023'; end if;
   if p_starts <= now() then raise exception '이미 지난 일시로는 공개할 수 없습니다.' using errcode = '22023'; end if;
+  if p_starts > now() + interval '2 years' then raise exception '2년 안의 일시만 공개할 수 있어요. 연도를 확인해 주세요.' using errcode = '22023'; end if;
   if p_price > 0 and btrim(coalesce(p_account, '')) = '' then raise exception '유료 공연은 입금 계좌가 필요합니다.' using errcode = '22023'; end if;
+  if p_price > 0 and length(regexp_replace(p_account, '[^0-9]', '', 'g')) < 6 then
+    raise exception '입금 계좌번호를 확인해 주세요. (숫자 6자리 이상)' using errcode = '22023';
+  end if;
 end;
 $$;
 
@@ -688,7 +723,7 @@ declare
   v_uid uuid := public._require_active_profile();
   v_id uuid;
   v_publish boolean := coalesce((p_input ->> 'publish')::boolean, false);
-  v_price bigint := coalesce(public._to_bigint(p_input ->> 'price_krw', '가격'), 0);
+  v_price bigint := public._to_bigint(p_input ->> 'price_krw', '가격');
   v_capacity bigint := coalesce(public._to_bigint(p_input ->> 'capacity', '정원'), 0);
   v_starts timestamptz := public._to_ts(p_input ->> 'starts_at');
   v_duration interval := public._duration(p_input ->> 'duration_minutes', 120);  -- 진행 시간(기본 2시간)
@@ -702,6 +737,7 @@ begin
   perform public._check_lengths(p_input, public._event_limits());
   if v_starts is null then raise exception '일시를 입력하세요.' using errcode = '22023'; end if;
   if v_capacity <= 0 or v_capacity > 100000 then raise exception '정원은 1~100000 사이여야 합니다.' using errcode = '22023'; end if;
+  if v_price is null then raise exception '가격을 입력하세요. (무료면 0)' using errcode = '22023'; end if;
   if v_price < 0 then raise exception '가격은 0원 이상이어야 합니다.' using errcode = '22023'; end if;
   if v_publish then perform public._check_publishable(p_input ->> 'venue_name', v_starts, v_price, p_input ->> 'account_number'); end if;
   -- 좌표: 실제로는 주소 → 좌표 변환(카카오 Local) 결과를 받는다. 없으면 null
@@ -758,14 +794,18 @@ begin
   perform public._check_lengths(p_input, public._event_limits());
   if v_price < 0 then raise exception '가격은 0원 이상이어야 합니다.' using errcode = '22023'; end if;
   if v_capacity <= 0 or v_capacity > 100000 then raise exception '정원은 1~100000 사이여야 합니다.' using errcode = '22023'; end if;
-  if v_price <> v_tt.price_krw and exists (select 1 from public.bookings where event_id = p_event_id and status <> 'CANCELLED') then
+  if v_price <> v_tt.price_krw and exists (select 1 from public.bookings where event_id = p_event_id and status in ('PENDING_PAYMENT', 'CONFIRMED')) then
     raise exception '예매가 있는 공연은 가격을 바꿀 수 없습니다.' using errcode = 'P0001';
   end if;
   if v_capacity < v_tt.reserved_quantity + v_tt.sold_quantity then raise exception '이미 예매된 수량보다 정원을 줄일 수 없습니다.' using errcode = 'P0001'; end if;
   if v_event.status = 'PUBLISHED' then
     if v_starts is distinct from v_event.starts_at or public._norm(v_venue) <> public._norm(v_event.venue_name)
        or v_price <> v_tt.price_krw or v_account is distinct from v_event.account_number then
-      perform public._check_publishable(v_venue, v_starts, v_price, v_account);
+      if v_starts is distinct from v_event.starts_at then
+        perform public._check_publishable(v_venue, v_starts, v_price, v_account);
+      else
+        perform public._check_publishable(v_venue, greatest(v_starts, now() + interval '1 minute'), v_price, v_account);
+      end if;
     end if;
   end if;
   update public.events set
@@ -801,7 +841,7 @@ begin
       case when v_starts is distinct from v_event.starts_at then '일시가 ' || to_char(v_starts at time zone 'Asia/Seoul', 'MM.DD HH24:MI') || '(으)로' else '' end ||
       case when v_starts is distinct from v_event.starts_at and public._norm(v_venue) <> public._norm(v_event.venue_name) then ', ' else '' end ||
       case when public._norm(v_venue) <> public._norm(v_event.venue_name) then '장소가 ' || coalesce(nullif(v_venue, ''), '미정') || '(으)로' else '' end || ' 바뀌었어요. 내 티켓에서 유지하거나 취소·환불을 요청할 수 있어요.',
-      'event-changed-' || p_event_id || '-' || b.user_id || '-' || md5(coalesce(v_starts::text, '') || v_venue))
+      'event-changed-' || p_event_id || '-' || b.user_id || '-' || gen_random_uuid())
     from (select distinct user_id from public.bookings where event_id = p_event_id and status in ('PENDING_PAYMENT', 'CONFIRMED')) b;
   end if;
   -- 입금 계좌를 고치면(오타 수정 등) 아직 입금 전인 예매자에게 새 계좌를 알린다
@@ -832,6 +872,14 @@ begin
   select * into v_event from public.events where id = p_event_id for update;
   if v_event.status = p_status then return; end if;
   if v_event.status = 'CANCELLED' then raise exception '취소된 공연은 다시 열 수 없습니다. 새로 등록해 주세요.' using errcode = 'P0001'; end if;
+  if p_status = 'CANCELLED' and public._event_end(v_event.starts_at, v_event.ends_at) <= now() then
+    raise exception '이미 끝난 공연은 취소할 수 없어요. 개별 환불은 예매자와 따로 정해 주세요.' using errcode = 'P0001';
+  end if;
+  if p_status = 'DRAFT' and v_event.status = 'PUBLISHED' then
+    perform public._notify(b.user_id, p_event_id, 'EVENT_HIDDEN', '[' || v_event.title || '] 공연 페이지가 비공개로 바뀌었어요. 예매와 티켓은 그대로예요.',
+      'event-hidden-' || p_event_id || '-' || b.user_id || '-' || gen_random_uuid())
+    from (select distinct user_id from public.bookings where event_id = p_event_id and status in ('PENDING_PAYMENT', 'CONFIRMED') and channel = 'ONLINE') b;
+  end if;
   if p_status = 'PUBLISHED' then
     select max(price_krw) into v_price from public.ticket_types where event_id = p_event_id;
     perform public._check_publishable(v_event.venue_name, v_event.starts_at, coalesce(v_price, 0), v_event.account_number);
@@ -907,6 +955,10 @@ begin
   -- 한 공연에 입금 대기 예매는 한 사람당 1건(입금 안 하고 여러 건으로 자리를 잡지 못하게)
   if exists (select 1 from public.bookings where user_id = v_uid and event_id = v_event.id and status = 'PENDING_PAYMENT') then
     raise exception '이 공연에 입금 대기 중인 예매가 있어요. 입금하거나 취소한 뒤 다시 예매해 주세요.' using errcode = 'P0001';
+  end if;
+  if (select coalesce(sum(i.quantity), 0) from public.bookings b join public.booking_items i on i.booking_id = b.id
+      where b.user_id = v_uid and b.event_id = v_event.id and b.status in ('PENDING_PAYMENT', 'CONFIRMED') and b.channel = 'ONLINE') + p_quantity > 10 then
+    raise exception '한 사람이 한 공연에 예매할 수 있는 표는 10장까지예요.' using errcode = 'P0001';
   end if;
   select * into v_tt from public.ticket_types where id = p_ticket_type_id;
   if v_tt.capacity - v_tt.reserved_quantity - v_tt.sold_quantity < p_quantity then raise exception '남은 자리가 부족합니다.' using errcode = 'P0001'; end if;
@@ -993,7 +1045,18 @@ begin
   perform public._expire_bookings(v_i.ticket_type_id);
   select * into v_b from public.bookings where id = p_booking_id for update;
   if v_b.status = 'EXPIRED' then return; end if;  -- 기한이 지나 방금 만료됨(자리 반환 완료). 취소와 결과가 같다
-  if v_b.status <> 'PENDING_PAYMENT' then raise exception '입금 확인 전 예매만 취소할 수 있습니다.' using errcode = 'P0001'; end if;
+  -- 무료 신청은 확정 뒤에도 취소할 수 있다(돈이 오가지 않음, 입장 전). 노쇼를 줄이고 자리를 다른 사람에게
+  if v_b.status = 'CONFIRMED' and v_b.total_amount_krw = 0 and v_b.channel = 'ONLINE' then
+    perform 1 from public.tickets where booking_id = p_booking_id order by id for update;
+    if exists (select 1 from public.tickets where booking_id = p_booking_id and status = 'CHECKED_IN') then
+      raise exception '이미 입장한 신청은 취소할 수 없어요.' using errcode = 'P0001';
+    end if;
+    update public.bookings set status = 'CANCELLED', cancelled_at = now(), updated_at = now() where id = p_booking_id;
+    update public.tickets set status = 'CANCELLED', updated_at = now() where booking_id = p_booking_id;
+    update public.ticket_types set sold_quantity = sold_quantity - v_i.quantity, updated_at = now() where id = v_i.ticket_type_id;
+    return;
+  end if;
+  if v_b.status <> 'PENDING_PAYMENT' then raise exception '입금 확인 전 예매만 취소할 수 있습니다. 확정된 예매는 주최 동아리에 문의해 주세요.' using errcode = 'P0001'; end if;
   update public.bookings set status = 'CANCELLED', cancelled_at = now(), updated_at = now() where id = p_booking_id;
   update public.payments set status = 'FAILED', failure_code = 'CANCELLED_BEFORE_DEPOSIT', updated_at = now() where booking_id = p_booking_id and status = 'PENDING';
   update public.ticket_types set reserved_quantity = reserved_quantity - v_i.quantity, updated_at = now() where id = v_i.ticket_type_id;
@@ -1026,7 +1089,6 @@ begin
   if exists (select 1 from public.events where id = v_t.event_id and public._event_end(starts_at, ends_at) <= now()) then
     raise exception '이미 끝난 공연의 티켓입니다.' using errcode = 'P0001';
   end if;
-  update public.qr_credentials set revoked_at = now() where ticket_id = p_ticket_id and revoked_at is null;
   insert into public.qr_credentials (ticket_id, token_hash, expires_at)
   -- 유효시간: 24시간과 '공연 끝 시각' 중 긴 쪽(최대 7일). 전날 받아 둔 QR도 공연장에서 쓸 수 있게
   values (p_ticket_id, encode(extensions.digest(v_token, 'sha256'), 'hex'),
@@ -1039,7 +1101,7 @@ $$;
 create or replace function public._ticket_by_token(p_event_id uuid, p_token text) returns public.tickets
 language sql stable security definer set search_path = '' as $$
   select t.* from public.qr_credentials q join public.tickets t on t.id = q.ticket_id
-  where q.token_hash = encode(extensions.digest(regexp_replace(coalesce(p_token, ''), '^\s+|\s+$', '', 'g'), 'sha256'), 'hex')
+  where q.token_hash = encode(extensions.digest(lower(regexp_replace(coalesce(p_token, ''), '^\s+|\s+$', '', 'g')), 'sha256'), 'hex')
     and q.revoked_at is null and q.expires_at > now() and t.event_id = p_event_id
     and exists (select 1 from public.events e where e.id = t.event_id and e.status <> 'CANCELLED');
 $$;
@@ -1198,6 +1260,10 @@ begin
   if not exists (select 1 from public.clubs where id = p_to_club_id and status = 'ACTIVE' and exchange_open) then
     raise exception '지금은 교류를 받지 않는 동아리입니다.' using errcode = 'P0001';
   end if;
+  if exists (select 1 from public.exchange_requests where from_club_id = p_from_club_id and to_club_id = p_to_club_id and status = 'REJECTED'
+             and responded_at > now() - interval '7 days') then
+    raise exception '거절된 신청은 7일 뒤에 다시 보낼 수 있어요.' using errcode = 'P0001';
+  end if;
   if exists (select 1 from public.exchange_requests where from_club_id = p_from_club_id and to_club_id = p_to_club_id and status = 'PENDING') then
     raise exception '이미 보낸 신청이 처리 대기 중입니다.' using errcode = '23505';
   end if;
@@ -1226,6 +1292,7 @@ begin
   if not found then raise exception '신청을 찾지 못했습니다.' using errcode = 'P0002'; end if;
   perform public._require_active_manager(v_r.to_club_id, '신청을 찾지 못했습니다.');
   if v_r.status <> 'PENDING' then raise exception '이미 처리한 신청입니다.' using errcode = 'P0001'; end if;
+  if v_r.created_by = auth.uid() then raise exception '신청한 사람이 직접 수락할 수는 없어요. 상대 동아리의 다른 운영진이 처리해 주세요.' using errcode = 'P0001'; end if;
   update public.exchange_requests set status = case when p_accept then 'ACCEPTED' else 'REJECTED' end,
     responded_by = auth.uid(), responded_at = now() where id = p_request_id;
   select name into v_to from public.clubs where id = v_r.to_club_id;
@@ -1242,8 +1309,11 @@ language plpgsql security definer set search_path = '' as $$
 declare v_r public.exchange_requests;
 begin
   select * into v_r from public.exchange_requests where id = p_request_id for update;
-  if not found or not public.is_club_manager(v_r.from_club_id) then raise exception '신청을 찾지 못했습니다.' using errcode = 'P0002'; end if;
-  if v_r.status <> 'PENDING' then raise exception '이미 처리한 신청입니다.' using errcode = 'P0001'; end if;
+  -- 대기 중인 신청은 보낸 쪽이 취소, 수락된 교류는 양쪽 누구나 끊기(오픈채팅 링크가 다시 안 보임)
+  if not found or not (public.is_club_manager(v_r.from_club_id) or (v_r.status = 'ACCEPTED' and public.is_club_manager(v_r.to_club_id))) then
+    raise exception '신청을 찾지 못했습니다.' using errcode = 'P0002';
+  end if;
+  if v_r.status not in ('PENDING', 'ACCEPTED') then raise exception '이미 처리한 신청입니다.' using errcode = 'P0001'; end if;
   update public.exchange_requests set status = 'CANCELLED' where id = p_request_id;
 end;
 $$;
@@ -1272,7 +1342,10 @@ begin
   perform public._require_login();
   select * into v_b from public.bookings where id = p_booking_id;
   if not found or v_b.user_id <> auth.uid() then raise exception '예매를 찾지 못했습니다.' using errcode = 'P0002'; end if;
-  if v_b.status <> 'PENDING_PAYMENT' or v_b.expires_at <= now() then raise exception '입금 대기 중인 예매가 아닙니다.' using errcode = 'P0001'; end if;
+  if v_b.status = 'PENDING_PAYMENT' and v_b.expires_at <= now() then
+    raise exception '입금 기한이 지났어요. 이미 입금했다면 주최 동아리에 문의해 주세요.' using errcode = 'P0001';
+  end if;
+  if v_b.status <> 'PENDING_PAYMENT' then raise exception '입금 대기 중인 예매가 아니에요.' using errcode = 'P0001'; end if;
   select * into v_pay from public.payments where booking_id = p_booking_id and status = 'PENDING' for update;
   if v_pay.depositor_notify_count > 0 and v_pay.updated_at > now() - interval '10 minutes' then
     raise exception '이미 알렸어요. 잠시 후 다시 눌러 주세요.' using errcode = 'P0001';
@@ -1309,11 +1382,12 @@ begin
   select * into v_b from public.bookings where id = p_booking_id;
   if not found or v_b.user_id <> auth.uid() then raise exception '예매를 찾지 못했습니다.' using errcode = 'P0002'; end if;
   select * into v_e from public.events where id = v_b.event_id;
-  if not (v_e.status = 'CANCELLED' or (v_e.schedule_changed_at is not null and v_e.schedule_changed_at > v_b.created_at)) then
+  if not (v_e.status = 'CANCELLED' or (v_e.schedule_changed_at is not null and v_e.schedule_changed_at > v_b.created_at)
+          or exists (select 1 from public.clubs c where c.id = v_e.club_id and c.status in ('SUSPENDED', 'REJECTED'))) then
     raise exception '공연이 취소되거나 일정이 바뀐 경우에만 환불을 요청할 수 있어요. 그 밖에는 주최 동아리에 문의해 주세요.' using errcode = 'P0001';
   end if;
   if v_e.status <> 'CANCELLED' and v_e.starts_at <= now() then raise exception '공연이 이미 시작됐어요.' using errcode = 'P0001'; end if;
-  if v_b.total_amount_krw > 0 and (length(v_acct) < 5 or length(v_acct) > 60) then
+  if v_b.total_amount_krw > 0 and (length(v_acct) < 5 or length(v_acct) > 60 or length(regexp_replace(v_acct, '[^0-9]', '', 'g')) < 6) then
     raise exception '환불받을 계좌(은행 · 계좌번호 · 예금주)를 적어 주세요.' using errcode = '22023';
   end if;
   select * into v_i from public.booking_items where booking_id = p_booking_id;
@@ -1444,7 +1518,7 @@ begin
   perform public._require_login();
   select * into v_b from public.bookings where id = p_booking_id;
   if not found or v_b.user_id <> auth.uid() then raise exception '예매를 찾지 못했습니다.' using errcode = 'P0002'; end if;
-  if length(v_acct) < 5 or length(v_acct) > 60 then raise exception '환불받을 계좌(은행 · 계좌번호 · 예금주)를 적어 주세요.' using errcode = '22023'; end if;
+  if length(v_acct) < 5 or length(v_acct) > 60 or length(regexp_replace(v_acct, '[^0-9]', '', 'g')) < 6 then raise exception '환불받을 계좌(은행 · 계좌번호 · 예금주)를 적어 주세요.' using errcode = '22023'; end if;
   update public.payments set refund_account = v_acct, updated_at = now() where booking_id = p_booking_id and status = 'REFUND_PENDING';
   if not found then raise exception '환불 대기 중인 예매만 계좌를 고칠 수 있어요.' using errcode = 'P0001'; end if;
 end;
@@ -1510,6 +1584,16 @@ begin
   update public.payments set status = 'PENDING', failure_code = null, updated_at = now() where booking_id = p_booking_id and status = 'FAILED' and failure_code = 'EXPIRED';
   perform public._confirm_booking(p_booking_id, auth.uid());
   perform public._audit(v_e.id, 'CONFIRM_LATE_DEPOSIT', 'booking', p_booking_id);
+end;
+$$;
+
+-- 예매자: 이 티켓의 QR을 모두 무효로(휴대폰 분실·QR 사진이 퍼졌을 때). 다음에 열면 새 QR
+create or replace function public.revoke_ticket_qrs(p_ticket_id uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  perform public._require_login();
+  if not exists (select 1 from public.tickets where id = p_ticket_id and user_id = auth.uid()) then raise exception '티켓을 찾지 못했습니다.' using errcode = 'P0002'; end if;
+  update public.qr_credentials set revoked_at = now() where ticket_id = p_ticket_id and revoked_at is null;
 end;
 $$;
 
@@ -1633,4 +1717,5 @@ grant execute on function public.my_home_state() to anon, authenticated;
 grant execute on function public.record_onsite_sale(uuid, integer, text, text), public.cancel_onsite_sale(uuid) to authenticated;
 grant execute on function public.mark_deposit_sent(uuid), public.ack_event_change(uuid), public.request_refund(uuid, text),
   public.mark_refunded(uuid), public.update_depositor_name(uuid, text), public.update_refund_account(uuid, text),
-  public.undo_confirm_deposit(uuid), public.confirm_late_deposit(uuid), public.undo_check_in(uuid), public.transfer_ownership(uuid) to authenticated;
+  public.undo_confirm_deposit(uuid), public.confirm_late_deposit(uuid), public.undo_check_in(uuid), public.transfer_ownership(uuid),
+  public.revoke_ticket_qrs(uuid) to authenticated;

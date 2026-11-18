@@ -106,6 +106,8 @@ export interface Backend {
   // 현장 판매(운영진)
   recordOnsiteSale(eventId: string, quantity: number, method: 'CASH' | 'TRANSFER', buyerName: string): Promise<void>
   cancelOnsiteSale(bookingId: string): Promise<void>
+  // 휴대폰 분실·QR 사진 유출 시 이 티켓의 QR 모두 무효
+  revokeTicketQrs(ticketId: string): Promise<void>
 }
 
 // ───────────────────────── 브라우저 데모 ─────────────────────────
@@ -212,6 +214,7 @@ class LocalBackend implements Backend {
     this.mutate((d, u) => { repo.recordOnsiteSale(d, u, eventId, quantity, method, buyerName) })
   }
   async cancelOnsiteSale(bookingId: string) { this.mutate((d, u) => repo.cancelOnsiteSale(d, u, bookingId)) }
+  async revokeTicketQrs(ticketId: string) { this.mutate((d, u) => repo.revokeTicketQrs(d, u, ticketId)) }
 }
 
 // ───────────────────────── Supabase ─────────────────────────
@@ -345,6 +348,7 @@ class SupabaseBackend implements Backend {
     await this.rpc('record_onsite_sale', { p_event_id: eventId, p_quantity: quantity, p_method: method, p_buyer_name: buyerName })
   }
   async cancelOnsiteSale(bookingId: string) { await this.rpc('cancel_onsite_sale', { p_booking_id: bookingId }) }
+  async revokeTicketQrs(ticketId: string) { await this.rpc('revoke_ticket_qrs', { p_ticket_id: ticketId }) }
 }
 
 export function createBackend(): Backend {

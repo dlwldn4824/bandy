@@ -121,6 +121,7 @@ function Inbox() {
             {chat
               ? <a className="b-btn small" href={chat} target="_blank" rel="noreferrer">오픈채팅</a>
               : <span className="b-sub">링크 없음</span>}
+            <button type="button" className="b-link" onClick={() => act((b) => b.cancelExchange(r.id), '교류를 끊었어요. 서로 오픈채팅 링크가 보이지 않아요.')}>교류 끊기</button>
           </article>
         )
       })}

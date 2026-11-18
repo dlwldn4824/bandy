@@ -290,6 +290,15 @@ export function TicketsPage() {
               {qr?.offline && qr.ticketId === open.id && <p className="b-warn">인터넷 연결이 약해 이 기기에 저장된 QR을 보여 줘요.</p>}
               <p className="b-note">현장에서 운영진에게 이 QR을 보여 주세요. 화면 밝기를 높이면 잘 찍혀요.<br />코드: <code>{token}</code></p>
               {ev.id && <Link className="b-link" to={`/app/e/${ev.id}`}>공연 정보 확인</Link>}
+              {/* 무료 신청은 입장 전이면 취소(노쇼 줄이기) */}
+              {(() => { const bk = db.bookings.find((b) => b.id === open.booking_id); return bk && bk.total_amount_krw === 0 && live?.status === 'ISSUED' ? (
+                <button type="button" className="b-link" onClick={async () => { const r = await call((b) => b.cancelBooking(bk.id)); showToast(r.ok ? '신청을 취소했어요.' : r.error); if (r.ok) setOpen(null) }}>신청 취소</button>
+              ) : null })()}
+              {live?.status === 'ISSUED' && (
+                <button type="button" className="b-link" onClick={async () => { const r = await call((b) => b.revokeTicketQrs(open.id), { reload: false }); showToast(r.ok ? '이전 QR을 모두 무효로 했어요. 다시 열면 새 QR이 나와요.' : r.error); if (r.ok) setOpen(null) }}>
+                  QR 사진이 퍼졌나요? 이전 QR 모두 무효로
+                </button>
+              )}
               <button type="button" className="b-btn ghost" onClick={() => setOpen(null)}>닫기</button>
             </div>
           </div>

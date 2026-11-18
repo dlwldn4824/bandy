@@ -72,6 +72,10 @@ export function safeUrl(url: string | null | undefined) {
   return URL_RE.test(v) ? v : null
 }
 
+// 동아리 이름: 보이지 않는 문자 제거·공백 정리, 비교는 공백 없이 소문자(서버 _club_name · _club_key와 같음)
+export function clubName(v: string) { return v.replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '').trim().replace(/\s+/g, ' ') }
+function clubKey(v: string) { return clubName(v).replace(/\s/g, '').toLowerCase() }
+
 // 글자 수 제한(서버 _event_limits · _club_limits와 같음)
 export const LIMITS = {
   event: { title: [60, '공연명'], venue_name: [60, '장소'], address: [120, '주소'], description: [2000, '공연 소개'], bank_name: [20, '입금 은행'], account_number: [30, '입금 계좌'], account_holder: [40, '예금주'] },
@@ -88,7 +92,7 @@ function checkUrl(url: string | null | undefined, label: string) {
   let v = (url ?? '').trim()
   // 'instagram.com/abc'처럼 앞부분 없이 쓴 주소는 https://를 붙인다(다른 스킴은 그대로 거부)
   if (v && !/^[a-z][a-z0-9+.-]*:/i.test(v) && /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/|$)/i.test(v)) v = `https://${v}`
-  if (v && (!URL_RE.test(v) || v.length > 300)) throw new BandyError(`${label}은(는) http:// 또는 https://로 시작하는 주소만 쓸 수 있습니다.`)
+  if (v && (!URL_RE.test(v) || v.length > 300)) throw new BandyError(`${label} 주소를 확인해 주세요. (http:// 또는 https://로 시작하는 주소)`)
   return v
 }
 
@@ -163,7 +167,9 @@ function checkDuration(min: number | undefined, fallback: number) {
 function checkPublishable(venue: string, startsAt: string, price: number, account: string) {
   if (!venue.trim()) throw new BandyError('공개하려면 장소가 필요합니다.')
   if (isPastEvent({ starts_at: startsAt })) throw new BandyError('이미 지난 일시로는 공개할 수 없습니다.')
+  if (new Date(startsAt).getTime() > Date.now() + 730 * 86400000) throw new BandyError('2년 안의 일시만 공개할 수 있어요. 연도를 확인해 주세요.')
   if (price > 0 && !account.trim()) throw new BandyError('유료 공연은 입금 계좌가 필요합니다.')
+  if (price > 0 && account.replace(/[^0-9]/g, '').length < 6) throw new BandyError('입금 계좌번호를 확인해 주세요. (숫자 6자리 이상)')
 }
 
 function requireLogin(_db: Db, userId: Uuid | null): Uuid {
@@ -273,10 +279,17 @@ export function createClub(db: Db, userId: Uuid | null, input: {
   sns_url: string; open_chat_url: string; exchange_open: boolean
 }): Club {
   requireActiveProfile(db, userId)
-  const name = input.name.trim()
+  const name = clubName(input.name)
   if (!name) throw new BandyError('동아리 이름을 입력하세요.')
   checkLengths(input as Record<string, unknown>, LIMITS.club)
-  if (db.clubs.some((c) => c.name === name)) throw new BandyError('이미 등록된 동아리 이름입니다.')
+  // 거절된 내 동아리를 같은 이름으로 다시 신청하면 승인 대기로 되돌린다(재심사)
+  const old = db.clubs.find((c) => clubKey(c.name) === clubKey(name) && c.status === 'REJECTED' && isOwner(db, userId, c.id))
+  if (old) {
+    Object.assign(old, { status: 'PENDING', name, introduction: input.introduction.trim(), school: input.school.trim(), genre: input.genre.trim(),
+      region: input.region.trim(), sns_url: checkUrl(input.sns_url, 'SNS 링크') || null, updated_at: now() })
+    return old
+  }
+  if (db.clubs.some((c) => clubKey(c.name) === clubKey(name))) throw new BandyError('이미 등록된 동아리 이름입니다. (띄어쓰기·대소문자만 다른 이름도 같은 이름으로 봐요)')
   // [임시] 승인 대기 중인 등록은 한 사람당 1건
   if (db.clubs.some((c) => c.status === 'PENDING' && isOwner(db, userId, c.id))) {
     throw new BandyError('승인 대기 중인 동아리가 있어요. 승인 후에 추가로 등록할 수 있어요.')
@@ -312,15 +325,24 @@ export function setClubStatus(db: Db, userId: Uuid | null, clubId: Uuid, status:
     }[status]
     notify(db, owner.user_id, null, 'CLUB_STATUS', message, `club-status-${clubId}-${status}-${uid('n')}`)
   }
+  if (status === 'SUSPENDED' || status === 'REJECTED') {
+    const seen = new Set<string>()
+    for (const b of db.bookings.filter((x) => (x.status === 'PENDING_PAYMENT' || x.status === 'CONFIRMED') && (x.channel ?? 'ONLINE') === 'ONLINE')) {
+      const e = db.events.find((x) => x.id === b.event_id)
+      if (!e || e.club_id !== clubId || isEventOver(e) || seen.has(`${e.id}-${b.user_id}`)) continue
+      seen.add(`${e.id}-${b.user_id}`)
+      notify(db, b.user_id, e.id, 'CLUB_SUSPENDED', `[${e.title}] 주최 동아리 운영이 중지돼 입금 확인·입장이 어려울 수 있어요. 내 티켓에서 환불을 요청할 수 있어요.`, `club-suspended-${e.id}-${b.user_id}-${uid('n')}`)
+    }
+  }
 }
 
 export function updateClub(db: Db, userId: Uuid | null, clubId: Uuid, patch: Partial<Pick<Club,
   'name' | 'introduction' | 'school' | 'genre' | 'region' | 'sns_url' | 'open_chat_url' | 'exchange_open' | 'profile_path'>>) {
   if (patch.name !== undefined) {
-    patch.name = patch.name.trim()
+    patch.name = clubName(patch.name)
     if (!patch.name) throw new BandyError('동아리 이름을 입력하세요.')
     if (patch.name.length > 40) throw new BandyError('동아리 이름은 40자까지입니다.')
-    if (db.clubs.some((c) => c.id !== clubId && c.name === patch.name)) throw new BandyError('이미 등록된 동아리 이름입니다.')
+    if (db.clubs.some((c) => c.id !== clubId && clubKey(c.name) === clubKey(patch.name!))) throw new BandyError('이미 등록된 동아리 이름입니다.')
   }
   requireActiveProfile(db, userId)
   if (!isClubManager(db, userId, clubId)) throw new BandyError('동아리 운영진만 수정할 수 있습니다.')
@@ -382,6 +404,11 @@ export function setEventStatus(db: Db, userId: Uuid | null, eventId: Uuid, statu
   if (status === 'PUBLISHED') requireActiveManager(db, userId, event.club_id, '공연을 찾지 못했습니다.')
   if (event.status === status) return
   if (event.status === 'CANCELLED') throw new BandyError('취소된 공연은 다시 열 수 없습니다. 새로 등록해 주세요.')
+  if (status === 'CANCELLED' && isEventOver(event)) throw new BandyError('이미 끝난 공연은 취소할 수 없어요. 개별 환불은 예매자와 따로 정해 주세요.')
+  if (status === 'DRAFT' && event.status === 'PUBLISHED') {
+    const users = new Set(db.bookings.filter((b) => b.event_id === eventId && (b.status === 'PENDING_PAYMENT' || b.status === 'CONFIRMED') && (b.channel ?? 'ONLINE') === 'ONLINE').map((b) => b.user_id))
+    for (const u of users) notify(db, u, eventId, 'EVENT_HIDDEN', `[${event.title}] 공연 페이지가 비공개로 바뀌었어요. 예매와 티켓은 그대로예요.`, `event-hidden-${eventId}-${u}-${uid('n')}`)
+  }
   const maxPrice = Math.max(0, ...db.ticket_types.filter((t) => t.event_id === eventId).map((t) => t.price_krw))
   if (status === 'PUBLISHED') checkPublishable(event.venue_name ?? '', event.starts_at, maxPrice, event.account_number)
   event.status = status
@@ -421,13 +448,15 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
   const before = { starts_at: event.starts_at, venue_name: event.venue_name, account_number: event.account_number, bank_name: event.bank_name }
   // 진행 시간: 보내면 그대로, 안 보내면 기존 진행 시간 유지
   const duration = checkDuration(input.duration_minutes, durationMinutes(event))
-  const hasBookings = db.bookings.some((b) => b.event_id === eventId && b.status !== 'CANCELLED')
+  const hasBookings = db.bookings.some((b) => b.event_id === eventId && (b.status === 'PENDING_PAYMENT' || b.status === 'CONFIRMED'))
   if (hasBookings && input.price_krw !== tt.price_krw) throw new BandyError('예매가 있는 공연은 가격을 바꿀 수 없습니다.')
   if (input.capacity < tt.reserved_quantity + tt.sold_quantity) throw new BandyError('이미 예매된 수량보다 정원을 줄일 수 없습니다.')
   const startsIso = new Date(input.starts_at).toISOString()
   if (event.status === 'PUBLISHED' && (startsIso !== event.starts_at || !sameVenue(input.venue_name, event.venue_name)
     || input.price_krw !== tt.price_krw || input.account_number.trim() !== event.account_number)) {
-    checkPublishable(input.venue_name, startsIso, input.price_krw, input.account_number)
+    // 일시를 바꿀 때만 '미래 일시' 검사(공연 시작 뒤에도 장소·계좌 오타는 고칠 수 있게)
+    const checkAt = startsIso !== event.starts_at ? startsIso : new Date(Math.max(new Date(startsIso).getTime(), Date.now() + 60000)).toISOString()
+    checkPublishable(input.venue_name, checkAt, input.price_krw, input.account_number)
   }
   Object.assign(event, {
     title: input.title.trim(), category: input.category, starts_at: new Date(input.starts_at).toISOString(),
@@ -466,7 +495,7 @@ export function updateEvent(db: Db, userId: Uuid | null, eventId: Uuid, input: {
     ].filter(Boolean).join(', ')
     const users = new Set(db.bookings.filter((x) => x.event_id === eventId && (x.status === 'PENDING_PAYMENT' || x.status === 'CONFIRMED')).map((x) => x.user_id))
     for (const u of users) {
-      notify(db, u, eventId, 'EVENT_CHANGED', `[${event.title}] 공연 ${parts} 바뀌었어요. 내 티켓에서 유지하거나 취소·환불을 요청할 수 있어요.`, `event-changed-${eventId}-${u}-${event.starts_at}-${event.venue_name}`)
+      notify(db, u, eventId, 'EVENT_CHANGED', `[${event.title}] 공연 ${parts} 바뀌었어요. 내 티켓에서 유지하거나 취소·환불을 요청할 수 있어요.`, `event-changed-${eventId}-${u}-${uid('n')}`)
     }
   }
 }
@@ -489,7 +518,8 @@ export function updateProfile(db: Db, userId: Uuid | null, displayName: string) 
   const p = db.profiles.find((x) => x.id === userId)
   if (!p) throw new BandyError('로그인이 필요합니다.')
   if (!displayName.trim()) throw new BandyError('이름을 입력하세요.')
-  p.display_name = displayName.trim().slice(0, 20)
+  if (displayName.trim().length > 20) throw new BandyError('이름은 20자까지예요.')
+  p.display_name = displayName.trim()
   p.updated_at = now()
 }
 
@@ -521,6 +551,9 @@ export function createBooking(db: Db, userId: Uuid | null, ticketTypeId: Uuid, q
   if (db.bookings.some((b) => b.user_id === userId && b.event_id === event.id && b.status === 'PENDING_PAYMENT')) {
     throw new BandyError('이 공연에 입금 대기 중인 예매가 있어요. 입금하거나 취소한 뒤 다시 예매해 주세요.')
   }
+  const held = db.bookings.filter((b) => b.user_id === userId && b.event_id === event.id && (b.status === 'PENDING_PAYMENT' || b.status === 'CONFIRMED') && (b.channel ?? 'ONLINE') === 'ONLINE')
+    .reduce((n, b) => n + (db.booking_items.find((i) => i.booking_id === b.id)?.quantity ?? 0), 0)
+  if (held + quantity > MAX_QUANTITY) throw new BandyError('한 사람이 한 공연에 예매할 수 있는 표는 10장까지예요.')
   if (remaining(tt) < quantity) throw new BandyError('남은 자리가 부족합니다.')
   const free = tt.price_krw === 0
   if (!free && !depositorName.trim()) throw new BandyError('입금자명을 입력하세요.')
@@ -645,7 +678,16 @@ export function cancelBooking(db: Db, userId: Uuid | null, bookingId: Uuid) {
   const item = db.booking_items.find((i) => i.booking_id === booking.id)!
   expireBookings(db, item.ticket_type_id)
   if (booking.status === 'EXPIRED') return // 기한이 지나 방금 만료됨(자리 반환 완료). 취소와 결과가 같다
-  if (booking.status !== 'PENDING_PAYMENT') throw new BandyError('입금 확인 전 예매만 취소할 수 있습니다.')
+  // 무료 신청은 확정 뒤에도 취소(입장 전). 노쇼를 줄이고 자리를 다른 사람에게
+  if (booking.status === 'CONFIRMED' && booking.total_amount_krw === 0 && (booking.channel ?? 'ONLINE') === 'ONLINE') {
+    const tks = db.tickets.filter((t) => t.booking_id === booking.id)
+    if (tks.some((t) => t.status === 'CHECKED_IN')) throw new BandyError('이미 입장한 신청은 취소할 수 없어요.')
+    Object.assign(booking, { status: 'CANCELLED', cancelled_at: now(), updated_at: now() })
+    for (const t of tks) Object.assign(t, { status: 'CANCELLED', updated_at: now() })
+    db.ticket_types.find((t) => t.id === item.ticket_type_id)!.sold_quantity -= item.quantity
+    return
+  }
+  if (booking.status !== 'PENDING_PAYMENT') throw new BandyError('입금 확인 전 예매만 취소할 수 있습니다. 확정된 예매는 주최 동아리에 문의해 주세요.')
   releaseBooking(db, booking, 'CANCELLED', 'CANCELLED_BEFORE_DEPOSIT')
   // 입금했다고 알린 뒤 본인이 취소하면 운영진에게 환불 확인 알림
   if (!byHost && db.payments.find((p) => p.booking_id === booking.id)?.depositor_notified_at) {
@@ -665,7 +707,8 @@ export type CheckInResult =
   | { result: 'invalid' }
 
 function findTicket(db: Db, eventId: Uuid, token: string) {
-  const qr = db.qr_credentials.find((q) => q.token_hash === fakeHash(token.trim()) && q.token === token.trim())
+  const tok = token.trim().toLowerCase() // QR 직접 입력은 대소문자 무시
+  const qr = db.qr_credentials.find((q) => !q.revoked_at && new Date(q.expires_at) > new Date() && q.token.toLowerCase() === tok)
   const event = db.events.find((e) => e.id === eventId)
   return qr && !qr.revoked_at && new Date(qr.expires_at) > new Date() && event?.status !== 'CANCELLED'
     ? db.tickets.find((t) => t.id === qr.ticket_id && t.event_id === eventId)
@@ -681,7 +724,7 @@ export function issueTicketQr(db: Db, userId: Uuid | null, ticketId: Uuid) {
   const tev = db.events.find((e) => e.id === t.event_id)
   if (tev && tev.status !== 'CANCELLED' && isEventOver(tev)) throw new BandyError('이미 끝난 공연의 티켓입니다.')
   if (db.events.find((e) => e.id === t.event_id)?.status === 'CANCELLED') throw new BandyError('취소된 공연의 티켓입니다.')
-  for (const q of db.qr_credentials) if (q.ticket_id === ticketId && !q.revoked_at) q.revoked_at = now()
+  // 다시 열어도 이전 QR을 무효로 하지 않는다(친구에게 보낸 QR · 저장 QR 보호, 티켓은 한 번만 입장)
   const token = `${t.id}.${Math.random().toString(36).slice(2, 12)}`
   db.qr_credentials.push({
     id: uid('qr'), ticket_id: t.id, token, token_hash: fakeHash(token),
@@ -725,6 +768,10 @@ export function requestExchange(db: Db, userId: Uuid | null, fromClubId: Uuid, t
   const to = db.clubs.find((c) => c.id === toClubId)
   if (from?.status !== 'ACTIVE') throw new BandyError('승인된 동아리만 교류를 신청할 수 있습니다.')
   if (!to || to.status !== 'ACTIVE' || !to.exchange_open) throw new BandyError('지금은 교류를 받지 않는 동아리입니다.')
+  if (db.exchange_requests.some((r) => r.from_club_id === fromClubId && r.to_club_id === toClubId && r.status === 'REJECTED'
+    && r.responded_at && Date.now() - new Date(r.responded_at).getTime() < 7 * 86400000)) {
+    throw new BandyError('거절된 신청은 7일 뒤에 다시 보낼 수 있어요.')
+  }
   if (db.exchange_requests.some((r) => r.from_club_id === fromClubId && r.to_club_id === toClubId && r.status === 'PENDING')) {
     throw new BandyError('이미 보낸 신청이 처리 대기 중입니다.')
   }
@@ -752,6 +799,7 @@ export function respondExchange(db: Db, userId: Uuid | null, requestId: Uuid, ac
   if (!req) throw new BandyError('신청을 찾지 못했습니다.')
   requireActiveManager(db, userId, req.to_club_id, '신청을 찾지 못했습니다.')
   if (req.status !== 'PENDING') throw new BandyError('이미 처리한 신청입니다.')
+  if (req.created_by === userId) throw new BandyError('신청한 사람이 직접 수락할 수는 없어요. 상대 동아리의 다른 운영진이 처리해 주세요.')
   req.status = accept ? 'ACCEPTED' : 'REJECTED'
   req.responded_by = userId
   req.responded_at = now()
@@ -763,11 +811,21 @@ export function respondExchange(db: Db, userId: Uuid | null, requestId: Uuid, ac
   }
 }
 
+// 대기 중인 신청은 보낸 쪽이 취소, 수락된 교류는 양쪽 누구나 끊기
 export function cancelExchange(db: Db, userId: Uuid | null, requestId: Uuid) {
   const req = db.exchange_requests.find((r) => r.id === requestId)
-  if (!req || !isClubManager(db, userId, req.from_club_id)) throw new BandyError('신청을 찾지 못했습니다.')
-  if (req.status !== 'PENDING') throw new BandyError('이미 처리한 신청입니다.')
+  if (!req || !(isClubManager(db, userId, req.from_club_id) || (req.status === 'ACCEPTED' && isClubManager(db, userId, req.to_club_id)))) {
+    throw new BandyError('신청을 찾지 못했습니다.')
+  }
+  if (req.status !== 'PENDING' && req.status !== 'ACCEPTED') throw new BandyError('이미 처리한 신청입니다.')
   req.status = 'CANCELLED'
+}
+
+// 이 티켓의 QR을 모두 무효로(휴대폰 분실·QR 사진이 퍼졌을 때)
+export function revokeTicketQrs(db: Db, userId: Uuid | null, ticketId: Uuid) {
+  requireLogin(db, userId)
+  if (!db.tickets.some((t) => t.id === ticketId && t.user_id === userId)) throw new BandyError('티켓을 찾지 못했습니다.')
+  for (const q of db.qr_credentials) if (q.ticket_id === ticketId && !q.revoked_at) q.revoked_at = now()
 }
 
 // ───────────── 부원 · 운영진 ─────────────
@@ -912,7 +970,7 @@ export function updateRefundAccount(db: Db, userId: Uuid | null, bookingId: Uuid
   const b = db.bookings.find((x) => x.id === bookingId)
   if (!b || b.user_id !== userId) throw new BandyError('예매를 찾지 못했습니다.')
   const v = account.trim()
-  if (v.length < 5 || v.length > 60) throw new BandyError('환불받을 계좌(은행 · 계좌번호 · 예금주)를 적어 주세요.')
+  if (v.length < 5 || v.length > 60 || v.replace(/[^0-9]/g, '').length < 6) throw new BandyError('환불받을 계좌(은행 · 계좌번호 · 예금주)를 적어 주세요.')
   const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'REFUND_PENDING')
   if (!pay) throw new BandyError('환불 대기 중인 예매만 계좌를 고칠 수 있어요.')
   Object.assign(pay, { refund_account: v, updated_at: now() })
@@ -993,7 +1051,8 @@ export function markDepositSent(db: Db, userId: Uuid | null, bookingId: Uuid) {
   requireLogin(db, userId)
   const b = db.bookings.find((x) => x.id === bookingId)
   if (!b || b.user_id !== userId) throw new BandyError('예매를 찾지 못했습니다.')
-  if (b.status !== 'PENDING_PAYMENT' || pastDeadline(b)) throw new BandyError('입금 대기 중인 예매가 아닙니다.')
+  if (pastDeadline(b)) throw new BandyError('입금 기한이 지났어요. 이미 입금했다면 주최 동아리에 문의해 주세요.')
+  if (b.status !== 'PENDING_PAYMENT') throw new BandyError('입금 대기 중인 예매가 아니에요.')
   const pay = db.payments.find((p) => p.booking_id === b.id && p.status === 'PENDING')!
   if ((pay.depositor_notify_count ?? 0) > 0 && Date.now() - new Date(pay.updated_at).getTime() < 10 * 60000) {
     throw new BandyError('이미 알렸어요. 잠시 후 다시 눌러 주세요.')
@@ -1023,12 +1082,13 @@ export function requestRefund(db: Db, userId: Uuid | null, bookingId: Uuid, refu
   const b = db.bookings.find((x) => x.id === bookingId)
   if (!b || b.user_id !== userId) throw new BandyError('예매를 찾지 못했습니다.')
   const e = db.events.find((x) => x.id === b.event_id)!
-  if (!(e.status === 'CANCELLED' || (e.schedule_changed_at && e.schedule_changed_at > b.created_at))) {
+  const clubDown = ['SUSPENDED', 'REJECTED'].includes(db.clubs.find((c) => c.id === e.club_id)?.status ?? '')
+  if (!(e.status === 'CANCELLED' || clubDown || (e.schedule_changed_at && e.schedule_changed_at > b.created_at))) {
     throw new BandyError('공연이 취소되거나 일정이 바뀐 경우에만 환불을 요청할 수 있어요. 그 밖에는 주최 동아리에 문의해 주세요.')
   }
   if (e.status !== 'CANCELLED' && isPastEvent(e)) throw new BandyError('공연이 이미 시작됐어요.')
   const acct = refundAccount.trim()
-  if (b.total_amount_krw > 0 && (acct.length < 5 || acct.length > 60)) throw new BandyError('환불받을 계좌(은행 · 계좌번호 · 예금주)를 적어 주세요.')
+  if (b.total_amount_krw > 0 && (acct.length < 5 || acct.length > 60 || acct.replace(/[^0-9]/g, '').length < 6)) throw new BandyError('환불받을 계좌(은행 · 계좌번호 · 예금주)를 적어 주세요.')
   if (b.status !== 'CONFIRMED') throw new BandyError('확정된 예매만 환불을 요청할 수 있어요. 입금 전이면 예매 취소를 눌러 주세요.')
   const tickets = db.tickets.filter((x) => x.booking_id === b.id)
   if (tickets.some((x) => x.status === 'CHECKED_IN')) throw new BandyError('이미 입장한 티켓이 있어 환불을 요청할 수 없어요.')

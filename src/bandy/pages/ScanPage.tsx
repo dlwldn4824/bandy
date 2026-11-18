@@ -73,7 +73,7 @@ export function ScanPage() {
         : <button type="button" className="b-btn ghost" onClick={stopCamera}>카메라 끄기</button>}
       {camera === 'error' && <p className="b-warn">카메라를 열 수 없어요. 아래에 QR 코드 글자를 입력해도 돼요.</p>}
       <form className="b-row" style={{ flexWrap: 'nowrap' }} onSubmit={(e) => { e.preventDefault(); verifyRef.current(code); setCode('') }}>
-        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="QR 코드 직접 입력" aria-label="QR 코드" />
+        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="QR 코드 직접 입력" aria-label="QR 코드" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
         <button type="submit" className="b-btn small" style={{ height: 44 }}>검증</button>
       </form>
 
