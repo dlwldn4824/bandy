@@ -93,6 +93,15 @@ npm run build
 | [2025-공연앱.md](./docs/2025-공연앱.md) | 옛 앱(`/old`)의 기능 · 보안 · 데이터 분석 |
 | [landing-copy.md](./docs/landing-copy.md) | 랜딩 문구 |
 
+백엔드 설계는 따로 있습니다 (작성: [@THISISMYCOSMOS](https://github.com/THISISMYCOSMOS)).
+
+| | |
+|---|---|
+| [development-plan.md](./docs/development-plan.md) | 백엔드 개발 계획 |
+| [db-design.md](./docs/db-design.md) · [db-structure.xlsx](./docs/db-structure.xlsx) | DB 구조 |
+| [data-flow.md](./docs/data-flow.md) | 데이터 흐름 |
+| [external-apis.md](./docs/external-apis.md) · [backend-api-spec.xlsx](./docs/backend-api-spec.xlsx) | API 명세 |
+
 ## 기술
 
 React 18 · TypeScript · Vite · React Router · Firebase (Firestore · Storage) · Vercel
