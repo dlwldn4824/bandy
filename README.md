@@ -114,11 +114,6 @@ npm run check:routes
 | [심사-제출-체크리스트.md](./docs/store/심사-제출-체크리스트.md) | 제출할 때 넣을 값, 아직 안 끝난 것 |
 | [2025-공연앱.md](./docs/2025-공연앱.md) | 옛 앱(`/old`)의 기능 · 보안 · 데이터 분석 |
 | [landing-copy.md](./docs/landing-copy.md) | 랜딩 문구 |
-
-백엔드 설계는 따로 있습니다 (작성: [@THISISMYCOSMOS](https://github.com/THISISMYCOSMOS)).
-
-| | |
-|---|---|
 | [development-plan.md](./docs/backend/development-plan.md) | 백엔드 개발 계획 |
 | [db-design.md](./docs/backend/db-design.md) · [db-structure.xlsx](./docs/backend/db-structure.xlsx) | DB 구조 |
 | [data-flow.md](./docs/backend/data-flow.md) | 데이터 흐름 |
