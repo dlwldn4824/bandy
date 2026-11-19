@@ -6,7 +6,7 @@
  * 앱 안(`/ui/legal/*`)에만 있으면 심사에서 걸립니다.
  *
  * 글을 두 벌로 두면 반드시 갈라지므로, 앱 화면이 쓰는
- * `src/lightui/legal/content.ts` 를 그대로 읽어서 찍습니다. 빌드 때마다
+ * `src/new/lightui/legal/content.ts` 를 그대로 읽어서 찍습니다. 빌드 때마다
  * 다시 찍히니 앱과 웹이 어긋날 일이 없습니다 (package.json 의 prebuild).
  *
  * TypeScript 를 node 가 바로 못 읽어서 esbuild 로 타입만 벗겨 불러옵니다.
@@ -27,7 +27,7 @@ async function loadContent() {
   const dir = await mkdtemp(join(tmpdir(), 'bandy-legal-'))
   const outfile = join(dir, 'content.mjs')
   await build({
-    entryPoints: [join(ROOT, 'src/lightui/legal/content.ts')],
+    entryPoints: [join(ROOT, 'src/new/lightui/legal/content.ts')],
     outfile,
     format: 'esm',
     platform: 'node',

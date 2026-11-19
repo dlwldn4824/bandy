@@ -3,7 +3,7 @@
 소개 페이지(`/`, `/intro`)에 들어가는 내용 전부입니다.
 피그마·사업계획서·발표자료 어디에 옮겨도 되도록 섹션 단위로 끊었습니다.
 
-구현: [src/pages/Landing.tsx](../src/pages/Landing.tsx) · 브랜드 상수: [src/config/brand.ts](../src/config/brand.ts)
+구현: [src/pages/Landing.tsx](../src/old/pages/Landing.tsx) · 브랜드 상수: [src/config/brand.ts](../src/shared/config/brand.ts)
 
 ---
 

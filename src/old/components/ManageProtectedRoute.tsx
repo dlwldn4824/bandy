@@ -1,0 +1,106 @@
+import { useEffect, useState } from 'react'
+import { Navigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext.tsx'
+import { verifyAdminCodeDetailed, verifyAdminCodeErrorMessage } from '../services/adminAuthApi.ts'
+import { hasAdminApiToken } from '../services/guestsApi.ts'
+import { isManageSessionActive, setManageSession } from '../utils/manageSession.ts'
+import '../pages/Admin.css'
+
+interface ManageProtectedRouteProps {
+  children: React.ReactNode
+}
+
+const ManageProtectedRoute = ({ children }: ManageProtectedRouteProps) => {
+  const { isAdmin, isLoading: authLoading } = useAuth()
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [sessionActive, setSessionActive] = useState(isManageSessionActive)
+
+  // 세션만 남고 API 토큰이 없으면(만료·localStorage 삭제) 다시 입장 화면으로
+  useEffect(() => {
+    if (isManageSessionActive() && !hasAdminApiToken()) {
+      setManageSession(false)
+      setSessionActive(false)
+    }
+  }, [])
+
+  if (authLoading) {
+    return null
+  }
+
+  // 운영진(admin) 화면과 완전 분리 — admin 로그인 상태에서는 /manage 접근 불가
+  if (isAdmin) {
+    return <Navigate to="/old/admin/dashboard" replace />
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+
+    if (!password.trim()) {
+      setError('운영 관리 비밀번호를 입력해주세요.')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const result = await verifyAdminCodeDetailed('action', password)
+      if (!result.ok) {
+        setError(
+          result.reason === 'invalid'
+            ? '올바른 비밀번호를 입력해주세요.'
+            : verifyAdminCodeErrorMessage(result.reason)
+        )
+        return
+      }
+      if (!hasAdminApiToken()) {
+        setError('서버 API 설정이 필요합니다. Vercel에 FIREBASE_SERVICE_ACCOUNT를 추가한 뒤 재배포해주세요.')
+        return
+      }
+      setManageSession(true)
+      setSessionActive(true)
+      setPassword('')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (!sessionActive) {
+    return (
+      <div className="admin-page admin-page--unified manage-gate">
+        <div className="manage-gate-card ui-card">
+          <h1 className="admin-page-title">운영 관리</h1>
+          <p className="admin-page-subtitle ui-muted">
+            이 페이지는 운영진 대시보드와 별도입니다. 운영 관리 비밀번호를 입력하세요.
+          </p>
+          <form className="manage-gate-form" onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label htmlFor="manage-password">운영 관리 비밀번호</label>
+              <input
+                id="manage-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="비밀번호 입력"
+                autoFocus
+              />
+            </div>
+            {error && <div className="error-message">{error}</div>}
+            <button
+              type="submit"
+              className="admin-primary-button"
+              disabled={!password.trim() || isSubmitting}
+            >
+              {isSubmitting ? '확인 중...' : '입장'}
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  return <>{children}</>
+}
+
+export default ManageProtectedRoute

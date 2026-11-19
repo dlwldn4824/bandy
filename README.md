@@ -40,30 +40,46 @@
 | **운영진** | `/ui/console` · `/ui/show/:id/run` · `/ui/deposits` · `/ui/entry` · `/ui/settlement` | 공연 관리 · 당일 타임라인 · 입금 · 입장 · 정산 |
 | **약관** | `/ui/legal/:doc` · `/privacy` · `/terms` · `/refund` · `/account-deletion` | 앱 안과 웹 양쪽에서 열립니다 |
 
-경로 상수는 [`src/lightui/paths.ts`](./src/lightui/paths.ts) 한 곳에 있습니다. Figma 프로토타입 연결을 그대로 옮긴 것이라 화면에서 어디로 가는지가 1:1 입니다.
+경로 상수는 [`src/lightui/paths.ts`](./src/new/lightui/paths.ts) 한 곳에 있습니다. Figma 프로토타입 연결을 그대로 옮긴 것이라 화면에서 어디로 가는지가 1:1 입니다.
 
 ## 폴더
 
 ```
 src/
-  lightui/     지금 앱 — 화면 · 컴포넌트 · 경로 상수
-    screens/     L1 홈, D2 예매, S19 공연 당일 …
-    components/  Phone, TopBar, Sheet, Button …
-    legal/       약관 · 개인정보 · 환불 본문 (웹 페이지도 여기서 찍습니다)
-    pay/         포트원 결제 (테스트 모드)
-    push/        웹 푸시
-    safety/      신고 · 차단
-  brand/       랜딩 (/brand)
-  mocks/       화면이 쓰는 목 데이터
-  config/      Firebase
-  assets/      공용 이미지 · 폰트
-  legacy/      2025 공연 앱 (/old) — docs/2025-공연앱.md
-  _unused/     아무 데서도 안 쓰는 코드 (빌드에서 제외)
+  new/           지금 서비스
+    lightui/       앱 화면 (/ui/*)
+      screens/       L1 홈, D2 예매, S19 공연 당일 …
+      components/    Phone, TopBar, Sheet, Button …
+      legal/         약관 · 개인정보 · 환불 본문 (웹 페이지도 여기서 찍습니다)
+      pay/           포트원 결제 (테스트 모드)
+      push/          웹 푸시
+      safety/        신고 · 차단
+    brand/         랜딩 (/brand)
+    mocks/         화면이 쓰는 목 데이터
+  old/           2025 공연 앱 (/old/*) — docs/2025-공연앱.md
+  shared/        양쪽이 같이 쓰는 것
+    config/        Firebase · 브랜드명
+    assets/        이미지 · 폰트
+    styles/        전역 토큰
+  _unused/       아무 데서도 안 쓰는 코드 (빌드에서 제외)
+  main.tsx  App.tsx  index.css
 ```
 
-**경계가 분명합니다.** `lightui` 와 `brand` 가 바깥에서 가져다 쓰는 것은 `mocks` 둘과 `config/firebase` 하나뿐입니다. 옛 앱 코드에 기대지 않습니다.
+```
+docs/
+  store/      스토어 출시 · 심사
+  backend/    백엔드 설계
+  setup/      Firebase · 메일 · 시트 연동 설정
+  bizplan/    사업 계획
+  screenshots/
+scripts/      빌드 보조 (약관 페이지 생성 등)
+public/       그대로 서빙되는 것 (robots · sitemap · OG 이미지 · 서비스 워커)
+api/  server/ 서버 API
+```
 
-브랜드명은 [`src/config/brand.ts`](./src/config/brand.ts) 한 곳에서만 바꿉니다 — 한때 '마주'로 바꿨다가 되돌린 적이 있어서 그렇게 모아 뒀습니다. 코드 안의 식별자(`bandyCore.js`, `Bandy.css` 등)는 그대로 둡니다.
+**`new` 는 `old` 에 기대지 않습니다.** `new` 가 밖에서 가져다 쓰는 것은 `shared/config/firebase` 하나뿐입니다. 옛 앱을 통째로 들어내도 지금 서비스는 그대로 돕니다.
+
+브랜드명은 [`src/shared/config/brand.ts`](./src/shared/config/brand.ts) 한 곳에서만 바꿉니다 — 한때 '마주'로 바꿨다가 되돌린 적이 있어서 그렇게 모아 뒀습니다. 코드 안의 식별자(`bandyCore.js`, `Bandy.css` 등)는 그대로 둡니다.
 
 ## 시작하기
 
@@ -87,9 +103,9 @@ npm run build
 
 | | |
 |---|---|
-| [출시-준비.md](./docs/출시-준비.md) | 순서 · 비용 · 사업자등록을 미뤄야 하는 이유 |
-| [스토어-심사-반려-예상.md](./docs/스토어-심사-반려-예상.md) | 애플 · 구글에서 걸릴 것들 |
-| [심사-제출-체크리스트.md](./docs/심사-제출-체크리스트.md) | 제출할 때 넣을 값, 아직 안 끝난 것 |
+| [출시-준비.md](./docs/store/출시-준비.md) | 순서 · 비용 · 사업자등록을 미뤄야 하는 이유 |
+| [스토어-심사-반려-예상.md](./docs/store/스토어-심사-반려-예상.md) | 애플 · 구글에서 걸릴 것들 |
+| [심사-제출-체크리스트.md](./docs/store/심사-제출-체크리스트.md) | 제출할 때 넣을 값, 아직 안 끝난 것 |
 | [2025-공연앱.md](./docs/2025-공연앱.md) | 옛 앱(`/old`)의 기능 · 보안 · 데이터 분석 |
 | [landing-copy.md](./docs/landing-copy.md) | 랜딩 문구 |
 
@@ -97,10 +113,10 @@ npm run build
 
 | | |
 |---|---|
-| [development-plan.md](./docs/development-plan.md) | 백엔드 개발 계획 |
-| [db-design.md](./docs/db-design.md) · [db-structure.xlsx](./docs/db-structure.xlsx) | DB 구조 |
-| [data-flow.md](./docs/data-flow.md) | 데이터 흐름 |
-| [external-apis.md](./docs/external-apis.md) · [backend-api-spec.xlsx](./docs/backend-api-spec.xlsx) | API 명세 |
+| [development-plan.md](./docs/backend/development-plan.md) | 백엔드 개발 계획 |
+| [db-design.md](./docs/backend/db-design.md) · [db-structure.xlsx](./docs/backend/db-structure.xlsx) | DB 구조 |
+| [data-flow.md](./docs/backend/data-flow.md) | 데이터 흐름 |
+| [external-apis.md](./docs/backend/external-apis.md) · [backend-api-spec.xlsx](./docs/backend/backend-api-spec.xlsx) | API 명세 |
 
 ## 기술
 
