@@ -97,6 +97,12 @@ npm run build
 
 `npm run build` 는 빌드 전에 [`scripts/build-legal-pages.mjs`](./scripts/build-legal-pages.mjs) 를 돌려 약관 · 개인정보 · 환불 · 계정 삭제를 정적 HTML 로 찍습니다. 앱 안 약관을 고치면 웹 페이지가 따라옵니다.
 
+```bash
+npm run check:routes
+```
+
+배포된 주소가 실제로 열리는지 훑습니다. SPA 는 어떤 주소든 index.html 을 돌려줘서 상태 코드만으로는 알 수 없으므로, 그 페이지에 있어야 할 문구까지 같이 봅니다 (`cleanUrls` 를 켰다가 `/brand` 와 `/ui` 가 통째로 404 가 된 적이 있어 만들었습니다).
+
 환경 변수는 [`.env.example`](./.env.example) 을 복사해 쓰세요. 전부 비워 둬도 앱은 돕니다 — 카카오 로그인은 목으로, 카드 결제는 버튼이 숨고, 푸시는 「준비 중」 으로 뜹니다.
 
 ## 문서
