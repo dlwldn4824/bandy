@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
+import TopBar from '../components/TopBar.tsx'
+import TabBar from '../components/TabBar.tsx'
 import SectionHeader from '../components/SectionHeader.tsx'
 import ListRow from '../components/ListRow.tsx'
 import Button from '../components/Button.tsx'
@@ -9,23 +11,74 @@ import DirectionsSheet from '../components/DirectionsSheet.tsx'
 import { P } from '../paths.ts'
 import { useLikes } from '../likes.ts'
 import { useGoBack } from '../useGoBack.ts'
-import { showDetail as s } from '../../mocks/bandyLight.ts'
+import { showDetailFor, showMissing, mapShows } from '../../mocks/bandyLight.ts'
+import { useStage } from '../shows/stage.ts'
 import mapVenue from '../assets/map-venue.svg'
 import './D1Show.css'
 
-/** D1 공연 상세 — Figma 183:2 */
+/**
+ * D1 공연 상세 — Figma 183:2
+ *
+ * 어느 공연을 눌러도 「멜로딕 단독 공연」 이 나왔습니다. 부산 공연을 눌러도
+ * 라디오가가가 뜨고 가격도 잔여석도 멜로딕 것이었습니다 — 주소의 id 로
+ * 찾습니다.
+ *
+ * 아래 버튼은 **공연 단계**를 따릅니다. 아직 열지 않은 공연에 「예매하기」 가
+ * 있으면 눌러서 입금 안내까지 가 버립니다.
+ */
 const D1Show = () => {
   const navigate = useNavigate()
   const goBack = useGoBack()
   const { showId = 'glow' } = useParams()
   const { isLiked, toggleLike } = useLikes()
   const [dirs, setDirs] = useState(false)
+  const s = showDetailFor(showId)
+  const at = mapShows.find((show) => show.id === showId)?.at
+  const { stage } = useStage(showId, at)
+
+  // 모르는 공연이면 없다고 말합니다 — 남의 공연을 보여 주지 않습니다
+  if (!s) {
+    return (
+      <Phone>
+        <TopBar title="공연" />
+        <div className="lui-body">
+          <div className="d1__body">
+            <div className="d1__gap-26" />
+            <div className="lui-card d1-missing">
+              <p className="d1-missing__title">{showMissing.title}</p>
+              <p className="d1-missing__body">{showMissing.body}</p>
+              <Button variant="ghost" onClick={() => navigate(P.home)}>
+                {showMissing.cta}
+              </Button>
+            </div>
+          </div>
+        </div>
+        <TabBar active="home" />
+      </Phone>
+    )
+  }
+
+  /**
+   * 단계마다 아래 버튼이 할 수 있는 일이 다릅니다.
+   * 얇은 상세(지도에만 있는 공연)는 가격도 좌석도 모르니 팔 수 없습니다 —
+   * 「예매하기」 를 두면 가격 미정인 채로 입금 안내까지 가 버립니다.
+   */
+  const BOTTOM = s.thin
+    ? { label: '아직 예매를 받지 않아요', on: false }
+    : {
+    draft: { label: '아직 열지 않았어요', on: false },
+    gathering: { label: '함께 설 팀을 모으는 중', on: false },
+    selling: { label: '예매하기', on: true },
+    closed: { label: '예매가 마감됐어요', on: false },
+    today: { label: '오늘 공연이에요', on: true },
+    settling: { label: '끝난 공연이에요', on: false },
+      }[stage]
 
   return (
     <Phone>
       <div className="lui-body">
-        <div className="d1__hero">
-          <img src={s.hero} alt="" />
+        <div className={`d1__hero${s.hero ? '' : ' d1__hero--none'}`}>
+          {s.hero ? <img src={s.hero} alt="" /> : <span className="d1__hero-blank">포스터 없음</span>}
           <button type="button" className="d1__round" onClick={() => goBack()} aria-label="뒤로">
             <Icon name="chevron-left" size={20} />
           </button>
@@ -64,8 +117,12 @@ const D1Show = () => {
           <div className="d1__gap-14" />
           <h1 className="d1__title">
             {s.titleLines[0]}
-            <br />
-            {s.titleLines[1]}
+            {s.titleLines[1] && (
+              <>
+                <br />
+                {s.titleLines[1]}
+              </>
+            )}
           </h1>
 
           <div className="d1__gap-14" />
@@ -81,24 +138,34 @@ const D1Show = () => {
             ))}
           </div>
 
-          <div className="d1__gap-26" />
-          <SectionHeader title="출연 팀" aside={`${s.lineup.length}팀`} />
-          <div className="lui-card d1__lineup">
-            {s.lineup.map((team) => (
-              <ListRow
-                key={team.name}
-                avatar={team.initial}
-                title={team.name}
-                sub={team.sub}
-                chevron
-                onClick={() => navigate(P.club(team.name))}
-              />
-            ))}
-          </div>
+          {/* 지도에서 만든 얇은 상세에는 출연 팀도 소개도 없습니다.
+              빈 제목만 두면 아직 안 불러온 것처럼 보입니다 */}
+          {s.lineup.length > 0 && (
+            <>
+              <div className="d1__gap-26" />
+              <SectionHeader title="출연 팀" aside={`${s.lineup.length}팀`} />
+              <div className="lui-card d1__lineup">
+                {s.lineup.map((team) => (
+                  <ListRow
+                    key={team.name}
+                    avatar={team.initial}
+                    title={team.name}
+                    sub={team.sub}
+                    chevron
+                    onClick={() => navigate(P.club(team.name))}
+                  />
+                ))}
+              </div>
+            </>
+          )}
 
-          <div className="d1__gap-26" />
-          <SectionHeader title="공연 소개" />
-          <p className="d1__about">{s.about.join('\n')}</p>
+          {s.about.length > 0 && (
+            <>
+              <div className="d1__gap-26" />
+              <SectionHeader title="공연 소개" />
+              <p className="d1__about">{s.about.join('\n')}</p>
+            </>
+          )}
 
           <div className="d1__gap-26" />
           <SectionHeader title="공연장" aside="길찾기" onAside={() => setDirs(true)} />
@@ -126,7 +193,12 @@ const D1Show = () => {
           <span className="lui-bottombar__value">{s.price}</span>
           <span className="lui-bottombar__label">{s.remain}</span>
         </div>
-        <Button onClick={() => navigate(P.book(s.id))}>예매하기</Button>
+        <Button
+          disabled={!BOTTOM.on}
+          onClick={() => navigate(stage === 'today' ? P.live(s.id) : P.book(s.id))}
+        >
+          {BOTTOM.label}
+        </Button>
       </div>
     </Phone>
   )

@@ -37,13 +37,6 @@ export interface ShowCard {
   poster?: string
 }
 
-/** L1 「이번 주 열리는 행사」 가로 스크롤 */
-export const weekShows: ShowCard[] = [
-  { id: 'glow', genre: '밴드', title: '멜로딕', venue: '라디오가가', date: '11/22', poster: posters.glowCard },
-  { id: 'lexa', genre: '밴드', title: '렉사', venue: '몽향', date: '11/29', poster: posters.union },
-  { id: 'acappella', genre: '아카펠라', title: '아카펠라', venue: '광운대', date: '12/06', poster: posters.draft },
-]
-
 /** L1 「내 주변」 — 숫자는 레이더가 끝난 뒤 카운트업합니다 */
 export const nearby = {
   bands: 8,
@@ -68,7 +61,25 @@ export const radioGaga: VenuePlace = {
   lng: 127.0583,
 }
 
-export const showDetail = {
+export interface ShowDetail {
+  id: string
+  hero: string
+  badges: string[]
+  titleLines: [string, string]
+  host: string
+  info: { k: string; v: string }[]
+  lineup: { initial: string; name: string; sub: string }[]
+  about: string[]
+  venue: VenuePlace
+  notice: string
+  price: string
+  priceValue: number
+  remain: string
+  /** 지도 목록에서 만든 얇은 상세 — 소개도 출연 팀도 아직 없습니다 */
+  thin?: boolean
+}
+
+export const showDetail: ShowDetail = {
   id: 'glow',
   hero: posters.glowHero,
   badges: ['D-3', '밴드', '4팀 연합'],
@@ -207,6 +218,83 @@ export const midnight: VenuePlace = {
   lng: 126.9245,
 }
 
+/* ── 공연 상세는 공연마다 다릅니다 ───────────────────── */
+
+/**
+ * 어느 공연을 눌러도 「멜로딕 단독 공연 · 겨울의 소리」 가 나왔습니다.
+ * 부산 공연을 눌러도 라디오가가가 나오고, 가격도 잔여석도 멜로딕 것이었습니다.
+ *
+ * 제대로 쓴 상세가 있는 공연은 그걸 주고, 지도에만 있는 공연은 **지도가 아는
+ * 만큼만** 만들어 줍니다 — 제목·장소·일시·포스터. 소개와 출연 팀은 없으니
+ * 없다고 말합니다. 모르는 id 면 null 입니다.
+ */
+export const showDetails: Record<string, ShowDetail> = {
+  glow: showDetail,
+  'lexa-melodic': {
+    id: 'lexa-melodic',
+    hero: posters.union,
+    badges: ['D-7', '밴드', '2팀 연합'],
+    titleLines: ['렉사 X 멜로딕', '연합 공연'],
+    host: '렉사 · 한양대학교 밴드 동아리',
+    info: [
+      { k: '일시', v: '11.29 (일) 18:00' },
+      { k: '장소', v: '몽향 · 서대문구 연세로' },
+      { k: '러닝타임', v: '약 90분' },
+      { k: '관람', v: '전체 관람가 · 스탠딩' },
+    ],
+    lineup: [
+      { initial: '렉', name: '렉사', sub: '한양대 · 4곡' },
+      { initial: '멜', name: '멜로딕', sub: '광운대 · 4곡' },
+    ],
+    about: [
+      '두 학교가 한 무대에 섭니다. 각자 네 곡씩 하고 마지막 한 곡은 같이 합니다.',
+      '',
+      '공연 시작 30분 전부터 입장할 수 있습니다.',
+    ],
+    venue: mongHyang,
+    notice: '예매 후 24시간 안에 입금해야 자리가 확정됩니다. 공연 3일 전까지 전액 환불됩니다.',
+    price: '16,000원',
+    priceValue: 16000,
+    remain: '잔여 8석',
+  },
+}
+
+/** 지도가 아는 만큼만 — 없는 것을 지어내지 않습니다 */
+function thinDetail(show: MapShow): ShowDetail {
+  return {
+    id: show.id,
+    // 포스터가 없으면 비워 둡니다 — 남의 공연 포스터를 빌려 쓰면 그 공연인 줄 압니다
+    hero: show.poster ?? '',
+    badges: [show.genre],
+    titleLines: [show.title, ''],
+    host: show.venue,
+    info: [
+      { k: '일시', v: show.date },
+      { k: '장소', v: `${show.venue} · ${show.region}` },
+    ],
+    lineup: [],
+    about: [],
+    venue: { name: show.venue, address: show.region, lat: show.lat, lng: show.lng },
+    notice: '아직 공연을 연 쪽에서 자세한 내용을 올리지 않았습니다.',
+    price: show.free ? '무료' : '가격 미정',
+    priceValue: 0,
+    remain: '',
+    thin: true,
+  }
+}
+
+export function showDetailFor(id: string): ShowDetail | null {
+  if (showDetails[id]) return showDetails[id]
+  const onMap = mapShows.find((show) => show.id === id)
+  return onMap ? thinDetail(onMap) : null
+}
+
+export const showMissing = {
+  title: '그 공연을 찾을 수 없어요',
+  body: '사라졌거나 주소가 잘못됐을 수 있습니다. 둘러보기에서 다시 찾아보세요.',
+  cta: '둘러보기',
+}
+
 /**
  * 티켓은 공연마다 다릅니다 — 예전에는 어느 티켓을 눌러도 멜로딕 것 하나만
  * 나와서, 눌러도 안 바뀌는 것처럼 보였습니다. 주소의 공연 id 로 찾습니다.
@@ -312,6 +400,25 @@ export const mapShows: MapShow[] = [
   { id: 'busan-gwangalli', title: '광안리 바다밴드', venue: '광안리 인디고', region: '부산 광안리', date: '12.14 (월) 18:00', lat: 35.1532, lng: 129.1186, at: '2026-12-14T18:00', when: 'later', genre: '밴드', free: true },
   { id: 'daegu-heavy', title: '대구 합동 공연', venue: '대구 헤비', region: '대구 동성로', date: '12.21 (월) 18:00', lat: 35.8686, lng: 128.5944, at: '2026-12-21T18:00', when: 'later', genre: '밴드' },
 ]
+
+/**
+ * L1 「이번 주 열리는 행사」 — **지도와 같은 목록에서 추립니다.**
+ *
+ * 전에는 따로 적어 둔 배열이었습니다. 그래서 같은 공연이 지도에서는
+ * `lexa-melodic`, 여기서는 `lexa` 였고, 12/06 공연이 「이번 주」 에 들어
+ * 있었습니다. 세는 쪽으로 두면 둘이 어긋날 수 없습니다.
+ */
+export const weekShows: ShowCard[] = mapShows
+  .filter((show) => show.when === 'today' || show.when === 'week')
+  .map((show) => ({
+    id: show.id,
+    genre: show.genre,
+    title: show.title,
+    venue: show.venue,
+    // '11.22 (일) 19:00' → '11/22'
+    date: show.date.split(' ')[0].replace('.', '/'),
+    poster: show.poster,
+  }))
 
 /** 지도를 처음 열었을 때 보이는 범위 — 노원 월계동 기준 */
 export const mapHome = { lat: 37.6186, lng: 127.0583, zoom: 13 }
@@ -846,7 +953,7 @@ export const clubConsole = {
       urgent: true,
     },
     {
-      id: 'union',
+      id: 'lexa-melodic',
       thumb: posters.union,
       title: '렉사 X 멜로딕 연합',
       when: '11.29 (일) 18:00 · 몽향',
@@ -858,7 +965,7 @@ export const clubConsole = {
   ],
   past: [
     {
-      id: 'autumn',
+      id: 'autumn-union',
       thumb: posters.draft,
       title: '가을 연합 공연',
       when: '10.11 (토) · 라디오가가',
