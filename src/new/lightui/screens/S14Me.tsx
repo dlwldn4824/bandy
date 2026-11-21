@@ -113,8 +113,11 @@ const S14Me = () => {
           <div className="s14__gap-14" />
           <div className="lui-card s14__profile">
             <ListRow
-              avatar={session?.initial || '?'}
-              title={session?.nickname || '로그인하기'}
+              // 로그인은 했는데 이름을 아직 안 적은 사람이 있습니다 (이메일로
+              // 막 들어와 온보딩을 건너뛴 경우). 그 사람에게 「로그인하기」 를
+              // 보여 주면 이미 한 일을 또 하라는 말이 됩니다.
+              avatar={session?.initial || (session ? '·' : '?')}
+              title={session ? session.nickname || '이름을 적어 주세요' : '로그인하기'}
               sub={profileSub}
               chevron
               onClick={() => navigate(session ? P.onboarding() : P.join)}

@@ -1,4 +1,4 @@
-import { mockKakaoUser, type BandyUser } from '../../mocks/auth'
+import { type BandyUser } from '../../mocks/auth'
 
 /**
  * 이메일 로그인.
@@ -136,6 +136,22 @@ export async function verifyEmailCode(email: string, code: string): Promise<Band
     else throw e
   }
 
-  // 이름·학교는 다음 단계(온보딩)에서 받습니다
-  return { ...mockKakaoUser, id: `email:${addr}`, provider: 'email', email: addr, nickname: '' }
+  /*
+   * 이름·학교는 다음 단계(온보딩)에서 받습니다.
+   *
+   * 전에는 `{ ...mockKakaoUser, … }` 로 만들었습니다. 그러면 처음 들어온
+   * 사람이 **이지우의 머리글자(「이」)와 운영진 권한**을 그대로 물려받습니다.
+   * 아바타에 남의 글자가 뜨고, 온보딩을 「나중에 할게요」 로 건너뛰면 그대로
+   * 남습니다. 남의 것을 내 것처럼 보여 주지 않습니다.
+   */
+  return {
+    id: `email:${addr}`,
+    provider: 'email',
+    email: addr,
+    nickname: '',
+    school: '',
+    department: '',
+    initial: '',
+    role: 'member',
+  }
 }
