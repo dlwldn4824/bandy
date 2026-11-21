@@ -12,7 +12,7 @@
  *   node scripts/check-routes.mjs http://localhost:4173
  */
 
-const BASE = process.argv[2] ?? 'https://band-alpha.vercel.app'
+const BASE = process.argv[2] ?? 'https://www.hibandy.com'
 
 /** [주소, 이 문구가 응답에 있어야 함] */
 const ROUTES = [

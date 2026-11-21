@@ -5,7 +5,7 @@
 
 | | |
 |---|---|
-| **서비스** | <https://band-alpha.vercel.app> |
+| **서비스** | <https://www.hibandy.com> |
 | **UX 소개서** | <https://dlwldn4824.github.io/bandy-case-study/> |
 | **디자인** | [Figma](https://www.figma.com/design/mLwN6nNV8jjSE70CiWRhvs) — 라이트 37화면 · 다크 34화면 |
 

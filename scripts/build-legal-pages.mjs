@@ -20,7 +20,7 @@ import { pathToFileURL } from 'node:url'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const OUT = join(ROOT, 'public')
-const SITE = 'https://band-alpha.vercel.app'
+const SITE = 'https://www.hibandy.com'
 
 /** content.ts 를 타입만 벗겨서 불러옵니다 */
 async function loadContent() {

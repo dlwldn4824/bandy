@@ -123,21 +123,27 @@ export function Steps() {
 
         <div className="b-steps__list">
           {audienceReasons.map((r, i) => (
-            <button
-              key={r.head}
-              type="button"
-              className="b-steps__item"
-              data-on={i === on ? '1' : '0'}
-              aria-expanded={i === on}
-              onClick={() => setOn(i)}
-              onMouseEnter={() => setOn(i)}
-            >
-              <span className="b-steps__n">{String(i + 1).padStart(2, '0')}</span>
-              <span className="b-steps__body">
-                <b>{r.head}</b>
-                <span className="b-steps__p">{r.body}</span>
-              </span>
-            </button>
+            <div className="b-steps__step" key={r.head}>
+              <button
+                type="button"
+                className="b-steps__item"
+                data-on={i === on ? '1' : '0'}
+                aria-expanded={i === on}
+                onClick={() => setOn(i)}
+                onMouseEnter={() => setOn(i)}
+              >
+                <span className="b-steps__n">{String(i + 1).padStart(2, '0')}</span>
+                <span className="b-steps__body">
+                  <b>{r.head}</b>
+                  <span className="b-steps__p">{r.body}</span>
+                </span>
+              </button>
+              {/* 좁은 화면에서만 보입니다 — 오른쪽에 그림 한 장을 둘 자리가 없어서,
+                  항목마다 제 그림을 답니다. 잘린 채 넘어가는 일이 없습니다. */}
+              <div className="b-steps__inline" aria-hidden="true">
+                <StepArt i={i} />
+              </div>
+            </div>
           ))}
         </div>
 

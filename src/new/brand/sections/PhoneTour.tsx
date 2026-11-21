@@ -35,8 +35,10 @@ function Screen({ raw, n, src, alt }: { raw: MotionValue<number>; n: number; src
 }
 
 function Cap({ raw, n, head, sub, side }: { raw: MotionValue<number>; n: number; head: string; sub: string; side: 'l' | 'r' }) {
-  const opacity = useTransform(raw, [n - FADE, n - 0.04, n + 0.72, n + 0.96], [0, 1, 1, 0])
-  const y = useTransform(raw, [n - FADE, n - 0.04, n + 0.72, n + 0.96], [14, 0, 0, -10])
+  /* 나가는 문장이 다 사라진 뒤에 다음 문장이 들어옵니다.
+     겹치는 구간을 두면 좁은 화면에서는 두 문장이 같은 자리에 포개져 읽히지 않습니다. */
+  const opacity = useTransform(raw, [n - 0.18, n - 0.02, n + 0.62, n + 0.78], [0, 1, 1, 0])
+  const y = useTransform(raw, [n - 0.18, n - 0.02, n + 0.62, n + 0.78], [12, 0, 0, -8])
   return (
     <motion.p className={`b-tour__cap b-tour__cap--${side}`} style={{ opacity, y }}>
       {head}
