@@ -22,12 +22,31 @@ import './S12Entry.css'
  *
  * 찾는 대상은 **입금이 끝난 사람**입니다. 확인 전인 사람도 같이 보여 주되
  * 입장은 막습니다 — 현장에서 「왜 안 되는지」 를 알아야 하니까요.
+ *
+ * 입장시키면 **위 숫자와 「방금 입장」 이 같이 움직입니다.** 시트 안에서만
+ * 「완료」 가 되고 닫으면 아무것도 안 바뀌면, 입구에 선 사람은 처리가 됐는지
+ * 알 수 없어 한 번 더 누릅니다.
  */
 const S12Entry = () => {
   const navigate = useNavigate()
   const [finding, setFinding] = useState(false)
   const [q, setQ] = useState('')
   const [entered, setEntered] = useState<string[]>([])
+  const [recent, setRecent] = useState(e.recent)
+
+  const count = e.entered + entered.length
+  const hhmm = () => {
+    const d = new Date()
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
+  /** 수동 입장 — 목록과 숫자를 같이 움직입니다 */
+  const letIn = (row: { name: string; sub: string }) => {
+    setEntered((prev) => [...prev, row.name])
+    setRecent((prev) => [
+      { initial: row.name.slice(0, 1), name: row.name, sub: `${row.sub.split(' · ')[0]} · ${hhmm()}` },
+      ...prev,
+    ])
+  }
 
   const found = useMemo(() => {
     const needle = q.trim()
@@ -65,20 +84,20 @@ const S12Entry = () => {
           <div className="lui-card s12__count">
             <div className="s12__count-top">
               <span>
-                <span className="s12__count-now">{e.entered}</span>
+                <span className="s12__count-now">{count}</span>
                 <span className="s12__count-of">/ {e.capacity}명 입장</span>
               </span>
               <span className="lui-pill lui-pill--lg">{e.badge}</span>
             </div>
             <span className="s12__bar">
-              <span style={{ width: `${(e.entered / e.capacity) * 100}%` }} />
+              <span style={{ width: `${Math.min(100, (count / e.capacity) * 100)}%` }} />
             </span>
           </div>
 
           <div className="s12__gap-26" />
-          <SectionHeader title="방금 입장" aside={String(e.recent.length)} />
+          <SectionHeader title="방금 입장" aside={String(recent.length)} />
           <div className="lui-card s12__recent">
-            {e.recent.map((row) => (
+            {recent.map((row) => (
               <ListRow
                 key={row.name}
                 avatar={row.initial}
@@ -139,7 +158,7 @@ const S12Entry = () => {
                   ) : r.ok ? (
                     <Button
                       size="sm"
-                      onClick={() => setEntered((prev) => [...prev, r.name])}
+                      onClick={() => letIn(r)}
                     >
                       입장
                     </Button>
