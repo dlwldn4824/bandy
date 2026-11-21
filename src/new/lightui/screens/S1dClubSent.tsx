@@ -116,7 +116,8 @@ const S1dClubSent = () => {
         </div>
       </div>
 
-      <div className="lui-bottombar s1d__bar">
+      {/* 버튼과 취소 링크를 한 줄에 두면 둘 다 버튼처럼 보입니다. 위아래로 쌓습니다. */}
+      <div className="lui-bottombar lui-bottombar--stack">
         <Button block onClick={() => navigate(P.home)}>
           둘러보러 가기
         </Button>

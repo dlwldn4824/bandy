@@ -46,5 +46,3 @@
   font-size: 12px; font-weight: 600; color: var(--lui-sub);
 }
 
-/* 버튼과 취소 링크를 한 줄에 두면 둘 다 버튼처럼 보입니다. 위아래로 쌓습니다. */
-.s1d__bar { flex-direction: column; align-items: stretch; gap: 10px; }

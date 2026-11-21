@@ -427,11 +427,19 @@ body.lui-page #root { background: #e9eaec; }
   gap: 14px;
   margin-top: 24px;
 }
-.lui-bottombar__info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.lui-bottombar__info { flex: none; }
+/* 같은 선택자를 두 번 쓰고 있었습니다 — 뒤의 flex:none 이 이기던 것을 한 줄로 합칩니다 */
+.lui-bottombar__info { flex: none; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .lui-bottombar__value { font-size: 18px; font-weight: 800; letter-spacing: -0.36px; color: var(--lui-ink); }
 .lui-bottombar__label { font-size: 11px; color: var(--lui-sub); }
+/* 가로로 놓인 바에서 버튼끼리 폭을 똑같이 나눠 가집니다 (flex-basis 0) */
 .lui-bottombar .lui-btn { flex: 1; min-width: 0; }
+
+/* 버튼을 위아래로 쌓는 바.
+   바를 세로로 뒤집으면 위의 flex:1 이 「폭을 나눠라」 가 아니라 「높이를 늘려라」 가
+   됩니다. flex-basis 0 이 높이에 걸려서 버튼이 제 키(47px)를 잃고 남는 자리만큼만
+   납작해집니다. 그래서 여기서 flex 를 풀어 줍니다. */
+.lui-bottombar--stack { flex-direction: column; align-items: stretch; gap: 10px; }
+.lui-bottombar--stack .lui-btn { flex: none; }
 
 /* ── 탭바 ─────────────────────────────────────────────
    규칙 4: 5개 · 아이콘 26px · 라벨 11px */
