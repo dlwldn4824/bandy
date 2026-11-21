@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import MoreMenu from '../components/MoreMenu.tsx'
@@ -8,6 +7,7 @@ import ListRow from '../components/ListRow.tsx'
 import Button from '../components/Button.tsx'
 import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
+import { useRemembered } from '../local/remember.ts'
 import { entered as e } from '../../mocks/bandyLight.ts'
 import './P3Entered.css'
 
@@ -22,10 +22,12 @@ import './P3Entered.css'
 const P3Entered = () => {
   const navigate = useNavigate()
   const { showId = 'glow' } = useParams()
-  const [done, setDone] = useState<string[]>([])
+  // 현장에서 하나씩 지워 가는 목록입니다. 지운 것이 안 남으면 목록이
+  // 아니라 그림입니다 — 공연장에서 화면 한 번 닫으면 처음부터 다시입니다.
+  const [done, setDone] = useRemembered<string[]>(`entered.${showId}`, [])
 
   const toggle = (id: string) =>
-    setDone((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+    setDone(done.includes(id) ? done.filter((x) => x !== id) : [...done, id])
 
   const dest: Record<string, string> = { people: P.livePeople(showId) }
 

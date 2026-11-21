@@ -10,6 +10,7 @@ import Icon from '../components/Icon.tsx'
 import Sheet from '../components/Sheet.tsx'
 import ConnectedResult from '../components/ConnectedResult.tsx'
 import { P } from '../paths.ts'
+import { useRemembered } from '../local/remember.ts'
 import { useRole } from '../auth/role.ts'
 import { subjectParticle, withParticle } from '../korean.ts'
 import type { ReceivedProposal } from '../../mocks/bandyLight.ts'
@@ -197,7 +198,9 @@ const RecruitTab = () => {
 const ReceivedTab = () => {
   const navigate = useNavigate()
   const { isManager } = useRole()
-  const [accepted, setAccepted] = useState<string[]>([])
+  // 수락한 제안이 다시 「받은 제안」 으로 돌아오면 또 수락하게 됩니다 —
+  // 상대 동아리에는 두 번 간 것으로 보입니다
+  const [accepted, setAccepted] = useRemembered<string[]>('proposalsAccepted', [])
   const [confirming, setConfirming] = useState<string | null>(null)
   // 수락한 순간 이 화면 위에 「연결되었어요」 가 덮입니다 (C4)
   const [celebrating, setCelebrating] = useState<ReceivedProposal | null>(null)
@@ -302,7 +305,7 @@ const ReceivedTab = () => {
           </Button>
           <Button
             onClick={() => {
-              if (confirming) setAccepted((prev) => [...prev, confirming])
+              if (confirming) setAccepted([...accepted, confirming])
               setCelebrating(target ?? null)
               setConfirming(null)
             }}
