@@ -22,3 +22,14 @@
 /* 안 적으면 다음으로 못 갑니다 (규칙 7 — 빨강은 꼭 봐야 하는 것) */
 .d2__bad { font-size: 11.5px; line-height: 18px; color: var(--lui-accent); padding-top: 2px; }
 .d2__none { padding: 2px 2px 0; }
+
+/* 로그인 없이 사는 사람에게 — 막지 않고 무엇이 달라지는지만 말합니다 */
+.d2__anon {
+  margin: 0; font-size: 11.5px; line-height: 1.7; color: var(--lui-sub);
+  text-align: center;
+}
+.d2__anon b { color: var(--lui-ink); font-weight: 700; }
+.d2__anon-link {
+  font-size: 11.5px; font-weight: 700; color: var(--lui-ink);
+  text-decoration: underline; text-underline-offset: 2px;
+}

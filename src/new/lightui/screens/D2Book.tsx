@@ -168,7 +168,23 @@ const D2Book = () => {
         </div>
       </div>
 
-      <div className="lui-bottombar">
+      <div className="lui-bottombar lui-bottombar--stack">
+        {/*
+          로그인 없이 예매되는 것은 막지 않습니다 — 포스터에 「NO SIGN-UP ·
+          TICKET BY SMS」 라고 적어 두었고, 공연 하루 전에 계정을 만들라고
+          하면 그냥 안 옵니다.
+          다만 **그 티켓을 다음에 어떻게 찾는지**는 말해야 합니다. 로그인
+          없이 산 티켓은 이 기기에만 남습니다. 사고 나서 기기를 바꾸면
+          찾을 길이 없는데, 사기 전에는 그걸 알 수가 없었습니다.
+        */}
+        {!saved && (
+          <p className="d2__anon">
+            로그인 없이도 예매됩니다. 다만 예매 내역이 <b>이 기기에만</b> 남아요.{' '}
+            <button type="button" className="d2__anon-link" onClick={() => navigate(P.start())}>
+              로그인하면 계정에 붙습니다
+            </button>
+          </p>
+        )}
         <Button
           block
           onClick={() => {
