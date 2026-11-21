@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { clubMembers, type ClubMember } from '../../mocks/bandyLight.ts'
+import { clubMembers, me, type ClubMember } from '../../mocks/bandyLight.ts'
+import { useIsDemoClub } from '../clubs/owner.ts'
 
 /**
  * 부원과 권한.
@@ -49,8 +50,19 @@ function subscribe(fn: () => void) {
 
 const get = () => snapshot
 
+/** 오늘 만든 동아리의 부원 목록 — 나 하나입니다 */
+const alone: ClubMember[] = [
+  { id: 'me', initial: me.initial, name: me.name, sub: '동아리를 만든 사람', role: 'manager', joined: '방금', me: true },
+]
+
 export function useMembers() {
-  const members = useSyncExternalStore(subscribe, get, get)
+  const stored = useSyncExternalStore(subscribe, get, get)
+  /**
+   * 적어 둔 다섯은 멜로딕 부원입니다. 다른 동아리로 들어온 사람에게
+   * 남의 부원을 보여 주면 거기서 운영진을 올릴 수도 있게 됩니다.
+   */
+  const demo = useIsDemoClub()
+  const members = demo || stored !== clubMembers ? stored : alone
   const managers = members.filter((m) => m.role === 'manager')
 
   return {

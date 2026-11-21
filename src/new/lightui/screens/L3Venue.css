@@ -81,3 +81,8 @@
   margin: 0; padding: 12px 0 2px; text-align: center;
   font-size: 12.5px; font-weight: 700; color: var(--lui-sub);
 }
+
+/* 갓 등록한 공연장 — 남의 일정 대신 빈 자리 */
+.l3-empty { padding: 20px 16px; display: flex; flex-direction: column; gap: 8px; }
+.l3-empty__title { font-size: 15px; font-weight: 700; color: var(--lui-ink); }
+.l3-empty__body { font-size: 12.5px; line-height: 1.75; color: var(--lui-sub); word-break: keep-all; }

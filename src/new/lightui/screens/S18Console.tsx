@@ -11,6 +11,7 @@ import { P } from '../paths.ts'
 import { useMembers } from '../auth/members.ts'
 import { useJoinInbox } from '../auth/joinInbox.ts'
 import { useMembership } from '../auth/membership.ts'
+import { freshClub, useIsDemoClub } from '../clubs/owner.ts'
 import { STAGE, useStages } from '../shows/stage.ts'
 import { clubConsole as c } from '../../mocks/bandyLight.ts'
 import './S18Console.css'
@@ -63,6 +64,13 @@ const S18Console = () => {
    * 것이지만, 적어도 이름이 거짓말을 하지는 않게 둡니다.
    */
   const { membership } = useMembership()
+  /**
+   * 적어 둔 공연·입금은 멜로딕 것입니다. 다른 동아리로 들어온 사람에게
+   * 남의 42건을 보여 주느니 빈 화면이 낫습니다 — 그게 실제 모습입니다.
+   */
+  const demo = useIsDemoClub()
+  const upcoming = demo ? c.upcoming : []
+  const past = demo ? c.past : []
 
   return (
     <Phone>
@@ -81,12 +89,18 @@ const S18Console = () => {
         <div className="s18">
           <p className="s18__club">{membership?.clubName ?? c.club.name}</p>
           <div className="s18__gap-6" />
-          <p className="s18__line">{c.summaryLine}</p>
+          <p className="s18__line">{demo ? c.summaryLine : '아직 올린 공연이 없어요'}</p>
 
           <div className="s18__gap-22" />
-          <SectionHeader title="다가오는 공연" aside={String(c.upcoming.length)} />
+          <SectionHeader title="다가오는 공연" aside={String(upcoming.length)} />
           <div className="lui-card s18__group">
-            {c.upcoming.map((show) => (
+            {upcoming.length === 0 && (
+              <div className="s18-empty">
+                <p className="s18-empty__title">{freshClub.shows}</p>
+                <p className="s18-empty__body">{freshClub.showsBody}</p>
+              </div>
+            )}
+            {upcoming.map((show) => (
               <ListRow
                 key={show.id}
                 avatar={<img src={show.thumb} alt="" />}
@@ -105,9 +119,10 @@ const S18Console = () => {
           </div>
 
           <div className="s18__gap-26" />
-          <SectionHeader title="끝난 공연" aside={String(c.past.length)} />
+          <SectionHeader title="끝난 공연" aside={String(past.length)} />
           <div className="lui-card s18__group">
-            {c.past.map((show) => (
+            {past.length === 0 && <p className="s18-empty__line">{freshClub.past}</p>}
+            {past.map((show) => (
               <ListRow
                 key={show.id}
                 avatar={<img src={show.thumb} alt="" />}
@@ -134,7 +149,9 @@ const S18Console = () => {
                       ? pending.length > 0
                         ? `${pending.length}명 기다림`
                         : '없음'
-                      : row.value
+                      : demo
+                        ? row.value
+                        : ''
                 }
                 onClick={() => navigate(TO[row.key])}
               />

@@ -9,6 +9,7 @@ import Button from '../components/Button.tsx'
 import Sheet from '../components/Sheet.tsx'
 import { P } from '../paths.ts'
 import { deposits, entryDesk as e } from '../../mocks/bandyLight.ts'
+import { freshClub, useIsDemoClub } from '../clubs/owner.ts'
 import scanFrame from '../assets/scan-frame.svg'
 import './S12Entry.css'
 
@@ -32,9 +33,11 @@ const S12Entry = () => {
   const [finding, setFinding] = useState(false)
   const [q, setQ] = useState('')
   const [entered, setEntered] = useState<string[]>([])
-  const [recent, setRecent] = useState(e.recent)
+  // 적어 둔 42명은 멜로딕의 11.22 공연 관객입니다 (clubs/owner.ts)
+  const demo = useIsDemoClub()
+  const [recent, setRecent] = useState(demo ? e.recent : [])
 
-  const count = e.entered + entered.length
+  const count = (demo ? e.entered : 0) + entered.length
   const hhmm = () => {
     const d = new Date()
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -51,12 +54,13 @@ const S12Entry = () => {
   const found = useMemo(() => {
     const needle = q.trim()
     if (!needle) return []
+    if (!demo) return []
     const rows = [
       ...deposits.paid.map((r) => ({ ...r, ok: true })),
       ...deposits.needCheck.map((r) => ({ ...r, ok: false })),
     ]
     return rows.filter((r) => r.name.includes(needle))
-  }, [q])
+  }, [q, demo])
 
   return (
     <Phone>
@@ -85,18 +89,20 @@ const S12Entry = () => {
             <div className="s12__count-top">
               <span>
                 <span className="s12__count-now">{count}</span>
-                <span className="s12__count-of">/ {e.capacity}명 입장</span>
+                <span className="s12__count-of">/ {demo ? e.capacity : 0}명 입장</span>
               </span>
-              <span className="lui-pill lui-pill--lg">{e.badge}</span>
+              {/* 오늘 공연이 없으면 「진행 중」 이 아닙니다 */}
+              {demo && <span className="lui-pill lui-pill--lg">{e.badge}</span>}
             </div>
             <span className="s12__bar">
-              <span style={{ width: `${Math.min(100, (count / e.capacity) * 100)}%` }} />
+              <span style={{ width: `${demo ? Math.min(100, (count / e.capacity) * 100) : 0}%` }} />
             </span>
           </div>
 
           <div className="s12__gap-26" />
           <SectionHeader title="방금 입장" aside={String(recent.length)} />
           <div className="lui-card s12__recent">
+            {recent.length === 0 && <p className="s12__empty">{freshClub.entryBody}</p>}
             {recent.map((row) => (
               <ListRow
                 key={row.name}
@@ -108,16 +114,21 @@ const S12Entry = () => {
             ))}
           </div>
 
-          <div className="s12__gap-26" />
-          <SectionHeader title="현장 판매" />
-          <div className="lui-card s12__onsite">
-            <ListRow
-              title={e.onsite.title}
-              sub={e.onsite.sub}
-              chevron
-              onClick={() => navigate(P.deposits)}
-            />
-          </div>
+          {/* 잔여석도 멜로딕 공연의 것입니다 */}
+          {demo && (
+            <>
+              <div className="s12__gap-26" />
+              <SectionHeader title="현장 판매" />
+              <div className="lui-card s12__onsite">
+                <ListRow
+                  title={e.onsite.title}
+                  sub={e.onsite.sub}
+                  chevron
+                  onClick={() => navigate(P.deposits)}
+                />
+              </div>
+            </>
+          )}
 
           <div className="s12__gap-14" />
           <div className="s12__pair">

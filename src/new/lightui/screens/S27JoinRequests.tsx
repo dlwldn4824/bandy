@@ -6,6 +6,7 @@ import SectionHeader from '../components/SectionHeader.tsx'
 import Button from '../components/Button.tsx'
 import Sheet from '../components/Sheet.tsx'
 import { useJoinInbox } from '../auth/joinInbox.ts'
+import { freshClub } from '../clubs/owner.ts'
 import { approveJoin, rejectClubJoin } from '../auth/clubJoin.ts'
 import { useMembers } from '../auth/members.ts'
 import { joinInboxCopy as t, ourSchool, type JoinRequest } from '../../mocks/bandyLight.ts'
@@ -86,8 +87,8 @@ const S27JoinRequests = () => {
 
           {pending.length === 0 ? (
             <div className="lui-card s27-empty">
-              <p className="s27-empty__title">{t.empty}</p>
-              <p className="s27-empty__body">{t.emptyBody}</p>
+              <p className="s27-empty__title">{freshClub.joins}</p>
+              <p className="s27-empty__body">{freshClub.joinsBody}</p>
             </div>
           ) : (
             <>

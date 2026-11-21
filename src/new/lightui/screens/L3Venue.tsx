@@ -9,6 +9,8 @@ import Sheet from '../components/Sheet.tsx'
 import { P } from '../paths.ts'
 import { subjectParticle } from '../korean.ts'
 import { venueBoard as v } from '../../mocks/bandyLight.ts'
+import { useMembership } from '../auth/membership.ts'
+import { freshVenue, useIsDemoVenue } from '../clubs/owner.ts'
 import './L3Venue.css'
 
 /**
@@ -31,6 +33,15 @@ const L3Venue = () => {
   const [accepting, setAccepting] = useState<string | null>(null)
   const [note, setNote] = useState<{ title: string; text: string } | null>(null)
 
+  /**
+   * 적어 둔 일정·지원 팀은 **라디오가가 것**입니다. 「몽향」 으로 등록하고
+   * 들어오면 머리에 라디오가가가 떴고, 이름만 바꾸면 남의 일정에 내 이름이
+   * 붙는 더 이상한 상태가 됩니다 (clubs/owner.ts).
+   */
+  const { membership } = useMembership()
+  const demo = useIsDemoVenue()
+  const name = membership?.kind === 'venue' ? membership.clubName : v.name
+
   const week = v.weeks[weekIndex]
   const applicants = v.applicants.filter((a) => !rejected.includes(a.id))
   const rejectTarget = v.applicants.find((a) => a.id === rejecting)
@@ -41,7 +52,7 @@ const L3Venue = () => {
       <div className="lui-body">
         <div className="l3">
           <div className="l3__head">
-            <h1 className="l3__name">{v.name}</h1>
+            <h1 className="l3__name">{name}</h1>
             {/* 공연장 모드에서 빠져나가는 유일한 길 — 그냥 라벨이면 갇힙니다 */}
             <button
               type="button"
@@ -52,10 +63,19 @@ const L3Venue = () => {
             </button>
           </div>
 
-          <p className="l3__lead">
-            3월에 비어 있는 날이 <strong>{v.emptyDays}일</strong> 남았어요
-          </p>
+          {demo ? (
+            <p className="l3__lead">
+              3월에 비어 있는 날이 <strong>{v.emptyDays}일</strong> 남았어요
+            </p>
+          ) : (
+            <div className="lui-card l3-empty">
+              <p className="l3-empty__title">{freshVenue.title}</p>
+              <p className="l3-empty__body">{freshVenue.body}</p>
+            </div>
+          )}
 
+          {demo && (
+            <>
           <div className="l3__gap-18" />
 
           <div className="lui-card l3__cal">
@@ -215,12 +235,16 @@ const L3Venue = () => {
             ))}
           </div>
 
+            </>
+          )}
+
           <div className="l3__gap-18" />
           <div className="lui-card l3__bulk">
             <ListRow
               avatar={<Icon name="plus" size={16} />}
-              title={v.bulk.title}
-              sub={v.bulk.sub}
+              /* 「남은 빈 날 8일」 은 라디오가가의 숫자입니다 */
+              title={demo ? v.bulk.title : '비어 있는 날 공개하기'}
+              sub={demo ? v.bulk.sub : '날짜를 고르고 조건을 적으면 동아리가 지원합니다'}
               chevron
               onClick={() =>
                 setNote({

@@ -6,6 +6,7 @@ import TabBar from '../components/TabBar.tsx'
 import { P } from '../paths.ts'
 import { deposits as d, type DepositRow } from '../../mocks/bandyLight.ts'
 import { COPY, useTicketStates } from '../pay/ticketState.ts'
+import { freshClub, useIsDemoClub } from '../clubs/owner.ts'
 import './S11Deposits.css'
 
 /** S11 입금 관리 (주최자) — Figma 214:2 */
@@ -53,19 +54,24 @@ const S11Deposits = () => {
   // 예매자가 「입금했어요」 를 누르면 여기 「입금 신고」 가 뜨고, 여기서
   // 확인을 누르면 저쪽 QR 이 열립니다 — 그게 수동 확인의 전부입니다.
   const { stateOf, confirm } = useTicketStates()
-  const live = d.needCheck.map((r) =>
+  // 적어 둔 42건은 멜로딕의 예매입니다 (clubs/owner.ts)
+  const demo = useIsDemoClub()
+  const live = (demo ? d.needCheck : []).map((r) =>
     r.showId ? { ...r, reported: stateOf(r.showId) === 'reported', state: COPY[stateOf(r.showId)].pill } : r,
   )
 
   const rows = live.filter((r) => !confirmed.includes(r.name) && r.state !== '입금 확인됨')
   // 확인을 누르면 그만큼 「입금 완료」 쪽으로 옮겨 갑니다
   const movedToPaid = live.filter((r) => confirmed.includes(r.name) || r.state === '입금 확인됨')
-  const paid = [...movedToPaid.map((r) => ({ ...r, reported: false, state: '입금 완료' })), ...d.paid]
+  const refunded = demo ? d.refunded : []
+  const paid = demo
+    ? [...movedToPaid.map((r) => ({ ...r, reported: false, state: '입금 완료' })), ...d.paid]
+    : []
 
   const counts: Record<FilterKey, number> = {
     need: rows.length,
-    paid: d.done + movedToPaid.length,
-    refund: d.refunded.length,
+    paid: demo ? d.done + movedToPaid.length : 0,
+    refund: demo ? d.refunded.length : 0,
   }
 
   return (
@@ -86,10 +92,10 @@ const S11Deposits = () => {
       />
       <div className="lui-body">
         <div className="s11">
-          <p className="s11__line">{d.summaryLine}</p>
+          <p className="s11__line">{demo ? d.summaryLine : freshClub.deposits}</p>
           <div className="s11__gap-6" />
           <p className="s11__big">
-            {d.done + movedToPaid.length} <em>/ {d.total}</em>
+            {demo ? d.done + movedToPaid.length : 0} <em>/ {demo ? d.total : 0}</em>
           </p>
           <div className="s11__gap-18" />
           <div className="s11__filters">
@@ -116,7 +122,7 @@ const S11Deposits = () => {
               </div>
               <div className="s11__gap-6" />
               {rows.length === 0 ? (
-                <p className="s11__empty">{d.empty.need}</p>
+                <p className="s11__empty">{demo ? d.empty.need : freshClub.depositsBody}</p>
               ) : (
                 rows.map((row, i) => (
                   <Row
@@ -135,10 +141,10 @@ const S11Deposits = () => {
               <div className="s11__gap-26" />
               <div className="s11__sec">
                 <span className="s11__sec-title">기한이 지난 예매</span>
-                <span className="s11__sec-aside">{d.expiredCount}</span>
+                <span className="s11__sec-aside">{demo ? d.expiredCount : '0건'}</span>
               </div>
               <div className="s11__gap-6" />
-              {d.expired.map((row) => (
+              {(demo ? d.expired : []).map((row) => (
                 <Row key={row.name} row={row} />
               ))}
             </>
@@ -163,14 +169,14 @@ const S11Deposits = () => {
             <>
               <div className="s11__sec">
                 <span className="s11__sec-title">환불한 예매</span>
-                <span className="s11__sec-aside">{d.refunded.length}건</span>
+                <span className="s11__sec-aside">{counts.refund}건</span>
               </div>
               <div className="s11__gap-6" />
-              {d.refunded.length === 0 ? (
+              {refunded.length === 0 ? (
                 <p className="s11__empty">{d.empty.refund}</p>
               ) : (
-                d.refunded.map((row, i) => (
-                  <Row key={row.name} row={row} line={i < d.refunded.length - 1} />
+                refunded.map((row, i) => (
+                  <Row key={row.name} row={row} line={i < refunded.length - 1} />
                 ))
               )}
             </>

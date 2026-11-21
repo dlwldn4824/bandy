@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { useClubJoin, type ClubJoinRequest } from './clubJoin.ts'
 import { joinRequests, me, type JoinRequest } from '../../mocks/bandyLight.ts'
+import { useIsDemoClub } from '../clubs/owner.ts'
 
 /**
  * 들어온 신청함 — 우리 동아리로 들어온 참여 신청.
@@ -88,7 +89,10 @@ function set(id: string, patch: Partial<JoinRequest>) {
 }
 
 export function useJoinInbox() {
-  const mock = useSyncExternalStore(subscribe, get, get)
+  const stored = useSyncExternalStore(subscribe, get, get)
+  // 적어 둔 세 건은 멜로딕으로 들어온 신청입니다
+  const demo = useIsDemoClub()
+  const mock = demo || stored !== joinRequests ? stored : []
   const mine = useClubJoin()
   // 진짜 신청을 맨 위에 둡니다 — 눌러서 확인할 수 있는 유일한 줄입니다
   const joined = mine && mine.kind === 'join'

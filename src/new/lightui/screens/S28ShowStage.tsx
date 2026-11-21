@@ -9,7 +9,7 @@ import Sheet from '../components/Sheet.tsx'
 import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
 import { STAGES, openChecklist, useStage, type SetStage } from '../shows/stage.ts'
-import { clubConsole as c } from '../../mocks/bandyLight.ts'
+import { clubConsole as c, showMissing } from '../../mocks/bandyLight.ts'
 import './S28ShowStage.css'
 
 /**
@@ -25,14 +25,14 @@ import './S28ShowStage.css'
 const S28ShowStage = () => {
   const navigate = useNavigate()
   const { showId = 'glow' } = useParams()
-  const show =
-    c.upcoming.find((s) => s.id === showId) ?? c.past.find((s) => s.id === showId) ?? c.upcoming[0]
+  // 모르는 공연이면 첫 공연으로 대신하지 않습니다 — 남의 공연 단계를 바꾸게 됩니다
+  const show = [...c.upcoming, ...c.past].find((row) => row.id === showId)
   const t = c.stageCopy
 
-  const { stage, locked, move } = useStage(show.id, show.at)
+  const { stage, locked, move } = useStage(show?.id ?? showId, show?.at)
   const [ask, setAsk] = useState<'open' | 'close' | 'back' | null>(null)
 
-  const need = openChecklist(show)
+  const need = openChecklist(show ?? {})
   /**
    * 갖출 것은 **처음 열 때만** 봅니다. 한 번 연 공연을 닫았다가 다시 여는
    * 길까지 막으면, 실수로 닫은 운영진이 공연을 다시 만들어야 합니다 —
@@ -40,13 +40,31 @@ const S28ShowStage = () => {
    */
   const ready = stage === 'closed' || need.every((n) => n.ok)
   // 끝난 공연에는 예매 수가 없습니다 — 모양이 다른 목이라 갈라 읽습니다
-  const sold = 'paid' in show ? show.paid : 0
-  const total = 'total' in show ? show.total : sold
+  const sold = show && 'paid' in show ? show.paid : 0
+  const total = show && 'total' in show ? show.total : sold
 
   const close = () => setAsk(null)
   const go = (next: SetStage) => {
     move(next)
     close()
+  }
+
+  if (!show) {
+    return (
+      <Phone>
+        <TopBar title={t.title} />
+        <div className="lui-body">
+          <div className="s28">
+            <div className="s28__gap-26" />
+            <div className="lui-card s28-alone">
+              <p className="s28-alone__title">{showMissing.title}</p>
+              <p className="s28-alone__body">{showMissing.body}</p>
+            </div>
+          </div>
+        </div>
+        <TabBar active="my" />
+      </Phone>
+    )
   }
 
   return (

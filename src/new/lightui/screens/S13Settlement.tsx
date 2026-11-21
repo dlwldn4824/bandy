@@ -9,6 +9,7 @@ import Button from '../components/Button.tsx'
 import { P } from '../paths.ts'
 import { settlement as s } from '../../mocks/bandyLight.ts'
 import { BANK, BANK_READY } from '../pay/deposit.ts'
+import { freshClub, useIsDemoClub } from '../clubs/owner.ts'
 import './S13Settlement.css'
 
 /**
@@ -22,6 +23,28 @@ import './S13Settlement.css'
  */
 const S13Settlement = () => {
   const navigate = useNavigate()
+  // 적어 둔 694,000원은 멜로딕의 11.22 공연 것입니다 (clubs/owner.ts)
+  const demo = useIsDemoClub()
+
+  if (!demo) {
+    return (
+      <Phone>
+        <TopBar title="정산" />
+        <div className="lui-body">
+          <div className="s13">
+            <div className="s13__gap-26" />
+            <div className="lui-card s13-empty">
+              <p className="s13-empty__title">{freshClub.settlement}</p>
+              <p className="s13-empty__body">{freshClub.settlementBody}</p>
+              <Button variant="ghost" onClick={() => navigate(P.console)}>
+                공연 관리로
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Phone>
+    )
+  }
 
   return (
     <Phone>
