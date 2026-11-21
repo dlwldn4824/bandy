@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import MoreMenu from '../components/MoreMenu.tsx'
@@ -6,10 +7,12 @@ import SectionHeader from '../components/SectionHeader.tsx'
 import SummaryBox from '../components/SummaryBox.tsx'
 import ListRow from '../components/ListRow.tsx'
 import Button from '../components/Button.tsx'
+import Sheet from '../components/Sheet.tsx'
 import { P } from '../paths.ts'
 import { settlement as s } from '../../mocks/bandyLight.ts'
 import { useBankAccount } from '../pay/bankAccount.ts'
 import { freshClub, useIsDemoClub } from '../clubs/owner.ts'
+import { useSettleRequest, whenText } from '../pay/settleRequest.ts'
 import './S13Settlement.css'
 
 /**
@@ -24,6 +27,10 @@ import './S13Settlement.css'
 const S13Settlement = () => {
   const { bank, ready: BANK_READY } = useBankAccount()
   const navigate = useNavigate()
+  // 요청했는지는 기기에 적어 둡니다 — 화면 상태로만 두면 나갔다 오는 순간
+  // 사라져서 같은 돈을 두 번 요청하게 됩니다
+  const { at, requested, request } = useSettleRequest()
+  const [asking, setAsking] = useState(false)
   // 적어 둔 694,000원은 멜로딕의 11.22 공연 것입니다 (clubs/owner.ts)
   const demo = useIsDemoClub()
 
@@ -116,9 +123,14 @@ const S13Settlement = () => {
                   {BANK_READY ? bank?.holder : '정산을 받으려면 계좌를 먼저 등록해 주세요.'}
                 </span>
               </span>
-              <span className="lui-pill lui-pill--lg lui-pill--outline">
+              {/* span 이라 눌리지 않았습니다 — 계좌를 바꾸러 갈 길이 없었습니다 */}
+              <button
+                type="button"
+                className="lui-pill lui-pill--lg lui-pill--outline s13__account-go"
+                onClick={() => navigate(P.bankAccount)}
+              >
                 {BANK_READY ? '변경' : '등록'}
-              </span>
+              </button>
             </div>
           </div>
 
@@ -127,11 +139,45 @@ const S13Settlement = () => {
         </div>
       </div>
 
-      <div className="lui-bottombar">
-        <Button block onClick={() => navigate(P.me)}>
-          정산 요청
+      <div className="lui-bottombar lui-bottombar--stack">
+        {requested && at && (
+          <p className="s13__asked">
+            {whenText(at)}에 요청했어요 · 확인되면 알림으로 알려 드려요
+          </p>
+        )}
+        <Button
+          block
+          disabled={requested || !BANK_READY}
+          onClick={() => setAsking(true)}
+        >
+          {requested ? '요청했어요' : '정산 요청'}
         </Button>
+        {!BANK_READY && !requested && (
+          <p className="s13__asked">받을 계좌를 먼저 등록해 주세요.</p>
+        )}
       </div>
+
+      <Sheet open={asking} title="정산을 요청할까요?" onClose={() => setAsking(false)}>
+        <p className="lui-menu__note">
+          {s.totalValue.toLocaleString('ko-KR')}원 중 동아리 몫이{' '}
+          {s.shares[0].value.toLocaleString('ko-KR')}원입니다.{' '}
+          {BANK_READY ? `${bank?.name} ${bank?.account} (${bank?.holder})` : ''} 로 영업일 기준
+          3일 안에 들어갑니다.
+        </p>
+        <div className="s13__pair">
+          <Button variant="ghost" onClick={() => setAsking(false)}>
+            그대로 두기
+          </Button>
+          <Button
+            onClick={() => {
+              request()
+              setAsking(false)
+            }}
+          >
+            요청하기
+          </Button>
+        </div>
+      </Sheet>
     </Phone>
   )
 }
