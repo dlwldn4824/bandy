@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { BANK_READY } from '../pay/deposit.ts'
+import { getBank } from '../pay/deposit.ts'
 
 /**
  * 공연이 지금 어디쯤인지.
@@ -109,7 +109,8 @@ export function openChecklist(show: { at?: string; venue?: string }) {
     { k: '공연장', ok: show.venue !== undefined ? Boolean(show.venue) : true, how: '설 자리를 먼저 잡으세요.' },
     {
       k: '입금 계좌',
-      ok: BANK_READY,
+      // 모듈 상수(BANK_READY)로 읽으면 방금 등록하고 돌아와도 false 입니다
+      ok: getBank().ready,
       // 계좌 없이 표를 팔면 돈 낼 길이 없는 공연을 파는 것입니다
       how: '동아리 계좌를 등록해야 예매자가 돈을 보낼 수 있습니다.',
     },

@@ -9,6 +9,7 @@ import Sheet from '../components/Sheet.tsx'
 import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
 import { STAGES, openChecklist, useStage, type SetStage } from '../shows/stage.ts'
+import { useBankAccount } from '../pay/bankAccount.ts'
 import { clubConsole as c, showMissing } from '../../mocks/bandyLight.ts'
 import './S28ShowStage.css'
 
@@ -30,6 +31,8 @@ const S28ShowStage = () => {
   const t = c.stageCopy
 
   const { stage, locked, move } = useStage(show?.id ?? showId, show?.at)
+  // 계좌를 등록하고 돌아오면 체크리스트가 그 자리에서 바뀌어야 합니다
+  useBankAccount()
   const [ask, setAsk] = useState<'open' | 'close' | 'back' | null>(null)
 
   const need = openChecklist(show ?? {})
@@ -126,7 +129,16 @@ const S28ShowStage = () => {
               <SectionHeader title={t.need} aside={ready ? '다 됐어요' : '빠진 것 있음'} />
               <div className="lui-card s28__need">
                 {need.map((n) => (
-                  <div key={n.k} className={`s28-need${n.ok ? ' s28-need--ok' : ''}`}>
+                  /* 빠진 것을 짚었으면 그 자리에서 메울 수 있어야 합니다 —
+                     「계좌를 등록해야 합니다」 라고만 적고 길을 안 두면
+                     마이까지 돌아가서 찾아야 합니다 */
+                  <button
+                    key={n.k}
+                    type="button"
+                    className={`s28-need${n.ok ? ' s28-need--ok' : ''}`}
+                    disabled={n.ok || n.k !== '입금 계좌'}
+                    onClick={() => navigate(P.bankAccount)}
+                  >
                     {/* 빠진 것에는 아이콘 대신 빈 동그라미 — 체크 아이콘을
                         회색으로 쓰면 「됐다」 와 구분이 안 됩니다 */}
                     {n.ok ? (
@@ -138,7 +150,10 @@ const S28ShowStage = () => {
                       <span className="s28-need__k">{n.k}</span>
                       {!n.ok && <span className="s28-need__how">{n.how}</span>}
                     </span>
-                  </div>
+                    {!n.ok && n.k === '입금 계좌' && (
+                      <Icon name="chevron-right" size={16} className="s28-need__chev" />
+                    )}
+                  </button>
                 ))}
               </div>
               <div className="s28__gap-12" />

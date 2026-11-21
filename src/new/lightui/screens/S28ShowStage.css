@@ -36,7 +36,10 @@
 
 /* 열기 전에 갖출 것 */
 .s28__need { padding: 4px 16px; }
-.s28-need { display: flex; gap: 10px; padding: 13px 0; align-items: flex-start; }
+.s28-need { display: flex; gap: 10px; padding: 13px 0; align-items: flex-start; width: 100%; text-align: left; }
+/* 다 된 줄은 눌러도 갈 데가 없습니다 — 눌리는 것처럼 보이지 않게 */
+.s28-need:disabled { cursor: default; }
+.s28-need__chev { color: var(--lui-icon-faint); flex: none; margin-top: 2px; }
 .s28-need + .s28-need { border-top: 1px solid var(--lui-line-2); }
 .s28-need__icon { color: var(--lui-sub-2); flex: none; margin-top: 1px; }
 .s28-need__todo {
