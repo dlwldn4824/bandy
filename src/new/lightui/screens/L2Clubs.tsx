@@ -14,6 +14,7 @@ import { useRole } from '../auth/role.ts'
 import { subjectParticle, withParticle } from '../korean.ts'
 import type { ReceivedProposal } from '../../mocks/bandyLight.ts'
 import {
+  me,
   myClub,
   showRun,
   receivedProposals,
@@ -44,6 +45,7 @@ const L2Clubs = () => {
   const navigate = useNavigate()
   const { isManager } = useRole()
   const [params, setParams] = useSearchParams()
+  const [switching, setSwitching] = useState(false)
 
   const asked = params.get('tab') as TabKey | null
   const allowed: TabKey[] = isManager ? ['recruit', 'received', 'sent'] : ['recruit', 'received']
@@ -68,7 +70,15 @@ const L2Clubs = () => {
         <div className="l2">
           <div className="l2__head">
             <h1 className="l2__title">동아리 교류</h1>
-            <span className="lui-pill lui-pill--soft">{myClub.switcher}</span>
+            {/* 그냥 라벨이면 눌러 볼 이유가 없습니다 — 내 동아리를 보여 주는 자리로 */}
+            <button
+              type="button"
+              className="lui-pill lui-pill--soft l2__switch"
+              aria-haspopup="dialog"
+              onClick={() => setSwitching(true)}
+            >
+              {myClub.switcher}
+            </button>
           </div>
 
           <div className="l2__gap-18" />
@@ -143,6 +153,37 @@ const L2Clubs = () => {
           {tab === 'sent' && <SentTab />}
         </div>
       </div>
+      <Sheet
+        open={switching}
+        title={myClub.switcherSheet.title}
+        onClose={() => setSwitching(false)}
+      >
+        <div className="lui-menu">
+          {me.clubs.map((club) => (
+            <div key={club.name} className="l2-switch__row">
+              <span className="l2-switch__avatar">{club.initial}</span>
+              <span className="l2-switch__main">
+                <span className="l2-switch__name">{club.name}</span>
+                <span className="l2-switch__sub">{club.sub}</span>
+              </span>
+              <span className="lui-pill lui-pill--ink">지금</span>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="lui-menu__item"
+            onClick={() => {
+              setSwitching(false)
+              navigate(P.me)
+            }}
+          >
+            <span className="lui-menu__label">{myClub.switcherSheet.joinTitle}</span>
+            <span className="lui-menu__sub">{myClub.switcherSheet.joinSub}</span>
+          </button>
+        </div>
+        <p className="lui-note l2__note">{myClub.switcherSheet.note}</p>
+      </Sheet>
+
       <TabBar active="club" />
     </Phone>
   )

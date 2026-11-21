@@ -75,8 +75,15 @@ function page({ title, lead, body, canonical }) {
   .updated { margin: 0; font-size: 12.5px; color: #8a8f98; }
   h2 { margin: 30px 0 8px; font-size: 16px; letter-spacing: -0.3px; color: #17181c; }
   p { margin: 0 0 12px; }
-  .nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; }
-  .nav a { padding: 8px 14px; border-radius: 999px; background: #f5f5f6; color: #5c616b; font-size: 12.5px; font-weight: 700; text-decoration: none; }
+  /* 네 칸을 글자 길이대로 두면 「계정 삭제」 하나만 둘째 줄로 떨어져 들쭉날쭉합니다.
+     좁은 화면은 2×2, 넓어지면 한 줄 4칸으로 폭을 맞춥니다. */
+  .nav { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 22px 0 0; }
+  @media (min-width: 560px) { .nav { grid-template-columns: repeat(4, 1fr); } }
+  .nav a {
+    padding: 9px 10px; border-radius: 999px; background: #f5f5f6; color: #5c616b;
+    font-size: 12.5px; font-weight: 700; text-decoration: none;
+    text-align: center; white-space: nowrap;
+  }
   .nav a[aria-current] { background: #17181c; color: #fff; }
   .note { padding: 14px 16px; border-radius: 14px; background: #f5f5f6; font-size: 13px; color: #5c616b; }
   .warn { padding: 14px 16px; border-radius: 14px; background: #fceeed; color: #e0443f; font-size: 13px; font-weight: 600; }

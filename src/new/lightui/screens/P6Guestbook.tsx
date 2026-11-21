@@ -21,7 +21,7 @@ const P6Guestbook = () => {
   const [reporting, setReporting] = useState(false)
 
   return (
-    <Phone time="18:42">
+    <Phone>
       <TopBar
         title="방명록"
         right={

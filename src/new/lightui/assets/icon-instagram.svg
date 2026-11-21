@@ -1,0 +1,7 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="icon/instagram">
+<rect id="frame" x="2" y="2" width="14" height="14" rx="4.2" stroke-width="1.6" stroke="#17181C"/>
+<circle id="lens" cx="9" cy="9" r="3.4" stroke-width="1.6" stroke="#17181C"/>
+<circle id="flash" cx="13.1" cy="4.9" r="0.95" fill="#17181C"/>
+</g>
+</svg>

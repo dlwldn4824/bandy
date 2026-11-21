@@ -26,7 +26,7 @@ const P1ShowLive = () => {
   }
 
   return (
-    <Phone time="18:42">
+    <Phone>
       <div className="lui-body">
         <div className="p1__hero">
           <img src={s.hero} alt="" />

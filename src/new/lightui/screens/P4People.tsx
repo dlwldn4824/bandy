@@ -30,7 +30,7 @@ const P4People = () => {
     navigate(name ? `${P.liveTap(showId)}?with=${encodeURIComponent(name)}` : P.liveTap(showId))
 
   return (
-    <Phone time="18:42">
+    <Phone>
       <TopBar
         title="오늘 여기 온 사람"
         right={

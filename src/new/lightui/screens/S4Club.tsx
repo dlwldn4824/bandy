@@ -98,6 +98,17 @@ const S4Club = () => {
           <div className="s4__gap-14" />
           <h1 className="s4__name">{c.name}</h1>
           <p className="s4__sub">{c.sub}</p>
+          {/* 인스타가 있는 동아리만 — 없으면 아예 그리지 않습니다 */}
+          {c.instagram && (
+            <a
+              className="s4__insta"
+              href={`https://www.instagram.com/${c.instagram}/`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Icon name="instagram" size={15} />@{c.instagram}
+            </a>
+          )}
 
           <div className="s4__gap-26" />
           <div className="lui-card s4__stats">

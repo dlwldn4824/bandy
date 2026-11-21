@@ -17,6 +17,8 @@ export interface BandyUser {
   department: string
   /** 아바타 자리에 쓰는 한 글자 */
   initial: string
+  /** 예매할 때 적은 연락처 — 다음 예매에서 자동으로 채웁니다 */
+  phone?: string
   /** 동아리에서의 권한 — 운영진만 할 수 있는 일이 있습니다 */
   role: 'manager' | 'member'
 }

@@ -106,18 +106,29 @@ export const booking = {
     sub: '11.22 (일) 19:00 · 라디오가가',
   },
   maxPerPerson: 4,
+  /** 아무것도 안 고른 상태에서 시작합니다 — 장바구니에 몰래 담아 두지 않습니다 */
+  initialTickets: 1,
   ticket: { name: '일반', price: 15000, priceLabel: '15,000원' },
+  /**
+   * 사전 구매 — 무엇을 팔지, 몇 개까지 팔지는 공연을 만든 쪽(S10)이 정합니다.
+   * `open: false` 인 것은 이번 공연에서 안 여는 것이라 화면에 아예 안 나옵니다.
+   */
   addons: [
     // 주류가 섞이면 연령 등급과 지역 제한이 붙습니다 — 무알코올이라는 걸 화면에 적어 둡니다
-    { id: 'drink', name: '음료 1잔 (무알코올)', price: 3000, sub: '3,000원 · 공연 당일 현장 바에서 교환', initial: 1 },
-    { id: 'tee', name: '공연 티셔츠', price: 15000, sub: '15,000원 · 수량 한정', initial: 0 },
+    { id: 'drink', name: '음료 1잔 (무알코올)', price: 3000, sub: '3,000원 · 공연 당일 현장 바에서 교환', open: true, max: 4 },
+    { id: 'tee', name: '공연 티셔츠', price: 15000, sub: '15,000원 · 수량 한정', open: true, max: 2 },
+    { id: 'poster', name: '공연 포스터', price: 5000, sub: '5,000원', open: false, max: 2 },
   ],
+  /** 공연자가 사전 구매를 하나도 안 열었을 때 */
+  addonsNone: '이번 공연은 사전 구매를 열지 않았어요. 현장에서 살 수 있습니다.',
   /**
    * 예매 수수료.
    * Figma 예시가 「티켓 2매 → 1,000원」 이라 1매당 500원으로 두었습니다.
    * 실제 요율은 아직 정해진 값이 아니니 확정되면 여기만 고치면 됩니다.
    */
   feePerTicket: 500,
+  /** 이름·연락처가 비면 다음으로 못 갑니다 — 입금자를 못 찾으면 자리를 확정할 수 없습니다 */
+  buyerRequired: '이름과 연락처를 적어 주세요. 입금 확인에 꼭 필요해요.',
   buyer: {
     nameLabel: '이름',
     namePlaceholder: '이지우',
@@ -308,6 +319,13 @@ export const myClub = {
   received: 2,
   sent: 1,
   switcher: '멜로딕 ▾',
+  /** 「멜로딕 ▾」 를 눌렀을 때 — 내가 든 동아리 목록 */
+  switcherSheet: {
+    title: '내 동아리',
+    note: '동아리를 여러 개 들었다면 여기서 바꿉니다. 지금은 하나뿐이에요.',
+    joinTitle: '다른 동아리 참여하기',
+    joinSub: '운영진에게 받은 참여 코드로',
+  },
   /** 다크 카드 안에서 C1 로 들어가는 줄 */
   connections: { title: '우리의 연결', sub: '만난 밴드 6팀' },
 }
@@ -373,6 +391,8 @@ export const clubDetail = {
   initial: '멜',
   name: '멜로딕',
   sub: '광운대학교 · 밴드 · 2008년 창단',
+  /** 인스타그램 계정 (@ 없이). 없는 동아리는 비워 둡니다 — 죽은 링크를 만들지 않습니다 */
+  instagram: 'melodic_kw',
   stats: [
     { k: '부원', v: '18' },
     { k: '올해 공연', v: '2' },
@@ -393,9 +413,11 @@ export const clubDetail = {
   pastCount: 7,
 }
 
-/** 다음 공연이 아직 없는 동아리도 있습니다 */
-export type ClubDetail = Omit<typeof clubDetail, 'upcoming'> & {
+/** 다음 공연이 아직 없는 동아리도, 인스타 계정이 없는 동아리도 있습니다 */
+export type ClubDetail = Omit<typeof clubDetail, 'upcoming' | 'instagram'> & {
   upcoming: { thumb: string; title: string; sub: string } | null
+  /** 인스타그램 계정 (@ 없이). 없으면 링크를 그리지 않습니다 */
+  instagram?: string
 }
 
 /**
@@ -412,6 +434,7 @@ export const clubsById: Record<string, ClubDetail> = {
     initial: '렉',
     name: '렉사',
     sub: '한양대학교 · 밴드 · 2011년 창단',
+    instagram: 'lexa_hyu',
     stats: [
       { k: '부원', v: '24' },
       { k: '올해 공연', v: '3' },
@@ -435,6 +458,7 @@ export const clubsById: Record<string, ClubDetail> = {
     initial: '하',
     name: '하모닉',
     sub: '삼육대학교 · 밴드 · 2015년 창단',
+    instagram: 'harmonic_syu',
     stats: [
       { k: '부원', v: '12' },
       { k: '올해 공연', v: '4' },
@@ -457,6 +481,7 @@ export const clubsById: Record<string, ClubDetail> = {
     initial: '아',
     name: '아카펠라',
     sub: '서울여자대학교 · 아카펠라 · 2013년 창단',
+    instagram: 'acappella_kw',
     stats: [
       { k: '부원', v: '9' },
       { k: '올해 공연', v: '2' },
@@ -476,6 +501,7 @@ export const clubsById: Record<string, ClubDetail> = {
     initial: '손',
     name: '손아픔',
     sub: '서울과학기술대학교 · 밴드 · 2018년 창단',
+    instagram: 'sonapeum_seoultech',
     stats: [
       { k: '부원', v: '11' },
       { k: '올해 공연', v: '2' },
@@ -495,6 +521,7 @@ export const clubsById: Record<string, ClubDetail> = {
     initial: '블',
     name: '블루노트',
     sub: '서울여자대학교 · 밴드 · 2010년 창단',
+    instagram: 'bluenote_swu',
     stats: [
       { k: '부원', v: '14' },
       { k: '올해 공연', v: '2' },

@@ -41,7 +41,7 @@ const P2Preorder = () => {
   const goodsList = filter === '한정' ? pre.goods.filter((g) => g.limited) : pre.goods
 
   return (
-    <Phone time="18:42">
+    <Phone>
       <TopBar
         title="사전 구매"
         right={

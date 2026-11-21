@@ -44,16 +44,8 @@ body.lui-page #root { background: #e9eaec; }
 .lui-body { flex: 1; display: flex; flex-direction: column; }
 
 /* ── 상태바 ───────────────────────────────────────────── */
-.lui-statusbar {
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  flex: none;
-}
-.lui-statusbar__time { font-size: 12px; font-weight: 600; color: var(--lui-ink); }
-.lui-statusbar__meta { font-size: 11px; color: var(--lui-sub); }
+/* 가짜 상태바를 걷어낸 자리 — 기기의 진짜 상태바와 겹치지 않게 여백만 둡니다 */
+.lui { padding-top: env(safe-area-inset-top); }
 
 /* ── 아이콘 ─────────────────────────────────────────────
    원본 SVG 를 마스크로 써서 색만 바꿉니다. 파일 자체는 건드리지 않습니다. */
@@ -1031,3 +1023,6 @@ textarea.lui-input {
   font-size: 12.5px; font-weight: 600; color: var(--lui-ink);
   user-select: all; -webkit-user-select: all;
 }
+
+/* 비워 두면 안 되는 칸 */
+.lui-input--bad { border-color: var(--lui-accent); }

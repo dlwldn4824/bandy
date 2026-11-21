@@ -23,7 +23,7 @@ const P5Tap = () => {
   const withName = params.get('with')
 
   return (
-    <Phone time="18:42">
+    <Phone>
       <TopBar
         title={withName ? `${withName}${withParticle(withName)} 연결` : '연결하기'}
         right={<span className="lui-topbar__side" />}

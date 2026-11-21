@@ -18,3 +18,7 @@
 
 .d2__fields { display: flex; flex-direction: column; gap: 12px; }
 .d2__gap { height: 26px; }
+
+/* 안 적으면 다음으로 못 갑니다 (규칙 7 — 빨강은 꼭 봐야 하는 것) */
+.d2__bad { font-size: 11.5px; line-height: 18px; color: var(--lui-accent); padding-top: 2px; }
+.d2__none { padding: 2px 2px 0; }

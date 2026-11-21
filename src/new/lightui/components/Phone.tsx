@@ -3,28 +3,20 @@ import { applyTheme, useTheme } from '../theme.ts'
 import '../styles/base.css'
 
 /**
- * Figma 프레임 한 장에 대응하는 셸.
+ * Figma 프레임 한 장에 대응하는 셸 — 폭 420px.
  *
- * 폭 420px · 상태바 44px 가 프레임의 공통 부분이라 여기 모았습니다.
+ * 예전에는 여기서 「9:41 LTE ▮」 상태바를 그렸습니다. Figma 프레임마다 있던 것이라
+ * 그대로 옮겼는데, 실제로 도는 앱에서는 거짓말입니다. 시각도 전파도 가짜였고,
+ * 기기의 진짜 상태바 아래에 하나가 더 붙는 꼴이었습니다. 그래서 뺐습니다 —
+ * 상태바는 OS 가 그립니다. 화면 안에 보이는 시각(입장 18:42 같은 것)은 데이터라 그대로입니다.
  */
 
 interface PhoneProps {
   children: ReactNode
-  /** 상태바를 숨길 일이 있으면 false (Figma 비교용 캡처에서는 항상 켭니다) */
-  statusBar?: boolean
-  /** 상태바 시각 — 공연 당일 화면은 Figma 가 18:42 로 그려 두었습니다 */
-  time?: string
   className?: string
 }
 
-export const StatusBar = ({ time = '9:41' }: { time?: string }) => (
-  <div className="lui-statusbar">
-    <span className="lui-statusbar__time">{time}</span>
-    <span className="lui-statusbar__meta">LTE ▮</span>
-  </div>
-)
-
-const Phone = ({ children, statusBar = true, time, className }: PhoneProps) => {
+const Phone = ({ children, className }: PhoneProps) => {
   // 시스템 설정이 바뀌면 다시 그리도록 구독만 해 둡니다
   useTheme()
 
@@ -37,7 +29,6 @@ const Phone = ({ children, statusBar = true, time, className }: PhoneProps) => {
 
   return (
     <div className={`lui${className ? ` ${className}` : ''}`}>
-      {statusBar && <StatusBar time={time} />}
       {children}
     </div>
   )

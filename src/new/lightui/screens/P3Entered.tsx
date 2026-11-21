@@ -30,7 +30,7 @@ const P3Entered = () => {
   const dest: Record<string, string> = { people: P.livePeople(showId) }
 
   return (
-    <Phone time="18:42">
+    <Phone>
       <TopBar
         title="입장"
         right={

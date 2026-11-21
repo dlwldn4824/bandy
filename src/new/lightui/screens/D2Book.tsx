@@ -8,6 +8,7 @@ import SectionHeader from '../components/SectionHeader.tsx'
 import SummaryBox from '../components/SummaryBox.tsx'
 import Button from '../components/Button.tsx'
 import { P } from '../paths.ts'
+import { getSession, saveSession } from '../auth/kakao.ts'
 import { booking } from '../../mocks/bandyLight.ts'
 import './D2Book.css'
 
@@ -18,13 +19,26 @@ const D2Book = () => {
   const navigate = useNavigate()
   const { showId = 'glow' } = useParams()
 
-  const [tickets, setTickets] = useState(2)
-  const [addons, setAddons] = useState<Record<string, number>>(
-    Object.fromEntries(booking.addons.map((a) => [a.id, a.initial])),
-  )
+  // 공연을 만든 쪽이 연 것만 팝니다
+  const offered = booking.addons.filter((a) => a.open)
+
+  const [tickets, setTickets] = useState(booking.initialTickets)
+  // 아무것도 안 담긴 상태에서 시작합니다
+  const [addons, setAddons] = useState<Record<string, number>>({})
+
+  // 로그인해 두었으면 이름과 연락처를 채워 둡니다
+  const saved = getSession()
+  const [name, setName] = useState(saved?.nickname ?? '')
+  const [phone, setPhone] = useState(saved?.phone ?? '')
+  const [depositor, setDepositor] = useState('')
+  const [tried, setTried] = useState(false)
+
+  // 입금자를 못 찾으면 자리를 확정할 수 없어서, 둘은 반드시 받습니다
+  const digits = phone.replace(/\D/g, '')
+  const ready = name.trim().length > 0 && digits.length >= 10
 
   const ticketTotal = tickets * booking.ticket.price
-  const addonTotal = booking.addons.reduce((sum, a) => sum + a.price * (addons[a.id] ?? 0), 0)
+  const addonTotal = offered.reduce((sum, a) => sum + a.price * (addons[a.id] ?? 0), 0)
   const fee = tickets * booking.feePerTicket
   const total = ticketTotal + addonTotal + fee
 
@@ -70,49 +84,78 @@ const D2Book = () => {
             aside="나중에 추가하기"
             onAside={() => navigate(P.liveStore(showId))}
           />
-          <div className="lui-card d2__option d2__option--multi">
-            {booking.addons.map((a, i) => (
-              <div key={a.id} style={{ display: 'contents' }}>
-                {i > 0 && <span className="d2__opt-line" />}
-                <div className="d2__opt-row">
-                  <div className="d2__opt-main">
-                    <span className="d2__opt-name">{a.name}</span>
-                    <span className="d2__opt-sub">{a.sub}</span>
+          {offered.length === 0 ? (
+            <p className="lui-note d2__none">{booking.addonsNone}</p>
+          ) : (
+            <div className="lui-card d2__option d2__option--multi">
+              {offered.map((a, i) => (
+                <div key={a.id} style={{ display: 'contents' }}>
+                  {i > 0 && <span className="d2__opt-line" />}
+                  <div className="d2__opt-row">
+                    <div className="d2__opt-main">
+                      <span className="d2__opt-name">{a.name}</span>
+                      <span className="d2__opt-sub">{a.sub}</span>
+                    </div>
+                    <Stepper
+                      value={addons[a.id] ?? 0}
+                      min={0}
+                      /* 몇 개까지 팔지도 공연자가 정합니다 */
+                      max={a.max}
+                      onChange={(n) => setAddons((prev) => ({ ...prev, [a.id]: n }))}
+                      label={a.name}
+                    />
                   </div>
-                  <Stepper
-                    value={addons[a.id] ?? 0}
-                    min={0}
-                    max={9}
-                    onChange={(n) => setAddons((prev) => ({ ...prev, [a.id]: n }))}
-                    label={a.name}
-                  />
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           <div className="d2__gap" />
           <SectionHeader title="예매자 정보" aside="입금자명으로 확인해요" />
           <div className="d2__fields">
             <label className="lui-field">
               <span className="lui-field__label">{booking.buyer.nameLabel}</span>
-              <input className="lui-input" placeholder={booking.buyer.namePlaceholder} />
+              <input
+                className={`lui-input${tried && !name.trim() ? ' lui-input--bad' : ''}`}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={booking.buyer.namePlaceholder}
+                autoComplete="name"
+              />
             </label>
             <label className="lui-field">
               <span className="lui-field__label">{booking.buyer.phoneLabel}</span>
-              <input className="lui-input" inputMode="tel" placeholder={booking.buyer.phonePlaceholder} />
+              <input
+                className={`lui-input${tried && digits.length < 10 ? ' lui-input--bad' : ''}`}
+                inputMode="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder={booking.buyer.phonePlaceholder}
+                autoComplete="tel"
+              />
             </label>
             <label className="lui-field">
               <span className="lui-field__label">{booking.buyer.depositorLabel}</span>
-              <input className="lui-input" placeholder={booking.buyer.depositorPlaceholder} />
+              <input
+                className="lui-input"
+                value={depositor}
+                onChange={(e) => setDepositor(e.target.value)}
+                placeholder={booking.buyer.depositorPlaceholder}
+                autoComplete="off"
+              />
             </label>
+            {tried && !ready && (
+              <p className="d2__bad" role="alert">
+                {booking.buyerRequired}
+              </p>
+            )}
           </div>
 
           <div className="d2__gap" />
           <SummaryBox
             items={[
               { k: `티켓 ${tickets}매`, v: won(ticketTotal) },
-              ...booking.addons
+              ...offered
                 .filter((a) => (addons[a.id] ?? 0) > 0)
                 .map((a) => ({
                   k: `${a.name}${(addons[a.id] ?? 0) > 1 ? ` ×${addons[a.id]}` : ''}`,
@@ -126,7 +169,18 @@ const D2Book = () => {
       </div>
 
       <div className="lui-bottombar">
-        <Button block onClick={() => navigate(P.deposit(showId))}>
+        <Button
+          block
+          onClick={() => {
+            if (!ready) {
+              setTried(true)
+              return
+            }
+            // 다음 예매에서 다시 적지 않도록 연락처를 남겨 둡니다
+            if (saved) saveSession({ ...saved, phone })
+            navigate(P.deposit(showId))
+          }}
+        >
           {won(total)} · 계좌 받기
         </Button>
       </div>
