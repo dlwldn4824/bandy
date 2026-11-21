@@ -70,7 +70,14 @@ export const lightUiRoutes = [
   <Route key="ui-map" path="/ui/map" element={<Navigate to="/ui?view=map" replace />} />,
   <Route key="ui-calendar" path="/ui/calendar" element={<Navigate to="/ui?view=calendar" replace />} />,
   <Route key="ui-clubs" path="/ui/clubs" element={<L2Clubs />} />,
-  <Route key="ui-clubops" path="/ui/console/teams" element={<S25ClubOps />} />,
+  // 다른 운영 화면은 다 감싸 두고 여기만 열려 있었습니다. 그래서 부원이
+  // 주소로 들어오면 화면은 열리는데 뒤로가기(P.console)가 게이트로 갔습니다 —
+  // 들어온 적 없는 곳에서 「운영진만 할 수 있어요」 를 만납니다.
+  <Route key="ui-clubops" path="/ui/console/teams" element={
+      <ManagerOnly title="함께 설 팀" what="제안 주고받기">
+        <S25ClubOps />
+      </ManagerOnly>
+    } />,
   <Route key="ui-show-stage" path="/ui/show/:showId/stage" element={
       <ManagerOnly title="공연 상태" what="공연 상태 바꾸기">
         <S28ShowStage />

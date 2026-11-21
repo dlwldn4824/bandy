@@ -116,6 +116,16 @@ const S1cClubPick = () => {
             </>
           )}
 
+          {/* 등록된 동아리가 하나도 없는 학교가 있습니다. 아무것도 안 그리면
+              화면이 비어 버려서 고장으로 읽힙니다 — 없다고 말하고, 만드는
+              길이 있다는 것까지 알려 줍니다. */}
+          {matches.length === 0 && !typed && (
+            <p className="s1c__empty">
+              {school ? `${school}에 ` : ''}등록된 동아리가 아직 없어요. 동아리 이름을 적으면
+              새로 만들 수 있습니다.
+            </p>
+          )}
+
           {typed && !exact && (
             <>
               <div className="s1c__gap" />
@@ -130,14 +140,6 @@ const S1cClubPick = () => {
                 </span>
               </button>
             </>
-          )}
-
-          {!typed && matches.length === 0 && (
-            <p className="s1c__empty">
-              아직 이 학교에 등록된 동아리가 없습니다.
-              <br />
-              이름을 적으면 새로 만들 수 있어요.
-            </p>
           )}
 
           <div className="s1c__gap" />

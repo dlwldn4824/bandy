@@ -82,7 +82,12 @@ const L2Clubs = () => {
                 <button
                   type="button"
                   className="lui-darkcard__foot lui-darkcard__hit"
-                  onClick={() => navigate(P.run(showRun.showId))}
+                  // 「다음 공연」 은 부원도 보는 줄입니다. P.run 은 운영진
+                  // 전용이라 부원이 누르면 게이트를 만납니다 — B1 을 고치기
+                  // 전에는 부원이 아예 없어서 드러나지 않던 자리입니다.
+                  onClick={() =>
+                    navigate(isManager ? P.run(showRun.showId) : P.show(showRun.showId))
+                  }
                 >
                   <span className="lui-darkcard__foot-text">
                     <span className="lui-darkcard__strong">다음 공연</span> · {showRun.when}
