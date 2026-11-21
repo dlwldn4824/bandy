@@ -7,6 +7,7 @@ import Icon from '../components/Icon.tsx'
 import Sheet from '../components/Sheet.tsx'
 import { P } from '../paths.ts'
 import { getSession, saveProfile } from '../auth/kakao.ts'
+import { makeJoinCode, setMembership } from '../auth/membership.ts'
 import { onboardingOptions } from '../../mocks/auth.ts'
 import { forgetSide, readSide } from '../auth/side.ts'
 import type { JoinSide } from '../../mocks/auth.ts'
@@ -230,7 +231,7 @@ const SIDE_FORM: Record<
     school: false,
     extraLabel: '공연장 이름과 주소',
     extraPlaceholder: '예) 라디오가가 · 서울 노원구 …',
-    extraHint: '확인 뒤 공연장 화면이 열립니다. 비는 날은 거기서 올립니다.',
+    extraHint: '공연장 화면이 바로 열립니다. 비는 날을 남들에게 공개하기 전에 밴디가 한 번 확인합니다.',
     to: P.venue,
   },
 }
@@ -283,6 +284,23 @@ const S1bOnboarding = () => {
       initial: nickname.trim()[0],
       onboarded: true,
     })
+    // 공연장은 여기서 소속이 생깁니다. 동아리처럼 「찾아서 들어가는」 자리가
+    // 없고, 적은 그 공연장이 곧 자기 것이라서요. /ui/venue 가 공연장 권한을
+    // 물으므로 이게 없으면 등록을 마치고도 자기 화면에 못 들어갑니다.
+    //
+    // 공개 전 확인은 서버의 몫입니다. 지금은 콘솔만 열어 두고, 비는 날이
+    // 남들에게 보이는 것은 확인을 거친 뒤입니다.
+    if (side === 'venue') {
+      const name = club.trim()
+      setMembership({
+        kind: 'venue',
+        clubId: `venue-${Date.now().toString(36)}`,
+        clubName: name,
+        role: 'manager',
+        code: makeJoinCode(name),
+      })
+    }
+
     forgetSide()
     clearDraft()
     // 동아리는 여기서 끝나지 않습니다 — 방금 고른 학교를 들고 「우리 동아리

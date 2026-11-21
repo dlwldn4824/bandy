@@ -7,6 +7,7 @@ import Button from '../components/Button.tsx'
 import Icon from '../components/Icon.tsx'
 import Sheet from '../components/Sheet.tsx'
 import { P } from '../paths.ts'
+import { subjectParticle } from '../korean.ts'
 import { venueBoard as v } from '../../mocks/bandyLight.ts'
 import './L3Venue.css'
 
@@ -23,11 +24,17 @@ const L3Venue = () => {
   const [open, setOpen] = useState(true)
   const [rejected, setRejected] = useState<string[]>([])
   const [rejecting, setRejecting] = useState<string | null>(null)
+  // 수락도 거절과 같은 자리에서 끝나야 합니다. 전에는 「수락」 이 동아리
+  // 입금 관리로 보냈는데, 공연장은 동아리가 아니라서 그 화면의 운영진
+  // 게이트에 막혔습니다 — 자기 지원 팀을 받는 일인데 들어가지 못했습니다.
+  const [accepted, setAccepted] = useState<string[]>([])
+  const [accepting, setAccepting] = useState<string | null>(null)
   const [note, setNote] = useState<{ title: string; text: string } | null>(null)
 
   const week = v.weeks[weekIndex]
   const applicants = v.applicants.filter((a) => !rejected.includes(a.id))
   const rejectTarget = v.applicants.find((a) => a.id === rejecting)
+  const acceptTarget = v.applicants.find((a) => a.id === accepting)
 
   return (
     <Phone>
@@ -183,19 +190,27 @@ const L3Venue = () => {
                   ))}
                 </div>
 
-                <div className="l3__pair">
-                  <Button onClick={() => navigate(P.deposits)}>수락</Button>
-                  <Button variant="ghost" onClick={() => navigate(P.chat(app.id))}>
-                    대화
-                  </Button>
-                </div>
-                <button
-                  type="button"
-                  className="l3-app__reject"
-                  onClick={() => setRejecting(app.id)}
-                >
-                  거절하기
-                </button>
+                {accepted.includes(app.id) ? (
+                  <p className="l3-app__done">
+                    수락했습니다 · 상대 동아리에 알렸어요
+                  </p>
+                ) : (
+                  <>
+                    <div className="l3__pair">
+                      <Button onClick={() => setAccepting(app.id)}>수락</Button>
+                      <Button variant="ghost" onClick={() => navigate(P.chat(app.id))}>
+                        대화
+                      </Button>
+                    </div>
+                    <button
+                      type="button"
+                      className="l3-app__reject"
+                      onClick={() => setRejecting(app.id)}
+                    >
+                      거절하기
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -217,6 +232,27 @@ const L3Venue = () => {
           </div>
         </div>
       </div>
+
+      <Sheet open={!!acceptTarget} title="이 팀을 받을까요?" onClose={() => setAccepting(null)}>
+        <p className="lui-menu__note">
+          {acceptTarget?.name}
+          {subjectParticle(acceptTarget?.name ?? '')} 이 날 섭니다. 상대 동아리에 알림이 가고,
+          같은 날 남은 자리는 그대로 열려 있습니다. 대관료 대신 티켓 매출에서 정산합니다.
+        </p>
+        <div className="l3__pair">
+          <Button variant="ghost" onClick={() => setAccepting(null)}>
+            그대로 두기
+          </Button>
+          <Button
+            onClick={() => {
+              if (accepting) setAccepted((prev) => [...prev, accepting])
+              setAccepting(null)
+            }}
+          >
+            수락
+          </Button>
+        </div>
+      </Sheet>
 
       <Sheet open={!!rejectTarget} title="이 팀을 거절할까요?" onClose={() => setRejecting(null)}>
         <p className="lui-menu__note">
@@ -254,7 +290,15 @@ const L3Venue = () => {
           const soon = 'soon' in tab && tab.soon
           const go = () => {
             if (tab.key === 'apps') appsRef.current?.scrollIntoView({ behavior: 'smooth' })
-            if (tab.key === 'settlement') navigate(P.settlement)
+            // 전에는 동아리 정산 화면으로 보냈습니다. 그 화면은 동아리 운영진
+            // 게이트라 공연장은 「운영진만 할 수 있어요」 를 만났습니다 — 자기
+            // 돈을 보러 갔는데요. 공연장 정산은 받는 쪽이 달라서 화면이 따로
+            // 필요합니다. 없는 동안 틀린 곳으로 보내느니 없다고 말합니다.
+            if (tab.key === 'settlement')
+              setNote({
+                title: '공연장 정산',
+                text: '아직 준비 중입니다. 공연장은 대관료 대신 티켓 매출에서 받기 때문에 동아리 정산과 계산이 달라, 화면을 따로 만들고 있습니다. 그때까지는 공연이 끝난 뒤 밴디가 정산 내역을 보내 드립니다.',
+              })
             if (tab.key === 'me') navigate(P.me)
           }
           return (

@@ -1,18 +1,12 @@
 import { ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
-import Phone from './Phone.tsx'
-import TopBar from './TopBar.tsx'
-import Button from './Button.tsx'
-import { MANAGER_ONLY, useRole } from '../auth/role.ts'
-import { topicParticle } from '../korean.ts'
-import { useGoBack } from '../useGoBack.ts'
-import { P } from '../paths.ts'
+import AllowedOnly from './AllowedOnly.tsx'
 
 /**
- * 운영진만 들어올 수 있는 화면을 감쌉니다.
+ * 동아리 운영진만 들어올 수 있는 화면.
  *
- * 부원 계정에서는 화면 대신 까닭을 보여 줍니다 — 버튼을 눌렀는데 아무 일도 없거나
- * 빈 화면이 나오는 것보다 낫습니다. 권한은 마이 > 설정에서 바꿔 볼 수 있습니다.
+ * 속은 `AllowedOnly` 가 합니다 — 권한이 동아리 운영진 하나뿐이던 때 만든
+ * 이름이라, 쓰는 곳이 열다섯 군데라 그대로 두고 껍데기만 남겼습니다.
+ * 새로 감쌀 화면은 `AllowedOnly` 에 무엇이 필요한지 적어 주세요.
  */
 const ManagerOnly = ({
   title,
@@ -20,42 +14,12 @@ const ManagerOnly = ({
   children,
 }: {
   title: string
-  /** 「…은 운영진만 할 수 있어요」 */
   what: string
   children: ReactNode
-}) => {
-  const { isManager } = useRole()
-  const navigate = useNavigate()
-  const goBack = useGoBack()
-
-  if (isManager) return <>{children}</>
-
-  return (
-    <Phone>
-      <TopBar title={title} />
-      <div className="lui-body">
-        <div className="lui-gate">
-          <p className="lui-gate__title">{MANAGER_ONLY}</p>
-          <p className="lui-gate__sub">
-            {what}
-            {topicParticle(what)} 동아리 운영진만 할 수 있습니다. 필요하면 운영진에게 권한을 받아
-            주세요.
-          </p>
-          {/* 막아 두기만 하면 주최자 화면을 아무도 못 봅니다 — 바꾸러 가는 길을 둡니다 */}
-          <button type="button" className="lui-gate__switch" onClick={() => navigate(P.me)}>
-            마이에서 권한 바꾸기
-          </button>
-        </div>
-      </div>
-
-      {/* 다른 화면과 같은 자리에 같은 모양으로 — 가운데 떠 있는 작은 버튼은 어색합니다 */}
-      <div className="lui-bottombar">
-        <Button block onClick={() => goBack()}>
-          돌아가기
-        </Button>
-      </div>
-    </Phone>
-  )
-}
+}) => (
+  <AllowedOnly need="club-manager" title={title} what={what}>
+    {children}
+  </AllowedOnly>
+)
 
 export default ManagerOnly

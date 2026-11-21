@@ -1,5 +1,6 @@
 import { Navigate, Route } from 'react-router-dom'
 import ManagerOnly from './components/ManagerOnly.tsx'
+import AllowedOnly from './components/AllowedOnly.tsx'
 import L1Home from './screens/L1Home.tsx'
 import D1Show from './screens/D1Show.tsx'
 import D2Book from './screens/D2Book.tsx'
@@ -112,7 +113,17 @@ export const lightUiRoutes = [
         <S13Settlement />
       </ManagerOnly>
     } />,
-  <Route key="ui-venue" path="/ui/venue" element={<L3Venue />} />,
+  <Route
+    key="ui-venue"
+    path="/ui/venue"
+    element={
+      // 게이트가 없어서 관객이 알림 한 줄로 남의 공연장 운영 화면을 열었습니다 —
+      // 거절하기·공개 내리기·조건 수정이 다 있는 화면입니다
+      <AllowedOnly need="venue" title="공연장" what="공연장 운영">
+        <L3Venue />
+      </AllowedOnly>
+    }
+  />,
   <Route key="ui-entry" path="/ui/entry" element={
       <ManagerOnly title="입장 관리" what="입장 관리">
         <S12Entry />

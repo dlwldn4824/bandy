@@ -14,9 +14,12 @@ import { useMembership, type ClubRole } from './membership.ts'
 export type { ClubRole }
 
 export function useRole() {
-  const { membership, inClub, isManager } = useMembership()
-  return { role: membership?.role, inClub, isManager }
+  const { membership, inClub, isVenue, isManager } = useMembership()
+  return { role: membership?.role, inClub, isVenue, isManager }
 }
 
 /** 권한이 없을 때 버튼 자리에 대신 두는 문구 */
 export const MANAGER_ONLY = '운영진만 할 수 있어요'
+
+/** 공연장 화면에서 같은 자리에 쓰는 문구 */
+export const VENUE_ONLY = '공연장만 볼 수 있어요'
