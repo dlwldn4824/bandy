@@ -75,7 +75,7 @@ export const showDetail = {
   titleLines: ['멜로딕 단독 공연', '〈겨울의 소리〉'],
   host: '멜로딕 · 광운대학교 밴드 동아리',
   info: [
-    { k: '일시', v: '11.22 (토) 19:00' },
+    { k: '일시', v: '11.22 (일) 19:00' },
     { k: '장소', v: '라디오가가 · 노원구 월계동' },
     { k: '러닝타임', v: '약 120분 · 중간 휴식 10분' },
     { k: '관람', v: '전체 관람가 · 스탠딩' },
@@ -103,7 +103,7 @@ export const booking = {
   summary: {
     thumb: posters.glowCard,
     title: '멜로딕 단독 공연',
-    sub: '11.22 (토) 19:00 · 라디오가가',
+    sub: '11.22 (일) 19:00 · 라디오가가',
   },
   maxPerPerson: 4,
   ticket: { name: '일반', price: 15000, priceLabel: '15,000원' },
@@ -148,7 +148,7 @@ export const depositGuide = {
   bookingNo: '예매번호 B-2611-0482',
   detail: [
     { k: '공연', v: '멜로딕 단독 공연' },
-    { k: '일시', v: '11.22 (토) 19:00' },
+    { k: '일시', v: '11.22 (일) 19:00' },
     { k: '티켓', v: '일반 2매' },
     { k: '사전 구매', v: '음료 1잔 (무알코올)' },
   ],
@@ -164,7 +164,7 @@ export const myTicket = {
   status: '입금 확인됨',
   entry: '입장 전',
   title: '멜로딕 단독 공연',
-  sub: '11.22 (토) 19:00 · 라디오가가',
+  sub: '11.22 (일) 19:00 · 라디오가가',
   facts: [
     { k: '매수', v: '일반 2매' },
     { k: '좌석', v: '자유석' },
@@ -206,7 +206,7 @@ export const ticketsByShow: Record<string, MyTicket> = {
     status: '입금 대기',
     entry: '입장 전',
     title: '렉사 X 멜로딕 연합',
-    sub: '11.29 (토) 18:00 · 몽향',
+    sub: '11.29 (일) 18:00 · 몽향',
     facts: [
       { k: '매수', v: '일반 1매' },
       { k: '좌석', v: '자유석' },
@@ -225,7 +225,7 @@ export const ticketsByShow: Record<string, MyTicket> = {
     status: '입금 확인됨',
     entry: '입장 1번',
     title: '손아픔 단독 공연',
-    sub: '12.06 (토) 19:00 · 홍대 미드나잇',
+    sub: '12.06 (일) 19:00 · 홍대 미드나잇',
     facts: [
       { k: '매수', v: '일반 1매' },
       { k: '좌석', v: '자유석' },
@@ -280,14 +280,14 @@ export interface MapShow {
 }
 
 export const mapShows: MapShow[] = [
-  { id: 'glow', title: '멜로딕 단독 공연', venue: '라디오가가', region: '서울 노원', date: '11.22 (토) 19:00', distance: '0.4km', lat: 37.6186, lng: 127.0583, poster: posters.draft, real: true, at: '2026-11-22T19:00', when: 'today', genre: '밴드' },
-  { id: 'lexa-melodic', title: '렉사 X 멜로딕', venue: '몽향', region: '서울 노원', date: '11.29 (토) 18:00', distance: '1.2km', lat: 37.6256, lng: 127.0629, poster: posters.union, real: true, at: '2026-11-29T18:00', when: 'week', genre: '밴드' },
-  { id: 'alive-night', title: '얼라이브 합동 공연', venue: '얼라이브홀', region: '서울 홍대', date: '12.06 (토) 19:30', distance: '11.8km', lat: 37.5556, lng: 126.923, poster: posters.glowCard, real: true, at: '2026-12-06T19:30', when: 'later', genre: '밴드' },
-  { id: 'sinchon-winter', title: '신촌 겨울 밴드전', venue: '신촌 파랑홀', region: '서울 신촌', date: '12.13 (토) 18:00', distance: '10.4km', lat: 37.5558, lng: 126.9365, at: '2026-12-13T18:00', when: 'later', genre: '밴드', free: true },
-  { id: 'seongsu-live', title: '성수 라이브 나이트', venue: '성수 언더스테이지', region: '서울 성수', date: '12.20 (토) 19:00', distance: '8.1km', lat: 37.5447, lng: 127.0557, at: '2026-12-20T19:00', when: 'later', genre: '밴드' },
-  { id: 'busan-seomyeon', title: '서면 인디 데이', venue: '서면 오방가라지', region: '부산 서면', date: '12.07 (일) 17:00', lat: 35.1578, lng: 129.0595, at: '2026-12-07T17:00', when: 'later', genre: '인디' },
-  { id: 'busan-gwangalli', title: '광안리 바다밴드', venue: '광안리 인디고', region: '부산 광안리', date: '12.14 (일) 18:00', lat: 35.1532, lng: 129.1186, at: '2026-12-14T18:00', when: 'later', genre: '밴드', free: true },
-  { id: 'daegu-heavy', title: '대구 합동 공연', venue: '대구 헤비', region: '대구 동성로', date: '12.21 (일) 18:00', lat: 35.8686, lng: 128.5944, at: '2026-12-21T18:00', when: 'later', genre: '밴드' },
+  { id: 'glow', title: '멜로딕 단독 공연', venue: '라디오가가', region: '서울 노원', date: '11.22 (일) 19:00', distance: '0.4km', lat: 37.6186, lng: 127.0583, poster: posters.draft, real: true, at: '2026-11-22T19:00', when: 'today', genre: '밴드' },
+  { id: 'lexa-melodic', title: '렉사 X 멜로딕', venue: '몽향', region: '서울 노원', date: '11.29 (일) 18:00', distance: '1.2km', lat: 37.6256, lng: 127.0629, poster: posters.union, real: true, at: '2026-11-29T18:00', when: 'week', genre: '밴드' },
+  { id: 'alive-night', title: '얼라이브 합동 공연', venue: '얼라이브홀', region: '서울 홍대', date: '12.06 (일) 19:30', distance: '11.8km', lat: 37.5556, lng: 126.923, poster: posters.glowCard, real: true, at: '2026-12-06T19:30', when: 'later', genre: '밴드' },
+  { id: 'sinchon-winter', title: '신촌 겨울 밴드전', venue: '신촌 파랑홀', region: '서울 신촌', date: '12.13 (일) 18:00', distance: '10.4km', lat: 37.5558, lng: 126.9365, at: '2026-12-13T18:00', when: 'later', genre: '밴드', free: true },
+  { id: 'seongsu-live', title: '성수 라이브 나이트', venue: '성수 언더스테이지', region: '서울 성수', date: '12.20 (일) 19:00', distance: '8.1km', lat: 37.5447, lng: 127.0557, at: '2026-12-20T19:00', when: 'later', genre: '밴드' },
+  { id: 'busan-seomyeon', title: '서면 인디 데이', venue: '서면 오방가라지', region: '부산 서면', date: '12.07 (월) 17:00', lat: 35.1578, lng: 129.0595, at: '2026-12-07T17:00', when: 'later', genre: '인디' },
+  { id: 'busan-gwangalli', title: '광안리 바다밴드', venue: '광안리 인디고', region: '부산 광안리', date: '12.14 (월) 18:00', lat: 35.1532, lng: 129.1186, at: '2026-12-14T18:00', when: 'later', genre: '밴드', free: true },
+  { id: 'daegu-heavy', title: '대구 합동 공연', venue: '대구 헤비', region: '대구 동성로', date: '12.21 (월) 18:00', lat: 35.8686, lng: 128.5944, at: '2026-12-21T18:00', when: 'later', genre: '밴드' },
 ]
 
 /** 지도를 처음 열었을 때 보이는 범위 — 노원 월계동 기준 */
@@ -383,7 +383,7 @@ export const clubDetail = {
   upcoming: {
     thumb: posters.draft,
     title: '멜로딕 단독 공연 〈겨울의 소리〉',
-    sub: '11.22 (토) 19:00 · 라디오가가',
+    sub: '11.22 (일) 19:00 · 라디오가가',
   },
   past: [
     { title: '2026 봄 정기 공연', sub: '04.19 · 라디오가가 · 관객 96명' },
@@ -422,7 +422,7 @@ export const clubsById: Record<string, ClubDetail> = {
     upcoming: {
       thumb: posters.union,
       title: '렉사 X 멜로딕 연합',
-      sub: '11.29 (토) 18:00 · 몽향',
+      sub: '11.29 (일) 18:00 · 몽향',
     },
     past: [
       { title: '렉사 X 멜로딕 연합 공연', sub: '06.07 · 몽향 · 관객 88명' },
@@ -444,7 +444,7 @@ export const clubsById: Record<string, ClubDetail> = {
     upcoming: {
       thumb: posters.draft,
       title: '하모닉 겨울 정기',
-      sub: '12.13 (토) 18:00 · 삼육대 대강당',
+      sub: '12.13 (일) 18:00 · 삼육대 대강당',
     },
     past: [
       { title: '겨울 합동 공연', sub: '11.02 · 라디오가가 · 관객 74명' },
@@ -466,7 +466,7 @@ export const clubsById: Record<string, ClubDetail> = {
     upcoming: {
       thumb: posters.draft,
       title: '아카펠라 겨울 정기',
-      sub: '12.06 (토) 17:00 · 광운대 노천극장',
+      sub: '12.06 (일) 17:00 · 광운대 노천극장',
     },
     past: [{ title: '아카펠라 겨울 정기 게스트', sub: '12.06 · 광운대 노천극장 · 관객 120명' }],
     pastCount: 2,
@@ -485,7 +485,7 @@ export const clubsById: Record<string, ClubDetail> = {
     upcoming: {
       thumb: posters.draft,
       title: '손아픔 단독 공연',
-      sub: '12.06 (토) 19:00 · 홍대 미드나잇',
+      sub: '12.06 (일) 19:00 · 홍대 미드나잇',
     },
     past: [{ title: '가을 정기 게스트', sub: '09.28 · 서울과기대 소극장 · 관객 60명' }],
     pastCount: 3,
@@ -791,7 +791,7 @@ export const clubConsole = {
       id: 'glow',
       thumb: posters.glowCard,
       title: '멜로딕 단독 공연',
-      when: '11.22 (토) 19:00 · 라디오가가',
+      when: '11.22 (일) 19:00 · 라디오가가',
       paid: 35,
       total: 42,
       /** 미입금이 있으면 빨강 (규칙 7) */
@@ -801,7 +801,7 @@ export const clubConsole = {
       id: 'union',
       thumb: posters.union,
       title: '렉사 X 멜로딕 연합',
-      when: '11.29 (토) 18:00 · 몽향',
+      when: '11.29 (일) 18:00 · 몽향',
       paid: 12,
       total: 20,
       urgent: false,
@@ -868,7 +868,7 @@ export const deposits = {
  * 밴드는 팀당 참가비 5만 원을 냅니다.
  */
 export const settlement = {
-  show: { thumb: posters.draft, title: '멜로딕 단독 공연', sub: '11.22 (토) · 라디오가가 · 종료' },
+  show: { thumb: posters.draft, title: '멜로딕 단독 공연', sub: '11.22 (일) · 라디오가가 · 종료' },
   payoutLabel: '동아리가 받는 금액',
   payout: '327,000원',
   breakdown: [
@@ -1045,7 +1045,7 @@ export const myTickets = {
       tab: 'upcoming',
       thumb: posters.draft,
       title: '멜로딕 단독 공연',
-      when: '11.22 (토) 19:00 · 라디오가가',
+      when: '11.22 (일) 19:00 · 라디오가가',
       what: '일반 2매 · 음료 1잔',
       badge: '오늘',
       urgent: true,
@@ -1057,7 +1057,7 @@ export const myTickets = {
       tab: 'upcoming',
       thumb: posters.union,
       title: '렉사 X 멜로딕 연합',
-      when: '11.29 (토) 18:00 · 몽향',
+      when: '11.29 (일) 18:00 · 몽향',
       what: '일반 1매',
       badge: '입금 24h',
       urgent: true,
@@ -1067,7 +1067,7 @@ export const myTickets = {
       tab: 'upcoming',
       thumb: posters.draft,
       title: '손아픔 단독 공연',
-      when: '12.06 (토) 19:00 · 홍대 미드나잇',
+      when: '12.06 (일) 19:00 · 홍대 미드나잇',
       what: '일반 1매',
       badge: '입장 1번',
     },
@@ -1151,10 +1151,10 @@ export const invite = {
   fullLink: 'https://bandy.kr/i/ab12cd',
   venue: '라디오가가 · 노원구 월계동',
   /** 티켓 이미지에는 장소를 따로 쓰므로 날짜·시각만 */
-  ticketWhen: '11.22 (토) 19:00',
+  ticketWhen: '11.22 (일) 19:00',
   poster: posters.glowHero,
   title: '멜로딕 단독 공연 〈겨울의 소리〉',
-  when: '11.22 (토) 19:00 · 라디오가가',
+  when: '11.22 (일) 19:00 · 라디오가가',
   message: '이번 주 토요일에 우리 공연해. 자리 하나 맡아 뒀으니까 와 줘!',
   channels: [
     { id: 'sms', icon: 'share-sms', label: '문자' },
@@ -1176,7 +1176,7 @@ export const inviteSms = {
   at: '오후 2:41',
   card: {
     title: '멜로딕 단독 공연 〈겨울의 소리〉',
-    when: '11.22 (토) 19:00 · 라디오가가',
+    when: '11.22 (일) 19:00 · 라디오가가',
     host: 'bandy.kr',
   },
   text: '이번 주 토요일에 우리 공연해. 자리 하나 맡아 뒀으니까 와 줘!',
@@ -1191,7 +1191,7 @@ export const inviteCard = {
   host: '멜로딕 · 광운대학교 밴드 동아리',
   facts: [
     { k: '공연', v: '멜로딕 단독 공연 〈겨울의 소리〉' },
-    { k: '일시', v: '11.22 (토) 19:00' },
+    { k: '일시', v: '11.22 (일) 19:00' },
     { k: '장소', v: '라디오가가 · 노원구 월계동' },
     { k: '출연', v: '멜로딕 · 렉사 · 하모닉 · 손아픔' },
     { k: '티켓', v: '15,000원 · 잔여 12석', accent: true },
@@ -1439,7 +1439,7 @@ export const showLive = {
     { label: '오늘', tone: 'accent' as const },
   ],
   titleLines: ['멜로딕 단독 공연', '〈겨울의 소리〉'],
-  when: '11.22 (토) 19:00 · 라디오가가',
+  when: '11.22 (일) 19:00 · 라디오가가',
   entry: { title: '입장 코드 보기', sub: '일반 2매 · 음료 1잔 · 18:30부터 입장' },
   timeline: [
     { at: '18:30', dur: '30분', title: '관객 입장', sub: '입구에서 QR을 보여 주세요' },
@@ -1471,7 +1471,7 @@ export const showLive = {
 export const showRun = {
   showId: 'glow',
   title: '멜로딕 단독 공연 〈겨울의 소리〉',
-  when: '11.22 (토) · 라디오가가',
+  when: '11.22 (일) · 라디오가가',
   /** 지금 보고 있는 사람의 동아리 — 라인업의 host 와 같으면 주최입니다 */
   myClubId: 'melodic',
   lineup: [
