@@ -108,3 +108,6 @@
 .p5__bottom { flex-direction: column; align-items: stretch; gap: 9px; }
 .p5__bottom .lui-btn { width: 100%; height: 49px; border-radius: 14px; }
 .p5__notice { font-size: 11.5px; line-height: 20.125px; color: var(--lui-sub-2); text-align: center; }
+
+/* 못 쓰거나 못 찾았을 때 — 도는 점 없이 멈춘 상태 */
+.p5__status--off { color: var(--lui-ink); }

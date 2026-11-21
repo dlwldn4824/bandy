@@ -36,3 +36,7 @@
 
 .s12__gap-14 { height: 14px; }
 .s12__gap-26 { height: 26px; }
+
+/* 이름으로 찾기 — 찾은 사람 */
+.s12__found { margin-top: 12px; }
+.s12__blocked { font-size: 11.5px; font-weight: 700; color: var(--lui-sub-2); }

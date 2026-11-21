@@ -11,13 +11,51 @@ import './S5Recruit.css'
 
 const man = (n: number) => `${(n / 10000).toLocaleString('ko-KR')}만 원`
 
+/**
+ * 적다 만 모집 글. 「임시 저장」 이 눌러도 아무 일 없는 버튼이었습니다 —
+ * 공연장과 팀 수와 소개까지 적다가 나가면 전부 날아갔습니다.
+ */
+const DRAFT_KEY = 'bandy.lightui.recruitDraft'
+
+interface Draft {
+  title: string
+  date: string
+  venue: string
+  teams: number
+  about: string
+}
+
+function readDraft(): Partial<Draft> {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY)
+    return raw ? (JSON.parse(raw) as Partial<Draft>) : {}
+  } catch {
+    return {}
+  }
+}
+
 /** S5 모집 글 쓰기 — Figma 208:2 */
 const S5Recruit = () => {
   const navigate = useNavigate()
-  const [venue, setVenue] = useState(f.venueOptions[0].id)
-  const [teams, setTeams] = useState(f.teams.initial)
+  const draft = readDraft()
+  const [title, setTitle] = useState(draft.title ?? f.title)
+  const [date, setDate] = useState(draft.date ?? '')
+  const [venue, setVenue] = useState(draft.venue ?? f.venueOptions[0].id)
+  const [teams, setTeams] = useState(draft.teams ?? f.teams.initial)
+  const [about, setAbout] = useState(draft.about ?? '')
+  const [saved, setSaved] = useState(false)
 
   const needMore = Math.max(teams - f.teams.joined, 0)
+
+  const save = () => {
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ title, date, venue, teams, about }))
+      setSaved(true)
+      window.setTimeout(() => setSaved(false), 1800)
+    } catch {
+      /* 저장이 막힌 기기에서는 조용히 넘어갑니다 — 적던 것은 화면에 그대로 있습니다 */
+    }
+  }
 
   return (
     <Phone>
@@ -27,11 +65,20 @@ const S5Recruit = () => {
           <div className="s5__gap-14" />
 
           <span className="s5__label">제목</span>
-          <input className="lui-input" defaultValue={f.title} />
+          <input
+            className="lui-input"
+            value={title}
+            onChange={(ev) => setTitle(ev.target.value)}
+          />
 
           <div className="s5__gap-14" />
           <span className="s5__label">공연 예정일</span>
-          <input className="lui-input" placeholder={f.datePlaceholder} />
+          <input
+            className="lui-input"
+            value={date}
+            onChange={(ev) => setDate(ev.target.value)}
+            placeholder={f.datePlaceholder}
+          />
 
           <div className="s5__gap-14" />
           <span className="s5__label">공연장</span>
@@ -83,7 +130,12 @@ const S5Recruit = () => {
 
           <div className="s5__gap-14" />
           <span className="s5__label">소개</span>
-          <textarea className="lui-input" placeholder={f.aboutPlaceholder} />
+          <textarea
+            className="lui-input"
+            value={about}
+            onChange={(ev) => setAbout(ev.target.value)}
+            placeholder={f.aboutPlaceholder}
+          />
 
           <div className="s5__gap-26" />
           <p className="s5__notice">{f.notice}</p>
@@ -92,8 +144,21 @@ const S5Recruit = () => {
 
       <div className="lui-bottombar s5__bottom">
         {/* 규칙 1 — 기본 버튼은 「올리기」 하나 */}
-        <Button variant="ghost">임시 저장</Button>
-        <Button onClick={() => navigate(P.clubs)}>올리기</Button>
+        <Button variant="ghost" onClick={save}>
+          {saved ? '저장했어요' : '임시 저장'}
+        </Button>
+        <Button
+          onClick={() => {
+            try {
+              sessionStorage.removeItem(DRAFT_KEY)
+            } catch {
+              /* 무시 */
+            }
+            navigate(P.clubs)
+          }}
+        >
+          올리기
+        </Button>
       </div>
     </Phone>
   )
