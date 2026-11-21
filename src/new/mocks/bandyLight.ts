@@ -1073,7 +1073,8 @@ export const settlement = {
     { k: '공연장', value: 128000, tone: 'mute' as const },
     { k: '수수료', value: 39000, tone: 'mute' as const },
   ],
-  account: { title: '국민 123456-78-901234', sub: '멜로딕 (이지우)' },
+  // 계좌는 여기 없습니다 — lightui/pay/deposit.ts 에서 읽습니다.
+  // 같은 목 번호가 입금 안내와 여기 두 군데 있었습니다.
   notice: '정산 요청 후 영업일 기준 3일 안에 입금됩니다.',
 }
 

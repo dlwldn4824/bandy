@@ -8,9 +8,18 @@ import ListRow from '../components/ListRow.tsx'
 import Button from '../components/Button.tsx'
 import { P } from '../paths.ts'
 import { settlement as s } from '../../mocks/bandyLight.ts'
+import { BANK, BANK_READY } from '../pay/deposit.ts'
 import './S13Settlement.css'
 
-/** S13 정산 — Figma 216:2 */
+/**
+ * S13 정산 — Figma 216:2
+ *
+ * 정산 받을 계좌도 목에 적혀 있었습니다 — 「국민 123456-78-901234 · 멜로딕
+ * (이지우)」. 입금 안내에서 걷어낸 것과 **같은 번호**가 여기 한 벌 더 살아
+ * 있었습니다. 돈이 들어올 곳이라 틀리면 입금 안내보다 더 나쁩니다.
+ *
+ * 등록된 계좌가 없으면 지어내지 않고 등록하라고 말합니다.
+ */
 const S13Settlement = () => {
   const navigate = useNavigate()
 
@@ -76,10 +85,16 @@ const S13Settlement = () => {
           <div className="lui-card s13__account">
             <div className="s13__account-row">
               <span className="s13__account-main">
-                <span className="s13__account-title">{s.account.title}</span>
-                <span className="s13__account-sub">{s.account.sub}</span>
+                <span className="s13__account-title">
+                  {BANK_READY ? `${BANK.name} ${BANK.account}` : '등록된 계좌가 없어요'}
+                </span>
+                <span className="s13__account-sub">
+                  {BANK_READY ? BANK.holder : '정산을 받으려면 계좌를 먼저 등록해 주세요.'}
+                </span>
               </span>
-              <span className="lui-pill lui-pill--lg lui-pill--outline">변경</span>
+              <span className="lui-pill lui-pill--lg lui-pill--outline">
+                {BANK_READY ? '변경' : '등록'}
+              </span>
             </div>
           </div>
 

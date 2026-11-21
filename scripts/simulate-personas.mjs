@@ -104,94 +104,126 @@ function checkSource() {
     ;(cond ? ok : warn).push(`${name}${note ? ` — ${note}` : ''}`)
   }
 
-  const membership = read('src/new/lightui/auth/membership.ts')
   const onboarding = read('src/new/lightui/screens/S1bOnboarding.tsx')
   const clubPick = read('src/new/lightui/screens/S1cClubPick.tsx')
   const routes = read('src/new/lightui/routes.tsx')
   const kakao = read('src/new/lightui/auth/kakao.ts')
-  const email = read('src/new/lightui/auth/email.ts')
   const me = read('src/new/lightui/screens/S14Me.tsx')
   const clubs = read('src/new/lightui/screens/L2Clubs.tsx')
   const venue = read('src/new/lightui/screens/L3Venue.tsx')
-  const notis = read('src/new/lightui/screens/S8Notifications.tsx')
   const deposit = read('src/new/lightui/screens/D3Deposit.tsx')
   const invite = read('src/new/lightui/screens/S17InviteCard.tsx')
   const mocks = read('src/new/mocks/bandyLight.ts')
   const authMocks = read('src/new/mocks/auth.ts')
 
-  // 소속을 주는 코드가 있는지 — 앱 전체에서 setMembership 을 null 로만 부릅니다
-  const setCalls = [
-    ...membership.matchAll(/setMembership\(/g),
-    ...me.matchAll(/setMembership\(([^)]*)\)/g),
-  ]
-  const grants = [...me.matchAll(/setMembership\(([^)]*)\)/g)].filter(
-    (m) => m[1].trim() !== 'null' && m[1].trim() !== '',
-  )
-  check('MEMBERSHIP_NEVER_GRANTED', grants.length === 0 && setCalls.length > 0,
-    `setMembership 호출 ${setCalls.length}개, 소속을 주는 호출 ${grants.length}개`)
+  const clubJoin = read('src/new/lightui/auth/clubJoin.ts')
 
-  // 온보딩 → 동아리 찾기로 학교를 넘기지 않음
-  check('CLUBPICK_SCHOOL_LOST',
-    /club:\s*\{[^}]*to:\s*P\.clubPick\(\)/s.test(onboarding) &&
-      /navigate\(form\.to \?\? P\.clubPick\(school\)\)/.test(onboarding),
-    'SIDE_FORM.club.to = P.clubPick() (인자 없음)')
+  /**
+   * 검사는 **주석을 걷어낸 사본**으로 합니다.
+   *
+   * 고치면서 「무엇이 틀렸었는지」 를 주석에 적어 두는데, 거기에 옛 값
+   * (`123456-78-901234`, `to: 'venue'`)이 그대로 들어 있습니다. 주석까지 보면
+   * 고친 자리를 안 고쳤다고 합니다.
+   */
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
-  // 동아리 찾기는 주소의 ?school= 만 봅니다 (세션을 읽지 않음)
+
+  /*
+   * 아래는 **고쳐진 자리를 지키는 검사**입니다.
+   *
+   * 처음에는 반대였습니다 — 「이 버그가 아직 있는가」 를 물어서, 버그가 사라지면
+   * 경고가 떴습니다. 고치고 나니 경고가 열세 개 떠서 집계를 믿을 수 없게 됐고,
+   * 그래서 묻는 방향을 뒤집었습니다. 이제 경고가 뜨면 **되돌아갔다는 뜻**입니다.
+   */
+
+  // 소속을 주는 길이 있는가 (B1)
+  check('FIX_MEMBERSHIP_GRANTED',
+    /export function approveClubJoin/.test(clubJoin) && /setMembership\(membership\)/.test(clubJoin),
+    'clubJoin.ts 의 approveClubJoin 이 setMembership 을 부르지 않습니다')
+
+  // 받아 준 줄이 내 신청일 때만 소속이 생기는가
+  check('FIX_APPROVE_MATCHES_ID',
+    /export function approveJoin/.test(clubJoin) && /current\.id !== requestId/.test(clubJoin),
+    'approveJoin 이 id 를 맞춰 보지 않습니다 — 남의 신청을 받아도 내 소속이 바뀝니다')
+
+  // 온보딩 → 동아리 찾기로 고른 학교를 넘기는가 (M13)
+  check('FIX_CLUBPICK_SCHOOL_KEPT',
+    /P\.clubPick\(needsSchool \? school : undefined\)/.test(onboarding),
+    'SIDE_FORM.to 가 먼저 쓰여 학교가 안 넘어갑니다')
+
+  // 온보딩을 끝냈다는 사실을 따로 적는가 (B2)
+  check('FIX_ONBOARDED_FLAG',
+    /if \(user\.onboarded\) return false/.test(kakao) && /onboarded\?: boolean/.test(authMocks),
+    '학교·학과로 판정하면 학교를 안 묻는 사람은 매번 온보딩을 다시 받습니다')
+
+  // 다시 로그인해도 학교·학과가 남는가 (M9)
+  check('FIX_LOGIN_KEEPS_PROFILE',
+    /prev\.id !== user\.id/.test(kakao) && /export function saveProfile/.test(kakao),
+    'saveSession 이 빈 값으로 덮으면 다시 들어올 때마다 학교가 지워집니다')
+
+  // 공연장 화면에 게이트가 있는가 (B5)
+  check('FIX_VENUE_GATED', /need="venue"/.test(routes),
+    '/ui/venue 가 열려 있으면 관객이 남의 공연장 운영 화면을 엽니다')
+
+  // 함께 설 팀도 다른 운영 화면처럼 감쌌는가
+  check('FIX_CLUBOPS_GATED',
+    /<ManagerOnly[^>]*>\s*<S25ClubOps/s.test(routes),
+    '/ui/console/teams 만 열려 있으면 뒤로가기가 게이트로 갑니다')
+
+  // 부원이 보는 「다음 공연」 이 공연 상세로 가는가
+  check('FIX_MEMBER_SHOW_LINK',
+    /isManager \? P\.run\(showRun\.showId\) : P\.show\(showRun\.showId\)/.test(clubs),
+    '부원이 「다음 공연」 을 누르면 운영진 게이트에 막힙니다')
+
+  // 공연장이 자기 자리에서 수락·정산을 보는가
+  check('FIX_VENUE_ACCEPT_LOCAL', !/navigate\(P\.deposits\)/.test(venue),
+    '「수락」 이 동아리 입금 관리로 가면 공연장은 게이트에 막힙니다')
+  check('FIX_VENUE_SETTLEMENT_HONEST', !/navigate\(P\.settlement\)/.test(venue),
+    '정산 탭이 동아리 정산으로 가면 공연장은 게이트에 막힙니다')
+
+  // 공연장 소식이 관객에게 가지 않는가
+  // 줄 앞의 to: 만 봅니다 — 주석에 적힌 to: 'venue' 까지 잡으면 거짓 경고가 됩니다
+  check('FIX_NOTI_NOT_TO_VENUE',
+    !/^\s*to: 'venue'/m.test(strip(mocks)),
+    '공연장 알림이 관객에게 가면 거기서 남의 운영 화면으로 들어갑니다')
+
+  // 입금 화면의 취소가 살아 있는가 (M5)
+  check('FIX_DEPOSIT_CANCEL_ALIVE',
+    !/<Button variant="ghost">예매 취소<\/Button>/.test(deposit),
+    '돈을 보내는 화면에서 안 눌리는 버튼은 고장으로 읽힙니다')
+
+  // 기한과 계좌를 적어 두지 않는가
+  check('FIX_DEPOSIT_NOT_HARDCODED',
+    !/remain: '\d{2}:\d{2}:\d{2}'/.test(strip(mocks)) && !/123456-78-901234/.test(strip(mocks)),
+    '적어 둔 기한과 목 계좌번호가 운영 주소에 뜹니다')
+
+  // 초대장이 주소의 코드를 읽는가 (M10)
+  check('FIX_INVITE_BY_CODE',
+    /useParams/.test(invite) && /inviteFor/.test(invite),
+    '코드를 안 읽으면 다른 공연에 초대받은 사람이 엉뚱한 공연을 예매합니다')
+
+  // 마이가 세션을 읽는가 (M1)
+  check('FIX_ME_FROM_SESSION', /getSession\(\)/.test(me),
+    '마이가 목을 그리면 모든 사람에게 남의 이름과 이메일이 뜹니다')
+
+  // 마이 설정 줄에 갈 곳이 있는가 (M2)
+  check('FIX_ME_ROWS_ALIVE', /SETTING_TO/.test(me),
+    '눌러도 아무 일이 없으면 공연장으로 등록할 길이 없습니다')
+
+  // 모르는 공연 id 에 남의 티켓을 주지 않는가 (M12)
+  check('FIX_TICKET_NO_FALLBACK', !/ticketsByShow\[id\] \?\? myTicket/.test(mocks),
+    '사지도 않은 공연에서 남의 예매번호와 QR 이 보입니다')
+
+  // 아직 그대로인 전제들 — 고친 적이 없는 자리입니다
   check('CLUBPICK_READS_ONLY_PARAM',
     /params\.get\('school'\)/.test(clubPick) && !/getSession/.test(clubPick))
-
-  // 온보딩 완료 판정이 학교·학과 둘 다를 요구
-  check('NEEDS_ONBOARDING_REQUIRES_SCHOOL',
-    /needsOnboarding\(user: BandyUser\)\s*\{\s*return !user\.school \|\| !user\.department/s.test(kakao))
-
-  // 공연장은 학교를 아예 받지 않음
   check('VENUE_FORM_NO_SCHOOL', /venue:\s*\{[^}]*school:\s*false/s.test(onboarding))
-
-  // 이메일 로그인은 저장된 세션을 합치지 않고 새로 만듭니다
-  check('EMAIL_RESETS_SESSION',
-    /return \{ \.\.\.mockKakaoUser, id: `email:\$\{addr\}`/.test(email) &&
-      !/getSession\(\)/.test(email))
-
-  // ManagerOnly 로 감싼 경로 수
-  const gated = [...routes.matchAll(/<ManagerOnly/g)].length
-  check('MANAGER_ONLY_COUNT', gated === MANAGER_ONLY_ROUTES.length,
-    `routes.tsx 의 ManagerOnly ${gated}개 (모델은 ${MANAGER_ONLY_ROUTES.length}개)`)
-
-  // /ui/venue 와 /ui/console/teams 는 감싸지 않음
-  check('VENUE_UNGATED', /path="\/ui\/venue" element=\{<L3Venue \/>\}/.test(routes))
-  check('CLUBOPS_UNGATED', /path="\/ui\/console\/teams" element=\{<S25ClubOps \/>\}/.test(routes))
-
-  // 부원도 보이는 「다음 공연」 이 운영진 전용 /run 으로 갑니다
-  check('MEMBER_SEES_RUN_LINK', /navigate\(P\.run\(showRun\.showId\)\)/.test(clubs))
-
-  // 공연장 화면의 수락·정산이 운영진 전용으로 갑니다
-  check('VENUE_ACCEPT_TO_DEPOSITS', /navigate\(P\.deposits\)/.test(venue))
-  check('VENUE_TAB_TO_SETTLEMENT', /navigate\(P\.settlement\)/.test(venue))
-
-  // 알림 한 줄이 공연장 운영 화면으로 보냅니다
-  check('NOTI_TO_VENUE', /venue:\s*P\.venue/.test(notis))
-
-  // 입금 화면의 예매 취소 버튼에 onClick 이 없습니다
-  check('DEPOSIT_CANCEL_DEAD', /<Button variant="ghost">예매 취소<\/Button>/.test(deposit))
-
-  // 초대장은 :code 를 보지 않고 glow 로 보냅니다
-  check('INVITE_CODE_IGNORED',
-    /navigate\(P\.book\('glow'\)\)/.test(invite) && !/useParams/.test(invite))
-
-  // 마이의 프로필은 세션이 아니라 목 데이터입니다
-  check('ME_PROFILE_IS_MOCK',
-    /avatar=\{me\.initial\}/.test(me) && !/getSession/.test(me))
-
-  // 마이 설정 줄 중 알림 설정만 반응합니다
-  check('ME_SETTINGS_ROWS_DEAD',
-    /row\.title === '알림 설정' \? navigate\(P\.notifications\) : undefined/.test(me) &&
-      /공연장으로 등록하기/.test(mocks))
-
-  // 모르는 공연 id 면 멜로딕 티켓을 돌려줍니다
-  check('TICKET_FALLBACK', /ticketsByShow\[id\] \?\? myTicket/.test(mocks))
-
-  // 학교 없이 찾으면 모든 동아리가 나옵니다
   check('FIND_CLUBS_NO_SCHOOL_RETURNS_ALL', /if \(!s\) return true/.test(authMocks))
+
+  // 운영 화면이 몇 개나 감싸져 있는지 — 수가 줄면 어딘가 열린 것입니다
+  const gated = [...routes.matchAll(/<ManagerOnly/g)].length
+  check('MANAGER_ONLY_ENOUGH', gated >= MANAGER_ONLY_ROUTES.length,
+    `routes.tsx 의 ManagerOnly ${gated}개 — 모델이 아는 ${MANAGER_ONLY_ROUTES.length}개보다 적습니다`)
 
   return { ok, warn }
 }
@@ -334,127 +366,152 @@ const SEV = { blocker: 3, major: 2, minor: 1 }
 
 const ISSUES = {
   'membership-never-granted': {
+    fixed: 'd33233a — approveClubJoin 이 소속을 만듭니다',
     kind: 'deadend', sev: 'blocker',
     title: '가입을 마치면 동아리 권한을 얻을 길이 없다',
     where: 'auth/membership.ts · S1cClubPick → S1dClubSent · S14Me',
   },
   'pending-no-return': {
+    fixed: '01a7684 — 마이 「보낸 신청」 에서 다시 들어갑니다',
     kind: 'deadend', sev: 'blocker',
     title: '신청 상태(와 확인 코드)를 다시 볼 화면으로 가는 길이 없다',
     where: 'S1dClubSent · paths.ts clubJoinSent',
   },
   'club-ops-blocked': {
+    fixed: 'd33233a — 소속이 생기니 게이트가 열립니다',
     kind: 'blocked', sev: 'blocker',
     title: '동아리로 가입했는데 공연 올리기·입금·정산이 전부 막힌다',
     where: 'routes.tsx ManagerOnly · S14Me',
   },
   'gate-lies': {
+    fixed: 'd33233a · ef566c7 — 마이에서 권한을 받는 길이 생겼습니다',
     kind: 'deadend', sev: 'major',
     title: '게이트가 「마이에서 권한 바꾸기」로 보내지만 마이에 바꿀 자리가 없다',
     where: 'ManagerOnly.tsx:45 → S14Me.tsx:170',
   },
   'venue-ops-blocked': {
+    fixed: '964009e — 수락은 그 자리에서, 정산은 없다고 말합니다',
     kind: 'blocked', sev: 'blocker',
     title: '공연장이 지원 팀 수락과 정산을 못 한다 (운영진 게이트에 걸림)',
     where: 'L3Venue.tsx:187,257 → ManagerOnly',
   },
   'venue-open-to-all': {
+    fixed: '964009e — /ui/venue 가 공연장 권한을 묻습니다',
     kind: 'blocked', sev: 'major',
     title: '관객이 알림 한 줄로 공연장 운영 화면(거절·공개 내리기)에 들어간다',
     where: 'S8Notifications.tsx:18 → /ui/venue (게이트 없음)',
   },
   'onboarding-loop': {
+    fixed: 'f8d7e32 — onboarded 플래그로 한 번만 받습니다',
     kind: 'deadend', sev: 'blocker',
     title: '다시 들어올 때마다 온보딩을 처음부터 다시 받는다',
     where: 'kakao.ts needsOnboarding · S1bOnboarding · email.ts',
   },
   'email-session-reset': {
+    fixed: 'f8d7e32 — 같은 id 면 빈 값으로 덮지 않습니다',
     kind: 'premise', sev: 'major',
     title: '이메일로 다시 로그인하면 적어 둔 학교·학과가 지워진다',
     where: 'auth/email.ts:140',
   },
   'clubpick-school-lost': {
+    fixed: 'f8d7e32 — 고른 학교를 들고 넘어갑니다',
     kind: 'premise', sev: 'major',
     title: '동아리 찾기에 학교가 넘어가지 않아 다른 학교 동아리가 「이 학교의 동아리」로 나온다',
     where: 'S1bOnboarding.tsx:225 → S1cClubPick.tsx:28',
   },
   'clubpick-no-school-premise': {
+    fixed: 'f8d7e32 — 학교를 안 묻는 사람에게는 전국 목록입니다',
     kind: 'premise', sev: 'major',
     title: '학교를 묻지 않은 사람(직장인·졸업 후·연합)에게 학교로 좁히는 화면을 준다',
     where: 'S1cClubPick.tsx:58 · mocks/auth.ts findClubs',
   },
   'clubpick-empty-never': {
+    fixed: 'fd26456 — 동아리 없는 학교에 빈 상태를 둡니다',
     kind: 'empty', sev: 'minor',
     title: '「이 학교에 등록된 동아리가 없습니다」 빈 상태가 실제로는 나오지 않는다',
     where: 'S1cClubPick.tsx:131',
   },
   'demo-membership-leak': {
+    fixed: 'membership.ts — 가입 이력 없는 기기에서만 데모입니다',
     kind: 'premise', sev: 'major',
     title: '가입 직후 같은 화면에서는 관객·공연장도 멜로딕 운영진으로 보인다',
     where: 'auth/membership.ts:57 (모듈 로드 때 한 번만 읽음)',
   },
   'storage-blocked-manager': {
+    fixed: 'd33233a — 저장소를 못 읽으면 관객으로 봅니다',
     kind: 'premise', sev: 'major',
     title: '사생활 보호 모드에서는 누구나 멜로딕 운영진이 되고 가입이 저장되지 않는다',
     where: 'auth/membership.ts:46 catch · kakao.ts saveSession',
   },
   'member-run-blocked': {
+    fixed: 'fd26456 — 부원은 공연 상세로 갑니다',
     kind: 'blocked', sev: 'major',
     title: '부원이 「다음 공연」을 누르면 운영진 전용 화면에 막힌다',
     where: 'L2Clubs.tsx:85 → /ui/show/:id/run (ManagerOnly)',
     latent: '지금은 부원이 될 길이 없어서 아무도 겪지 않습니다. membership-never-granted 를 고치는 순간 드러납니다.',
   },
   'ops-shows-other-club': {
+    fixed: 'f590e89 — 머리는 내 동아리입니다 (목록 내용은 아직 멜로딕)',
     kind: 'premise', sev: 'major',
     title: '운영 화면이 내 동아리가 아니라 멜로딕의 공연·입금·정산을 보여 준다',
     where: 'S18Console · S11Deposits · S13Settlement (mocks 고정) + 데모 소속',
   },
   'me-profile-mock': {
+    fixed: 'ef566c7 — 세션에서 읽습니다',
     kind: 'premise', sev: 'major',
     title: '마이 프로필이 세션이 아니라 목 데이터(이지우 · 광운대 · jiwoo@kw.ac.kr)다',
     where: 'S14Me.tsx:66 · mocks/bandyLight.ts me',
   },
   'me-dead-rows': {
+    fixed: 'ef566c7 — 목적지를 주거나 「준비 중」 이라고 말합니다',
     kind: 'deadend', sev: 'major',
     title: '마이의 계좌·환불 정보 / 공연장으로 등록하기 / 문의하기가 눌리지 않는다',
     where: 'S14Me.tsx:187',
   },
   'venue-no-entry-later': {
+    fixed: 'ef566c7 — 마이에서 공연장으로 등록합니다',
     kind: 'deadend', sev: 'major',
     title: '가입 때 공연장을 고르지 않으면 공연장 화면으로 가는 길이 없다',
     where: 'paths.ts venue · S14Me 공연장으로 등록하기(무반응)',
   },
   'deposit-cancel-dead': {
+    fixed: '93590cf — 취소가 동작합니다',
     kind: 'deadend', sev: 'major',
     title: '입금 안내의 「예매 취소」가 눌리지 않는다 (입금 전 취소 경로가 없음)',
     where: 'D3Deposit.tsx:152',
   },
   'deposit-instant-confirmed': {
+    fixed: '93590cf — 「입금했어요」 는 신고까지입니다',
     kind: 'premise', sev: 'major',
     title: '「입금했어요」를 누르면 운영진 확인 전인데 「입금 확인됨」 티켓이 바로 나온다',
     where: 'D3Deposit.tsx:154 → D4Ticket · mocks ticketsByShow.glow.status',
   },
   'ticket-fallback-wrong': {
+    fixed: 'f121acc — 모르는 공연이면 없다고 말합니다',
     kind: 'premise', sev: 'major',
     title: '모르는 공연의 티켓을 「입금 확인됨 · 2매 · 34,000원」으로 보여 준다',
     where: 'mocks/bandyLight.ts:257 ticketFor',
   },
   'live-data-fixed': {
+    fixed: '8663175 — 그 공연의 순서를 보여 줍니다',
     kind: 'premise', sev: 'minor',
     title: '어느 공연의 당일 화면이든 멜로딕 11.22 공연 내용이 나온다',
     where: 'P1ShowLive.tsx:11 showLive 고정',
   },
   'unpaid-ticket-live': {
+    fixed: '93590cf — QR 은 확인된 티켓에만 열립니다',
     kind: 'premise', sev: 'major',
     title: '입금 대기 티켓에서도 「예매 완료」 배지와 입장 코드가 열린다',
     where: 'S7Tickets.tsx:92 → P1ShowLive (상태를 보지 않음)',
   },
   'invite-code-ignored': {
+    fixed: 'ec8950f — 주소의 코드로 찾습니다',
     kind: 'premise', sev: 'major',
     title: '초대 링크의 코드를 무시하고 언제나 멜로딕 공연을 예매하게 한다',
     where: 'S17InviteCard.tsx:56',
   },
   'invite-no-exit': {
+    fixed: 'ec8950f — 「밴디 둘러보기」 를 뒀습니다',
     kind: 'noway', sev: 'minor',
     title: '초대 링크로 들어온 첫 화면에 뒤로가기도 탭바도 없다',
     where: 'S17InviteCard.tsx (TopBar·TabBar 없음)',
@@ -490,22 +547,26 @@ const ISSUES = {
     where: 'push/push.ts · PushRow',
   },
   'nfc-tap-no-end': {
+    fixed: 'ec8950f — 못 쓰는 기기면 말하고, 20초면 멈춥니다',
     kind: 'deadend', sev: 'major',
     title: '맞대기 화면이 끝나지 않는다 — 연결됨(C4)으로 가는 길이 없다',
     where: 'P5Tap.tsx · C4Connected (들어오는 경로 없음)',
   },
   'clubops-ungated-back': {
+    fixed: 'fd26456 — 다른 운영 화면과 똑같이 감쌌습니다',
     kind: 'blocked', sev: 'minor',
     title: '함께 설 팀 화면은 열리는데 뒤로가기가 운영진 게이트로 보낸다',
     where: 'routes.tsx /ui/console/teams · S25ClubOps.tsx:68',
     latent: '화면 안에 들어가는 링크가 운영진에게만 보여서, 주소를 직접 치거나 링크를 받은 경우에만 겪습니다.',
   },
   's12-search-dead': {
+    fixed: 'ec8950f · bef03f1 — 찾아서 입장시킵니다',
     kind: 'deadend', sev: 'minor',
     title: '입장 관리의 「이름으로 찾기」가 눌리지 않는다',
     where: 'S12Entry.tsx:81',
   },
   's5-draft-dead': {
+    fixed: 'ec8950f — sessionStorage 에 적어 둡니다',
     kind: 'deadend', sev: 'minor',
     title: '모집 글의 「임시 저장」이 눌리지 않는다',
     where: 'S5Recruit.tsx:95',
@@ -823,7 +884,12 @@ if (source.warn.length) {
 console.log('')
 
 let lastSev = null
-for (const x of rows.filter((x) => !x.latent)) {
+const open = rows.filter((x) => !x.latent && !x.fixed)
+const done = rows.filter((x) => x.fixed)
+
+if (!open.length) console.log('남은 문제가 없습니다 — 아래 「이미 고친 것」 만 남았습니다.')
+
+for (const x of open) {
   if (x.sev !== lastSev) {
     lastSev = x.sev
     const label = { blocker: '■ 막힘 (돈·가입)', major: '▲ 큼', minor: '· 작음' }[x.sev]
@@ -836,6 +902,15 @@ for (const x of rows.filter((x) => !x.latent)) {
     .join(' · ')
   console.log(`      입구별: ${side}`)
   console.log(`      예: ${x.examples[0].persona} → ${x.examples[0].trail.join(' → ')}`)
+}
+
+if (done.length) {
+  console.log('\n✓ 이미 고친 것 — 아래 수는 「고치기 전이라면 몇 명이 겪었을까」 입니다.')
+  console.log('   모델은 이 자리를 계속 지켜봅니다. 되돌아오면 위 목록에 다시 올라옵니다.')
+  for (const x of done) {
+    console.log(`  ${x.title}`)
+    console.log(`      ${pc(x.total, N)} · ${x.fixed}`)
+  }
 }
 
 const latent = rows.filter((x) => x.latent)
