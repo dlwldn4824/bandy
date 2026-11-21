@@ -1,0 +1,47 @@
+.s26__gap-14 { height: 14px; }
+.s26__gap-22 { height: 22px; }
+.s26__gap-26 { height: 26px; }
+
+/* S26 부원 — 권한 주기 */
+.s26 { display: flex; flex-direction: column; padding: 0 20px; }
+.s26__group { padding: 0 16px; }
+
+/* 「나」 표시 — 목록에서 내 줄을 찾는 데 1초도 쓰지 않게 */
+.s26__me {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--lui-r-pill);
+  background: var(--lui-chip);
+  color: var(--lui-sub);
+  vertical-align: 1px;
+}
+
+/* 행 안의 동작 버튼 — 규칙 1 에 따라 전부 외곽선 */
+.s26__act { height: 34px; padding: 0 12px; border-radius: 10px; font-size: 12.5px; white-space: nowrap; }
+
+/* 마지막 운영진 자리에는 버튼 대신 까닭이 들어갑니다 */
+.s26__locked {
+  display: block;
+  max-width: 132px;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--lui-sub-2);
+  text-align: right;
+  word-break: keep-all;
+}
+
+/* 운영진이 한 명일 때의 안내 — 빨강은 쓰지 않습니다(규칙 7). 지금 잘못된 게
+   아니라 나중에 잠길 수 있다는 이야기라서요 */
+.s26-alone { padding: 16px; display: flex; flex-direction: column; gap: 7px; }
+.s26-alone__title { font-size: 14.5px; font-weight: 700; color: var(--lui-ink); }
+.s26-alone__body { font-size: 12.5px; line-height: 1.75; color: var(--lui-sub); word-break: keep-all; }
+
+.s26-empty { padding: 18px 16px; }
+.s26-empty__body { font-size: 12.5px; line-height: 1.75; color: var(--lui-sub); word-break: keep-all; }
+
+.s26__note { font-size: 11.5px; line-height: 18px; color: var(--lui-sub-2); padding: 0 2px; word-break: keep-all; }
+
+.s26__ask { display: flex; gap: 8px; }
+.s26__ask .lui-btn { flex: 1; min-width: 0; height: 46px; border-radius: 13px; font-size: 14px; }

@@ -8,6 +8,7 @@ import Button from '../components/Button.tsx'
 import Icon from '../components/Icon.tsx'
 import MoreMenu from '../components/MoreMenu.tsx'
 import { P } from '../paths.ts'
+import { useMembers } from '../auth/members.ts'
 import { clubConsole as c } from '../../mocks/bandyLight.ts'
 import './S18Console.css'
 
@@ -36,6 +37,7 @@ const MenuRow = ({
 )
 
 const TO: Record<(typeof c.menu)[number]['key'], string> = {
+  members: P.clubMembers,
   teams: P.clubOps,
   run: P.run(),
   deposits: P.deposits,
@@ -45,6 +47,8 @@ const TO: Record<(typeof c.menu)[number]['key'], string> = {
 
 const S18Console = () => {
   const navigate = useNavigate()
+  // 부원 수는 세어서 적습니다 — 목에 박아 두면 올리고 내려도 그대로입니다
+  const { members, managers } = useMembers()
 
   return (
     <Phone>
@@ -109,7 +113,11 @@ const S18Console = () => {
               <MenuRow
                 key={row.key}
                 title={row.title}
-                value={row.value}
+                value={
+                  row.key === 'members'
+                    ? `${members.length}명 · 운영진 ${managers.length}명`
+                    : row.value
+                }
                 onClick={() => navigate(TO[row.key])}
               />
             ))}

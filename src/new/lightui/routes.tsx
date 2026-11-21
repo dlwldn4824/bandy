@@ -8,6 +8,7 @@ import D4Ticket from './screens/D4Ticket.tsx'
 import L2Clubs from './screens/L2Clubs.tsx'
 import S18Console from './screens/S18Console.tsx'
 import S25ClubOps from './screens/S25ClubOps.tsx'
+import S26Members from './screens/S26Members.tsx'
 import S19Run from './screens/S19Run.tsx'
 import S4Club from './screens/S4Club.tsx'
 import S5Recruit from './screens/S5Recruit.tsx'
@@ -67,6 +68,11 @@ export const lightUiRoutes = [
   <Route key="ui-calendar" path="/ui/calendar" element={<Navigate to="/ui?view=calendar" replace />} />,
   <Route key="ui-clubs" path="/ui/clubs" element={<L2Clubs />} />,
   <Route key="ui-clubops" path="/ui/console/teams" element={<S25ClubOps />} />,
+  <Route key="ui-members" path="/ui/console/members" element={
+      <ManagerOnly title="부원" what="부원 권한 바꾸기">
+        <S26Members />
+      </ManagerOnly>
+    } />,
   <Route key="ui-console" path="/ui/console" element={
       <ManagerOnly title="공연 관리" what="공연 관리">
         <S18Console />

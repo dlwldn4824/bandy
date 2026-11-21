@@ -14,6 +14,8 @@ import DeleteAccount from '../auth/DeleteAccount.tsx'
 import { useBlocked } from '../safety/report.ts'
 import { useRole } from '../auth/role.ts'
 import { useMembership } from '../auth/membership.ts'
+import { useMembers } from '../auth/members.ts'
+import { membersCopy } from '../../mocks/bandyLight.ts'
 import { me } from '../../mocks/bandyLight.ts'
 import { THEME_LABELS, useTheme, type ThemeMode } from '../theme.ts'
 import './S14Me.css'
@@ -42,6 +44,11 @@ const S14Me = () => {
   const { role, isManager } = useRole()
   const { membership, inClub, setMembership } = useMembership()
   const [leaveOpen, setLeaveOpen] = useState(false)
+  // 마지막 운영진이 그냥 나가면 공연도 못 올리고 정산도 못 받는 동아리가 남습니다
+  const { members, alone, handOverAndLeave } = useMembers()
+  const [heir, setHeir] = useState<string | null>(null)
+  const mustHandOver = isManager && alone
+  const heirs = members.filter((m) => !m.me)
   const [delOpen, setDelOpen] = useState(false)
   const { count: blockedCount } = useBlocked()
 
@@ -92,7 +99,11 @@ const S14Me = () => {
               <ListRow
                 avatar="–"
                 title="동아리에서 나가기"
-                sub="나가면 운영 화면이 닫히고 관객으로 돌아갑니다"
+                sub={
+                  mustHandOver
+                    ? '마지막 운영진이라 넘길 사람을 먼저 골라야 합니다'
+                    : '나가면 운영 화면이 닫히고 관객으로 돌아갑니다'
+                }
                 chevron
                 onClick={() => setLeaveOpen(true)}
               />
@@ -229,25 +240,78 @@ const S14Me = () => {
           <p className="s14__version">{me.version}</p>
         </div>
       </div>
-      <Sheet open={leaveOpen} title="동아리에서 나갈까요?" onClose={() => setLeaveOpen(false)}>
-        <p className="lui-menu__note">
-          {membership?.clubName} 에서 나갑니다. 운영 화면이 닫히고 관객으로 돌아갑니다. 참여 코드가
-          있으면 언제든 다시 들어올 수 있어요.
-        </p>
-        <div className="s14__leave">
-          <Button variant="ghost" onClick={() => setLeaveOpen(false)}>
-            그대로 두기
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => {
-              setMembership(null)
-              setLeaveOpen(false)
-            }}
-          >
-            나가기
-          </Button>
-        </div>
+      <Sheet
+        open={leaveOpen}
+        title={mustHandOver ? membersCopy.handover.title : '동아리에서 나갈까요?'}
+        onClose={() => setLeaveOpen(false)}
+      >
+        {mustHandOver ? (
+          <>
+            <p className="lui-menu__note">
+              {heirs.length === 0 ? membersCopy.handover.none : membersCopy.handover.body}
+            </p>
+            {heirs.length > 0 && (
+              <div className="s14__heirs">
+                {heirs.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={`s14-heir${heir === m.id ? ' s14-heir--on' : ''}`}
+                    onClick={() => setHeir(m.id)}
+                    aria-pressed={heir === m.id}
+                  >
+                    <span className="s14-heir__avatar">{m.initial}</span>
+                    <span className="s14-heir__main">
+                      <span className="s14-heir__name">{m.name}</span>
+                      <span className="s14-heir__sub">{m.sub}</span>
+                    </span>
+                    <span className="s14-heir__dot" aria-hidden />
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="s14__leave">
+              <Button variant="ghost" onClick={() => setLeaveOpen(false)}>
+                그대로 두기
+              </Button>
+              {heirs.length > 0 && (
+                <Button
+                  variant="danger"
+                  disabled={heir === null}
+                  onClick={() => {
+                    if (!heir) return
+                    handOverAndLeave(heir)
+                    setMembership(null)
+                    setLeaveOpen(false)
+                  }}
+                >
+                  {membersCopy.handover.cta}
+                </Button>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="lui-menu__note">
+              {membership?.clubName} 에서 나갑니다. 운영 화면이 닫히고 관객으로 돌아갑니다. 참여 코드가
+              있으면 언제든 다시 들어올 수 있어요.
+            </p>
+            <div className="s14__leave">
+              <Button variant="ghost" onClick={() => setLeaveOpen(false)}>
+                그대로 두기
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  setMembership(null)
+                  setLeaveOpen(false)
+                }}
+              >
+                나가기
+              </Button>
+            </div>
+          </>
+        )}
       </Sheet>
       <DeleteAccount open={delOpen} onClose={() => setDelOpen(false)} />
       <TabBar active="my" />

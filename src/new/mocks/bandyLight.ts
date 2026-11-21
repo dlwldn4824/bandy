@@ -846,13 +846,15 @@ export const clubConsole = {
   ],
   menu: [
     // 동아리 탭에 있던 모집·제안을 여기로 옮겼습니다 — 운영진이 하는 일이라서요
+    // 숫자는 S18 에서 실제 부원 수로 덮어씁니다 — 여기 적힌 건 기본값입니다
+    { key: 'members' as const, title: '부원', value: '운영진 권한 주기' },
     { key: 'teams' as const, title: '함께 설 팀', value: '모집 · 제안 2건' },
     { key: 'run' as const, title: '공연 당일', value: '타임라인 · 공지' },
     { key: 'deposits' as const, title: '입금 관리', value: '확인 2건' },
     { key: 'entry' as const, title: '입장 관리', value: '공연 당일' },
     { key: 'settlement' as const, title: '정산', value: '1건 대기' },
   ],
-  note: '공연 만들기와 입금·정산은 동아리 운영진만 할 수 있습니다. 부원에게 권한을 주려면 동아리 운영진에게 말해 주세요.',
+  note: '공연 만들기와 입금·정산은 동아리 운영진만 할 수 있습니다. 부원에게 권한을 주려면 위의 「부원」 에서 운영진으로 올려 주세요.',
 }
 
 export const deposits = {
@@ -1129,6 +1131,53 @@ export const myTickets = {
 }
 
 /* ── S8 알림 ────────────────────────────────────────── */
+/* ── 부원과 권한 (S26) ──────────────────────────────── */
+export interface ClubMember {
+  id: string
+  initial: string
+  name: string
+  /** 학과 · 파트 */
+  sub: string
+  role: 'manager' | 'member'
+  /** 들어온 때 */
+  joined: string
+  /** 나 자신인지 — 내 권한은 내가 못 올립니다 */
+  me?: boolean
+}
+
+/** MOCK: 실제로는 동아리 멤버 문서를 읽습니다 */
+export const clubMembers: ClubMember[] = [
+  { id: 'jiwoo', initial: '이', name: '이지우', sub: '로봇학부 · 보컬', role: 'manager', joined: '2024.03', me: true },
+  { id: 'yuseong', initial: '최', name: '최유성', sub: '전자공학과 · 기타', role: 'member', joined: '2024.03' },
+  { id: 'minji', initial: '김', name: '김민지', sub: '경영학부 · 베이스', role: 'member', joined: '2025.03' },
+  { id: 'seojun', initial: '박', name: '박서준', sub: '컴퓨터정보공학부 · 드럼', role: 'member', joined: '2025.03' },
+  { id: 'haneul', initial: '정', name: '정하늘', sub: '전자공학과 · 키보드', role: 'member', joined: '2026.03' },
+]
+
+export const membersCopy = {
+  title: '부원',
+  /** 운영진이 하나뿐일 때 — 그 사람이 졸업하면 동아리가 잠깁니다 */
+  aloneTitle: '운영진이 한 명이에요',
+  aloneBody:
+    '지금은 이지우 님만 공연을 올리고 정산을 받을 수 있습니다. 졸업하거나 계정을 잃으면 동아리가 잠깁니다 — 한 명 더 올려 두세요.',
+  promote: '운영진으로 올리기',
+  demote: '부원으로 내리기',
+  promoteAsk: (name: string) => `${name} 님을 운영진으로 올릴까요?`,
+  promoteBody:
+    '공연 올리기, 입금 확인, 입장, 정산을 할 수 있게 됩니다. 돈이 오가는 자리라 아는 사람에게만 주세요.',
+  demoteAsk: (name: string) => `${name} 님을 부원으로 내릴까요?`,
+  demoteBody: '운영 화면이 닫히고 우리 공연과 자기 순서만 보게 됩니다.',
+  lastManager: '마지막 운영진이라 내릴 수 없어요. 다른 사람을 먼저 올려 주세요.',
+  note: '권한은 동아리마다 따로입니다. 다른 동아리에서의 자격과 섞이지 않습니다.',
+  /** 마지막 운영진이 나가려 할 때 */
+  handover: {
+    title: '나가기 전에 넘겨 주세요',
+    body: '마지막 운영진입니다. 그냥 나가면 이 동아리를 아무도 다룰 수 없게 됩니다. 넘길 사람을 고르세요.',
+    cta: '넘기고 나가기',
+    none: '넘길 부원이 없습니다. 동아리를 닫으려면 문의해 주세요.',
+  },
+}
+
 export const notifications = {
   /**
    * 알림마다 「누구에게 갈 수 있는 알림인가」 를 적어 둡니다.
