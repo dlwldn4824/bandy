@@ -24,6 +24,8 @@ const KEY = 'bandy.lightui.clubJoin'
 export type JoinKind = 'join' | 'create'
 
 export interface ClubJoinRequest {
+  /** 받는 쪽(들어온 신청함)의 줄과 맞춰 보는 값 */
+  id: string
   kind: JoinKind
   /** 있는 동아리에 들어갈 때만 */
   clubId?: string
@@ -42,7 +44,10 @@ const listeners = new Set<() => void>()
 function read(): ClubJoinRequest | null {
   try {
     const raw = localStorage.getItem(KEY)
-    return raw ? (JSON.parse(raw) as ClubJoinRequest) : null
+    if (!raw) return null
+    const saved = JSON.parse(raw) as Partial<ClubJoinRequest>
+    // id 가 생기기 전에 저장된 기기 — 맞춰 볼 줄이 없으니 자기 것하고만 맞습니다
+    return { id: 'own', ...saved } as ClubJoinRequest
   } catch {
     return null
   }
@@ -70,6 +75,7 @@ export function rememberClubJoin(req: {
 }) {
   current = {
     ...req,
+    id: `own-${Date.now().toString(36)}`,
     at: new Date().toISOString(),
     state: 'pending',
     code: req.kind === 'create' ? newCode() : undefined,
@@ -121,6 +127,22 @@ export function approveClubJoin(): Membership | null {
   save()
   setMembership(membership)
   return membership
+}
+
+/**
+ * 들어온 신청함에서 한 줄을 받아 줬을 때 부릅니다.
+ *
+ * **아무 줄이나 받았다고 이 기기에 소속이 생기면 안 됩니다.** 운영진이 윤도현의
+ * 신청을 받아 줬는데 운영진 자신이 그 동아리 부원이 되어 버리면 틀린 사람의
+ * 권한을 바꾸는 것입니다. 바뀌어야 하는 건 **신청한 사람의 기기**고, 지금
+ * 구조에서는 그게 이 기기일 때만 여기서 알 수 있습니다.
+ *
+ * 그래서 받은 줄이 이 기기가 보낸 신청일 때만 소속을 만듭니다. 서버가 생기면
+ * 이 판단은 서버가 하고, 신청자에게는 알림으로 갑니다.
+ */
+export function approveJoin(requestId: string): Membership | null {
+  if (!current || current.id !== requestId) return null
+  return approveClubJoin()
 }
 
 /** 거절합니다. 소속은 생기지 않고, 까닭이 남습니다 */
