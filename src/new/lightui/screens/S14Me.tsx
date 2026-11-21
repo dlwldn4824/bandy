@@ -54,11 +54,11 @@ const MODES: ThemeMode[] = ['system', 'light', 'dark']
 const SETTING_TO: Record<string, string> = {
   '알림 설정': P.notifications,
   '공연장으로 등록하기': P.onboarding('venue'),
+  // 「준비 중」 이던 자리입니다. 등록할 데가 없어서 운영진이 예매를 못 열었습니다.
+  '계좌 · 환불 정보': P.bankAccount,
 }
 
 const SETTING_SOON: Record<string, string> = {
-  '계좌 · 환불 정보':
-    '환불 계좌는 지금 예매할 때마다 적습니다. 한 번 적어 두고 쓰는 자리는 준비 중이에요.',
   문의하기:
     '문의 창구를 준비 중입니다. 급한 일은 공연을 연 동아리에 바로 연락해 주세요 — 공연 화면에 연락처가 있습니다.',
 }

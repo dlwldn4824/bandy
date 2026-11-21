@@ -14,18 +14,26 @@
  * 「아직 등록 전」 이라고 말합니다.
  */
 
-const BANK_NAME = import.meta.env.VITE_BANK_NAME as string | undefined
-const BANK_ACCOUNT = import.meta.env.VITE_BANK_ACCOUNT as string | undefined
-const BANK_HOLDER = import.meta.env.VITE_BANK_HOLDER as string | undefined
+import { getBankAccount } from './bankAccount.ts'
 
-/** 셋이 다 있어야 계좌를 그립니다. 하나라도 비면 안내를 띄웁니다. */
-export const BANK_READY = Boolean(BANK_NAME && BANK_ACCOUNT && BANK_HOLDER)
-
-export const BANK = {
-  name: BANK_NAME ?? '',
-  account: BANK_ACCOUNT ?? '',
-  holder: BANK_HOLDER ?? '',
+/**
+ * 계좌는 `bankAccount.ts` 가 들고 있습니다 — 운영진이 화면에서 적고, 없으면
+ * `.env` 의 `VITE_BANK_*` 로 떨어집니다.
+ *
+ * 전에는 여기서 환경 변수만 읽었습니다. 그래서 키를 안 넣은 배포에서는
+ * 계좌가 영영 없고, 「계좌를 등록해야 예매를 열 수 있습니다」 라는 안내만
+ * 뜨고 등록할 자리는 없었습니다.
+ */
+export function getBank() {
+  const b = getBankAccount()
+  return { ready: b !== null, name: b?.name ?? '', account: b?.account ?? '', holder: b?.holder ?? '' }
 }
+
+/**
+ * 불러온 시점의 값입니다. 같은 화면에서 저장해도 안 바뀌므로, 화면에서는
+ * `useBankAccount()` 나 `getBank()` 를 쓰세요. 쓰던 곳이 있어 남겨 둡니다.
+ */
+export const BANK_READY = getBankAccount() !== null
 
 /** 계좌가 없을 때 그 자리에 들어가는 말 */
 export const BANK_UNSET = {

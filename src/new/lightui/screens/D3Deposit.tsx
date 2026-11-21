@@ -12,14 +12,8 @@ import { depositGuide as d, booking } from '../../mocks/bandyLight.ts'
 import CardPay from '../pay/CardPay.tsx'
 import { PAY_CONFIGURED } from '../pay/portone.ts'
 import { useTicketState } from '../pay/ticketState.ts'
-import {
-  BANK,
-  BANK_READY,
-  BANK_UNSET,
-  deadlineFrom,
-  dueText,
-  remainText,
-} from '../pay/deposit.ts'
+import { BANK_UNSET, deadlineFrom, dueText, remainText } from '../pay/deposit.ts'
+import { useBankAccount } from '../pay/bankAccount.ts'
 import glossSoft from '../assets/gloss-soft-accent.svg'
 import glossSpec from '../assets/gloss-spec-accent.svg'
 import './D3Deposit.css'
@@ -38,6 +32,8 @@ const D3Deposit = () => {
   // 결제 수단 탭. 카드가 준비되기 전에는 탭 자체를 그리지 않습니다 —
   // 고를 게 하나뿐인데 탭을 보여 주면 고를 수 있는 것처럼 보입니다.
   const [pay, setPay] = useState<'transfer' | 'card'>('transfer')
+  // 운영진이 계좌를 적으면 그 자리에서 바뀝니다
+  const { bank, ready: BANK_READY } = useBankAccount()
   const [cancelling, setCancelling] = useState(false)
   /**
    * 「입금했어요」 는 **보냈다고 알리는 것**이지 확인이 아닙니다.
@@ -127,15 +123,15 @@ const D3Deposit = () => {
           <div className="lui-card d3__account">
             <div className="d3__row">
               <span className="d3__k">은행</span>
-              <span className="d3__v">{BANK.name}</span>
+              <span className="d3__v">{bank?.name}</span>
             </div>
             <div className="d3__row">
               <span className="d3__k">계좌번호</span>
-              <span className="d3__v">{BANK.account}</span>
+              <span className="d3__v">{bank?.account}</span>
             </div>
             <div className="d3__row">
               <span className="d3__k">예금주</span>
-              <span className="d3__v">{BANK.holder}</span>
+              <span className="d3__v">{bank?.holder}</span>
             </div>
             <div className="d3__row">
               <span className="d3__k">입금자명</span>
@@ -143,7 +139,7 @@ const D3Deposit = () => {
             </div>
             <div className="d3__spacer" />
             <div className="d3__copy">
-              <Button variant="ghost" onClick={() => copy('account', BANK.account)}>
+              <Button variant="ghost" onClick={() => copy('account', bank?.account ?? '')}>
                 {copied === 'account' ? '복사했어요' : '계좌 복사'}
               </Button>
               <Button variant="ghost" onClick={() => copy('name', d.depositorName)}>

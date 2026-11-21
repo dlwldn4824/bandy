@@ -56,6 +56,8 @@ export const P = {
   /** 공연이 지금 어디쯤인지 — 초안·팀 모으는 중·예매 중·마감 */
   showStage: (id = 'glow') => `/ui/show/${id}/stage`,   // S28
   run: (id = 'glow') => `/ui/show/${id}/run`,            // S19 공연 당일 운영 (타임라인·공지)
+  /** 입금 계좌 — 예매자가 돈을 보낼 곳. 없으면 예매를 못 엽니다 */
+  bankAccount: '/ui/console/account',                   // S29
   deposits: '/ui/deposits',                             // S11
   settlement: '/ui/settlement',                         // S13
 

@@ -8,7 +8,7 @@ import ListRow from '../components/ListRow.tsx'
 import Button from '../components/Button.tsx'
 import { P } from '../paths.ts'
 import { settlement as s } from '../../mocks/bandyLight.ts'
-import { BANK, BANK_READY } from '../pay/deposit.ts'
+import { useBankAccount } from '../pay/bankAccount.ts'
 import { freshClub, useIsDemoClub } from '../clubs/owner.ts'
 import './S13Settlement.css'
 
@@ -22,6 +22,7 @@ import './S13Settlement.css'
  * 등록된 계좌가 없으면 지어내지 않고 등록하라고 말합니다.
  */
 const S13Settlement = () => {
+  const { bank, ready: BANK_READY } = useBankAccount()
   const navigate = useNavigate()
   // 적어 둔 694,000원은 멜로딕의 11.22 공연 것입니다 (clubs/owner.ts)
   const demo = useIsDemoClub()
@@ -109,10 +110,10 @@ const S13Settlement = () => {
             <div className="s13__account-row">
               <span className="s13__account-main">
                 <span className="s13__account-title">
-                  {BANK_READY ? `${BANK.name} ${BANK.account}` : '등록된 계좌가 없어요'}
+                  {BANK_READY ? `${bank?.name} ${bank?.account}` : '등록된 계좌가 없어요'}
                 </span>
                 <span className="s13__account-sub">
-                  {BANK_READY ? BANK.holder : '정산을 받으려면 계좌를 먼저 등록해 주세요.'}
+                  {BANK_READY ? bank?.holder : '정산을 받으려면 계좌를 먼저 등록해 주세요.'}
                 </span>
               </span>
               <span className="lui-pill lui-pill--lg lui-pill--outline">

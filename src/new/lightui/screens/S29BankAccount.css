@@ -1,0 +1,31 @@
+/* S29 입금 계좌 */
+.s29 { display: flex; flex-direction: column; padding: 0 20px 20px; }
+.s29__gap-14 { height: 14px; }
+.s29__gap-26 { height: 26px; }
+
+.s29__lead { margin: 0; font-size: 13px; line-height: 1.8; color: var(--lui-body); }
+.s29__lead b { color: var(--lui-ink); font-weight: 700; }
+
+.s29__label {
+  display: block; margin: 0 0 7px 2px;
+  font-size: 12px; font-weight: 700; color: var(--lui-sub);
+}
+
+.s29__preview { padding: 4px 16px; }
+.s29__row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0; font-size: 12.5px; color: var(--lui-sub);
+}
+.s29__row + .s29__row { border-top: 1px solid var(--lui-hairline); }
+.s29__v { font-weight: 700; color: var(--lui-ink); }
+
+.s29__notice { margin: 0; font-size: 11.5px; line-height: 1.7; color: var(--lui-sub-2); }
+
+.s29__clear {
+  display: block; margin: 0 auto; padding: 6px;
+  font-size: 12px; font-weight: 600; color: var(--lui-sub);
+}
+.s29__back {
+  display: block; margin: 0 auto; padding: 6px;
+  font-size: 12px; font-weight: 600; color: var(--lui-sub);
+}

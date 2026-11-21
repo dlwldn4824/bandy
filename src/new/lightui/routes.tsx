@@ -9,6 +9,7 @@ import D4Ticket from './screens/D4Ticket.tsx'
 import L2Clubs from './screens/L2Clubs.tsx'
 import S18Console from './screens/S18Console.tsx'
 import S25ClubOps from './screens/S25ClubOps.tsx'
+import S29BankAccount from './screens/S29BankAccount.tsx'
 import S26Members from './screens/S26Members.tsx'
 import S27JoinRequests from './screens/S27JoinRequests.tsx'
 import S28ShowStage from './screens/S28ShowStage.tsx'
@@ -73,6 +74,11 @@ export const lightUiRoutes = [
   // 다른 운영 화면은 다 감싸 두고 여기만 열려 있었습니다. 그래서 부원이
   // 주소로 들어오면 화면은 열리는데 뒤로가기(P.console)가 게이트로 갔습니다 —
   // 들어온 적 없는 곳에서 「운영진만 할 수 있어요」 를 만납니다.
+  <Route key="ui-bank" path="/ui/console/account" element={
+      <ManagerOnly title="입금 계좌" what="계좌 등록">
+        <S29BankAccount />
+      </ManagerOnly>
+    } />,
   <Route key="ui-clubops" path="/ui/console/teams" element={
       <ManagerOnly title="함께 설 팀" what="제안 주고받기">
         <S25ClubOps />
