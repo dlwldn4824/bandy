@@ -19,7 +19,19 @@ import { useSyncExternalStore } from 'react'
 
 export type ClubRole = 'manager' | 'member'
 
+/**
+ * 어떤 소속인가.
+ *
+ * 권한이 「동아리 운영진」 하나뿐이어서 생긴 문제가 둘 있습니다. 공연장은
+ * 동아리가 아니라 자기 지원 팀 수락과 정산을 못 하고, 반대로 `/ui/venue` 에는
+ * 게이트가 없어 **관객이 남의 공연장 운영 화면을 엽니다.** 종류를 나눠 둬야
+ * 게이트를 「무엇이 필요한가」 로 물을 수 있습니다.
+ */
+export type MemberKind = 'club' | 'venue'
+
 export interface Membership {
+  /** 없으면 'club' 으로 읽습니다 — 이 칸이 생기기 전에 저장된 기기가 있습니다 */
+  kind: MemberKind
   clubId: string
   clubName: string
   role: ClubRole
@@ -29,6 +41,7 @@ export interface Membership {
 
 /** MOCK: 처음 들어온 사람에게 보여 줄 소속 */
 export const DEMO_MEMBERSHIP: Membership = {
+  kind: 'club',
   clubId: 'melodic',
   clubName: '멜로딕',
   role: 'manager',

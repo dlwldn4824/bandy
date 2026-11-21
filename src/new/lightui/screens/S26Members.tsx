@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import TopBar from '../components/TopBar.tsx'
 import TabBar from '../components/TabBar.tsx'
@@ -6,6 +7,8 @@ import SectionHeader from '../components/SectionHeader.tsx'
 import ListRow from '../components/ListRow.tsx'
 import Button from '../components/Button.tsx'
 import Sheet from '../components/Sheet.tsx'
+import { P } from '../paths.ts'
+import { useJoinInbox } from '../auth/joinInbox.ts'
 import { useMembers } from '../auth/members.ts'
 import { useMembership } from '../auth/membership.ts'
 import { membersCopy as t, type ClubMember } from '../../mocks/bandyLight.ts'
@@ -22,7 +25,9 @@ import './S26Members.css'
  * 길은 막고, 나가려는 사람에게는 넘길 사람을 먼저 고르게 합니다(S14).
  */
 const S26Members = () => {
+  const navigate = useNavigate()
   const { members, managers, alone, promote, demote } = useMembers()
+  const { pending } = useJoinInbox()
   const { membership, setMembership } = useMembership()
   /** 확인 시트에 올려 둔 사람. 올릴 건지 내릴 건지도 같이 */
   const [ask, setAsk] = useState<{ m: ClubMember; to: 'manager' | 'member' } | null>(null)
@@ -90,8 +95,15 @@ const S26Members = () => {
           {mates.length === 0 ? (
             <div className="lui-card s26-empty">
               <p className="s26-empty__body">
-                아직 부원이 없습니다. 마이 &gt; 내 동아리의 참여 코드를 동아리 단톡에 올려 주세요.
+                {pending.length > 0
+                  ? `아직 부원이 없습니다. 신청한 ${pending.length}명을 받아 주면 여기에 섭니다.`
+                  : '아직 부원이 없습니다. 마이 > 내 동아리의 참여 코드를 동아리 단톡에 올려 주세요.'}
               </p>
+              {pending.length > 0 && (
+                <Button variant="ghost" onClick={() => navigate(P.joinRequests)}>
+                  들어온 신청 보기
+                </Button>
+              )}
             </div>
           ) : (
             <div className="lui-card s26__group">{mates.map(row)}</div>

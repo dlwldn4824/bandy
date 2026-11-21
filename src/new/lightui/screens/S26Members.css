@@ -45,3 +45,6 @@
 
 .s26__ask { display: flex; gap: 8px; }
 .s26__ask .lui-btn { flex: 1; min-width: 0; height: 46px; border-radius: 13px; font-size: 14px; }
+
+.s26-empty { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.s26-empty .lui-btn { height: 40px; padding: 0 14px; border-radius: 11px; font-size: 13px; }

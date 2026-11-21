@@ -1,0 +1,100 @@
+.s27__gap-14 { height: 14px; }
+.s27__gap-22 { height: 22px; }
+.s27__gap-26 { height: 26px; }
+
+/* S27 들어온 신청 */
+.s27 { display: flex; flex-direction: column; padding: 0 20px; }
+.s27__line { font-size: 15px; font-weight: 700; color: var(--lui-ink); }
+.s27__list { display: flex; flex-direction: column; gap: 10px; }
+
+/* 한 사람이 카드 하나 — 목록 행으로 두면 한마디를 읽을 자리가 없습니다 */
+.s27-req { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.s27-req__head { display: flex; align-items: center; gap: 11px; }
+.s27-req__avatar {
+  width: 40px; height: 40px; flex: none;
+  border-radius: var(--lui-r-pill);
+  background: var(--lui-soft);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: var(--lui-ink);
+}
+.s27-req__who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.s27-req__name { font-size: 15px; font-weight: 700; color: var(--lui-ink); }
+.s27-req__sub { font-size: 11.5px; color: var(--lui-sub); }
+.s27-req__ago { font-size: 11px; color: var(--lui-sub-2); flex: none; align-self: flex-start; }
+
+/* 다른 학교 — 확인하라는 표시입니다 */
+.s27-req__flag {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--lui-body);
+  background: var(--lui-box);
+  border-radius: 12px;
+  padding: 11px 12px;
+  word-break: keep-all;
+}
+.s27-req__flagtag {
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--lui-r-pill);
+  background: var(--lui-chip);
+  color: var(--lui-sub);
+}
+
+/* 본인이 쓴 한마디 — 운영진이 아는 사람인지 가늠하는 거의 유일한 단서 */
+.s27-req__word {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--lui-body);
+  word-break: keep-all;
+}
+
+.s27-req__acts { display: flex; gap: 8px; }
+.s27-req__acts .lui-btn { flex: 1; min-width: 0; height: 42px; border-radius: 12px; font-size: 13.5px; }
+
+.s27-empty { padding: 20px 16px; display: flex; flex-direction: column; gap: 7px; }
+.s27-empty__title { font-size: 14px; font-weight: 700; color: var(--lui-ink); }
+.s27-empty__body { font-size: 12.5px; line-height: 1.75; color: var(--lui-sub); word-break: keep-all; }
+
+/* 처리함 — 무엇을 알렸는지 남깁니다 */
+.s27__done { padding: 4px 16px; }
+.s27-done { display: flex; flex-direction: column; gap: 3px; padding: 13px 0; }
+.s27-done + .s27-done { border-top: 1px solid var(--lui-line-2); }
+.s27-done__name { font-size: 14px; font-weight: 700; color: var(--lui-ink); }
+.s27-done__state { font-size: 11.5px; color: var(--lui-sub); }
+.s27-done__why { font-size: 12px; line-height: 18px; color: var(--lui-sub-2); word-break: keep-all; }
+
+.s27__note { font-size: 11.5px; line-height: 18px; color: var(--lui-sub-2); padding: 0 2px; word-break: keep-all; }
+
+/* 거절 까닭 고르기 */
+.s27__reasons { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 16px; }
+.s27-reason {
+  text-align: left;
+  font-size: 13px;
+  line-height: 19px;
+  padding: 12px 14px;
+  border: 1px solid var(--lui-line-2);
+  border-radius: 13px;
+  background: var(--lui-card);
+  color: var(--lui-body);
+  word-break: keep-all;
+}
+.s27-reason--on { border-color: var(--lui-ink); color: var(--lui-ink); font-weight: 600; }
+.s27__own {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--lui-field-line);
+  border-radius: 13px;
+  background: var(--lui-field);
+  color: var(--lui-ink);
+  resize: none;
+}
+.s27__own::placeholder { color: var(--lui-sub-2); }
+
+.s27__ask { display: flex; gap: 8px; }
+.s27__ask .lui-btn { flex: 1; min-width: 0; height: 46px; border-radius: 13px; font-size: 14px; }

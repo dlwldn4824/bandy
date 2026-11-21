@@ -72,6 +72,24 @@ export function useMembers() {
       return true
     },
 
+    /**
+     * 받아 준 신청자를 부원 목록에 넣습니다 (S27 에서 부릅니다).
+     * 역할은 언제나 부원입니다 — 운영진은 사람이 따로 올립니다.
+     */
+    add(m: { id: string; initial: string; name: string; sub: string }) {
+      if (current.some((x) => x.id === m.id)) return
+      const now = new Date()
+      current = [
+        ...current,
+        {
+          ...m,
+          role: 'member' as const,
+          joined: `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}`,
+        },
+      ]
+      publish()
+    },
+
     /** 넘기고 나가기 — 한 명을 올리고 나를 뺍니다 */
     handOverAndLeave(toId: string) {
       current = current

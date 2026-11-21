@@ -9,6 +9,7 @@ import L2Clubs from './screens/L2Clubs.tsx'
 import S18Console from './screens/S18Console.tsx'
 import S25ClubOps from './screens/S25ClubOps.tsx'
 import S26Members from './screens/S26Members.tsx'
+import S27JoinRequests from './screens/S27JoinRequests.tsx'
 import S19Run from './screens/S19Run.tsx'
 import S4Club from './screens/S4Club.tsx'
 import S5Recruit from './screens/S5Recruit.tsx'
@@ -68,6 +69,11 @@ export const lightUiRoutes = [
   <Route key="ui-calendar" path="/ui/calendar" element={<Navigate to="/ui?view=calendar" replace />} />,
   <Route key="ui-clubs" path="/ui/clubs" element={<L2Clubs />} />,
   <Route key="ui-clubops" path="/ui/console/teams" element={<S25ClubOps />} />,
+  <Route key="ui-joins" path="/ui/console/joins" element={
+      <ManagerOnly title="들어온 신청" what="참여 신청 받기">
+        <S27JoinRequests />
+      </ManagerOnly>
+    } />,
   <Route key="ui-members" path="/ui/console/members" element={
       <ManagerOnly title="부원" what="부원 권한 바꾸기">
         <S26Members />

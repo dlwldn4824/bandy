@@ -847,6 +847,8 @@ export const clubConsole = {
   menu: [
     // 동아리 탭에 있던 모집·제안을 여기로 옮겼습니다 — 운영진이 하는 일이라서요
     // 숫자는 S18 에서 실제 부원 수로 덮어씁니다 — 여기 적힌 건 기본값입니다
+    // 기다리는 사람이 있는 줄을 제일 위에 둡니다
+    { key: 'joins' as const, title: '들어온 신청', value: '기다리는 사람' },
     { key: 'members' as const, title: '부원', value: '운영진 권한 주기' },
     { key: 'teams' as const, title: '함께 설 팀', value: '모집 · 제안 2건' },
     { key: 'run' as const, title: '공연 당일', value: '타임라인 · 공지' },
@@ -1154,6 +1156,92 @@ export const clubMembers: ClubMember[] = [
   { id: 'haneul', initial: '정', name: '정하늘', sub: '전자공학과 · 키보드', role: 'member', joined: '2026.03' },
 ]
 
+/* ── 들어온 신청 (S27) ──────────────────────────────── */
+export interface JoinRequest {
+  id: string
+  initial: string
+  name: string
+  /** 학과 · 파트 */
+  sub: string
+  school: string
+  /** 신청하면서 쓴 한마디. 안 쓴 사람도 있습니다 */
+  word?: string
+  /** 보낸 때 — 오래 둔 신청이 눈에 띄게 */
+  ago: string
+  state: 'pending' | 'approved' | 'rejected'
+  /** 거절했으면 까닭. 조용히 사라지면 고장 난 줄 압니다 */
+  why?: string
+}
+
+/**
+ * MOCK: 실제로는 이 동아리로 들어온 신청 문서를 읽습니다.
+ *
+ * 운영진이 봐야 하는 건 이름이 아니라 **아는 사람인지** 입니다. 그래서
+ * 학교가 우리와 같은지, 한마디에 뭐라고 썼는지를 같이 보여 줍니다.
+ */
+export const joinRequests: JoinRequest[] = [
+  {
+    id: 'r1',
+    initial: '윤',
+    name: '윤도현',
+    sub: '전자공학과 · 기타',
+    school: '광운대학교',
+    word: '신입생 공연 보고 들어가고 싶어서요. 기타 3년 쳤습니다.',
+    ago: '2시간 전',
+    state: 'pending',
+  },
+  {
+    id: 'r2',
+    initial: '한',
+    name: '한소은',
+    sub: '미디어커뮤니케이션학부 · 보컬',
+    school: '광운대학교',
+    word: '동아리 박람회에서 받은 코드로 신청합니다.',
+    ago: '어제',
+    state: 'pending',
+  },
+  {
+    id: 'r3',
+    initial: '오',
+    name: '오재민',
+    sub: '기계공학과 · 드럼',
+    school: '서울과학기술대학교',
+    ago: '3일 전',
+    state: 'pending',
+  },
+]
+
+/** 우리 학교 — 다른 학교에서 온 신청을 가려내는 기준입니다 */
+export const ourSchool = '광운대학교'
+
+export const joinInboxCopy = {
+  title: '들어온 신청',
+  /** 한 명이라도 기다리고 있으면 제일 위에 적습니다 */
+  waiting: (n: number) => `${n}명이 기다리고 있어요`,
+  empty: '기다리는 신청이 없습니다.',
+  emptyBody: '참여 코드를 동아리 단톡에 올리면 여기로 신청이 들어옵니다.',
+  other: '다른 학교',
+  otherNote: '우리 학교가 아닙니다. 아는 사람인지 확인하고 받아 주세요.',
+  accept: '받기',
+  reject: '거절',
+  acceptAsk: (name: string) => `${name} 님을 부원으로 받을까요?`,
+  acceptBody:
+    '우리 공연과 자기 순서를 보게 됩니다. 공연을 올리거나 돈을 다루려면 운영진으로 따로 올려야 합니다.',
+  rejectAsk: (name: string) => `${name} 님의 신청을 거절할까요?`,
+  rejectBody: '까닭을 골라 주세요. 그대로 신청자에게 갑니다 — 아무 말 없이 사라지면 고장 난 줄 압니다.',
+  /** 고르는 까닭. 마지막은 직접 씁니다 */
+  reasons: [
+    '우리 동아리 부원이 아닌 것 같아요',
+    '올해는 더 받지 않습니다',
+    '오디션을 먼저 봐야 해요',
+  ],
+  reasonOwn: '직접 쓰기',
+  reasonPlaceholder: '한 줄이면 됩니다',
+  told: '결과를 알렸습니다',
+  doneTitle: '처리함',
+  note: '받으면 바로 부원이 됩니다. 운영진 권한은 「부원」 에서 따로 올려 주세요.',
+}
+
 export const membersCopy = {
   title: '부원',
   /** 운영진이 하나뿐일 때 — 그 사람이 졸업하면 동아리가 잠깁니다 */
@@ -1191,6 +1279,7 @@ export const notifications = {
    * 기본값에서 겪은 것과 같은 문제입니다.
    */
   today: [
+    { initial: '윤', title: '윤도현 님이 참여를 신청했어요', sub: '멜로딕 · 2시간 전', unread: true, to: 'joins', who: 'manager' as const },
     { initial: '렉', title: '렉사가 교류를 신청했어요', sub: '연합 공연 · 2시간 전', unread: true, to: 'proposal', who: 'manager' as const },
     { initial: '멜', title: '입금이 확인됐어요', sub: '멜로딕 단독 공연 · 4시간 전', unread: true, to: 'ticket', who: 'ticket' as const },
     { initial: '라', title: '라디오가가가 3월 14일을 공개했어요', sub: '공연장 · 7시간 전', to: 'venue', who: 'all' as const },

@@ -16,6 +16,7 @@ import { notifications as n } from '../../mocks/bandyLight.ts'
 import './S8Notifications.css'
 
 const dest: Record<string, string> = {
+  joins: P.joinRequests,
   proposal: P.proposal('1'),
   ticket: P.ticket('glow'),
   venue: P.venue,
