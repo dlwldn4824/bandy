@@ -844,6 +844,8 @@ export const clubConsole = {
     },
   ],
   menu: [
+    // 동아리 탭에 있던 모집·제안을 여기로 옮겼습니다 — 운영진이 하는 일이라서요
+    { key: 'teams' as const, title: '함께 설 팀', value: '모집 · 제안 2건' },
     { key: 'run' as const, title: '공연 당일', value: '타임라인 · 공지' },
     { key: 'deposits' as const, title: '입금 관리', value: '확인 2건' },
     { key: 'entry' as const, title: '입장 관리', value: '공연 당일' },
@@ -1659,4 +1661,78 @@ export const guestbook = {
     { initial: '유', name: '유진', at: '21:30', text: '오늘 처음 왔는데 옆자리 분이랑 밴드 얘기하다가 친해졌어요. 이런 거 좋네요.' },
   ],
   notice: '공연이 끝난 뒤 48시간 동안 쓸 수 있어요.',
+}
+
+/* ── L2 동아리 탭 — 관객이 보는 것 ─────────────────── */
+
+/**
+ * 동아리 탭을 관객용으로 바꾸면서 쓰는 데이터.
+ *
+ * 예전에는 이 탭이 모집 글과 제안으로 채워져 있었습니다. 그건 운영진이
+ * 하는 일이라 마이 > 운영으로 옮겼습니다. 탭이 다섯 칸뿐이고, 관객이면서
+ * 부원인 사람이 「어느 탭에서 찾지」 하고 헤매지 않게 하려는 것입니다.
+ *
+ * 관객에게 이 탭은 「내가 따라다니는 밴드」 입니다.
+ */
+export const clubFeed = {
+  emptyTitle: '아직 찜한 동아리가 없어요',
+  emptyBody: '공연에서 좋았던 밴드를 찜해 두면 다음 공연이 여기 먼저 뜹니다.',
+  emptyCta: '동아리 둘러보기',
+
+  /** 찜한 동아리 — 다음 공연이 있으면 같이 */
+  following: [
+    {
+      id: 'melodic',
+      initial: '멜',
+      name: '멜로딕',
+      sub: '광운대 · 밴드',
+      next: { title: '겨울의 소리', when: '11.22 (일) 19:00', venue: '라디오가가' },
+    },
+    {
+      id: 'lexa',
+      initial: '렉',
+      name: '렉사',
+      sub: '한양대 · 밴드',
+      next: { title: 'CUSTOM', when: '11.29 (일) 18:00', venue: '몽향' },
+    },
+    {
+      id: 'harmonic',
+      initial: '하',
+      name: '하모닉',
+      sub: '삼육대 · 밴드',
+      next: null,
+    },
+  ],
+
+  /** 활동 소식 — 찜한 동아리가 뭘 했는지 */
+  news: [
+    {
+      id: 'n1',
+      initial: '멜',
+      club: '멜로딕',
+      text: '겨울의 소리 셋리스트를 올렸어요',
+      at: '2시간 전',
+      to: 'show' as const,
+    },
+    {
+      id: 'n2',
+      initial: '렉',
+      club: '렉사',
+      text: '하모닉과 합동 공연이 잡혔어요',
+      at: '어제',
+      to: 'club' as const,
+    },
+    {
+      id: 'n3',
+      initial: '하',
+      club: '하모닉',
+      text: '신입 부원을 모집하고 있어요',
+      at: '3일 전',
+      to: 'club' as const,
+    },
+  ],
+
+  /** 추천 — 찜한 동아리와 함께 선 적 있는 곳부터 */
+  suggestTitle: '이런 동아리는 어때요',
+  suggestNote: '찜한 동아리와 함께 섰던 곳입니다',
 }

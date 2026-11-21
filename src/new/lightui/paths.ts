@@ -41,7 +41,9 @@ export const P = {
 
   // 동아리
   clubs: '/ui/clubs',                                   // L2
-  console: '/ui/console',                               // S18 운영진 출발점
+  console: '/ui/console',
+  /** 모집 글 · 받은 제안 · 보낸 제안 — 동아리 탭에 있던 걸 운영 아래로 옮겼습니다 */
+  clubOps: '/ui/console/teams',                         // S25                               // S18 운영진 출발점
   club: (id = 'melodic') => `/ui/club/${id}`,           // S4
   recruitNew: '/ui/recruit/new',                        // S5
   proposal: (id = '1') => `/ui/proposal/${id}`,         // S6

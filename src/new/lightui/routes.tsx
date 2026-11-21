@@ -9,6 +9,7 @@ import S2Map from './screens/S2Map.tsx'
 import S23Calendar from './screens/S23Calendar.tsx'
 import L2Clubs from './screens/L2Clubs.tsx'
 import S18Console from './screens/S18Console.tsx'
+import S25ClubOps from './screens/S25ClubOps.tsx'
 import S19Run from './screens/S19Run.tsx'
 import S4Club from './screens/S4Club.tsx'
 import S5Recruit from './screens/S5Recruit.tsx'
@@ -67,6 +68,7 @@ export const lightUiRoutes = [
   <Route key="ui-map" path="/ui/map" element={<S2Map />} />,
   <Route key="ui-calendar" path="/ui/calendar" element={<S23Calendar />} />,
   <Route key="ui-clubs" path="/ui/clubs" element={<L2Clubs />} />,
+  <Route key="ui-clubops" path="/ui/console/teams" element={<S25ClubOps />} />,
   <Route key="ui-console" path="/ui/console" element={
       <ManagerOnly title="공연 관리" what="공연 관리">
         <S18Console />

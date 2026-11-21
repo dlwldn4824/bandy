@@ -1,565 +1,163 @@
-import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import TabBar from '../components/TabBar.tsx'
 import SectionHeader from '../components/SectionHeader.tsx'
-import DarkCard from '../components/DarkCard.tsx'
-import Dots from '../components/Dots.tsx'
+import ListRow from '../components/ListRow.tsx'
 import Button from '../components/Button.tsx'
 import Icon from '../components/Icon.tsx'
-import Sheet from '../components/Sheet.tsx'
-import ConnectedResult from '../components/ConnectedResult.tsx'
 import { P } from '../paths.ts'
-import { useRole } from '../auth/role.ts'
-import { subjectParticle, withParticle } from '../korean.ts'
-import type { ReceivedProposal } from '../../mocks/bandyLight.ts'
-import {
-  me,
-  myClub,
-  showRun,
-  receivedProposals,
-  recruitPosts,
-  sentProposals,
-  suggestedClubs,
-} from '../../mocks/bandyLight.ts'
+import { useMembership } from '../auth/membership.ts'
+import { clubFeed, suggestedClubs, showRun } from '../../mocks/bandyLight.ts'
 import './L2Clubs.css'
 
 /**
- * L2 동아리 교류 — Figma 174:2 / L2-b 304:2 / L2-c 305:2
+ * L2 동아리 — 관객이 따라다니는 밴드.
  *
- * 탭은 같은 화면 안에서 내용만 갈아끼웁니다(이동이 아닙니다). 어떤 탭인지는
- * `?tab=` 에 적어 두어서 뒤로가기로 이전 탭에 돌아올 수 있습니다.
- * 제안을 보내는 쪽은 운영진 일이라, 부원 계정에는 「보낸 제안」 탭이 없습니다.
+ * 전에는 이 탭이 모집 글과 받은 제안으로 채워져 있었습니다. 그건 운영진이
+ * 하는 일이라 마이 > 운영 아래(S25)로 옮겼습니다. 탭이 다섯 칸뿐이라,
+ * 관객이면서 부원인 사람이 「어느 탭에서 찾지」 하고 헤맸습니다.
+ *
+ * 그래서 이 탭은 관객 기준으로 다시 짰습니다 — 찜한 동아리, 그 동아리의
+ * 다음 공연, 활동 소식, 추천. 부원·운영진에게는 맨 위에 우리 동아리로
+ * 들어가는 줄 하나만 더 둡니다.
  */
-
-type TabKey = 'recruit' | 'received' | 'sent'
-
-/** 「멜로딕과 하모닉이」 — 받침에 맞춰 조사를 고릅니다 */
-function connectedLine(mine: string, theirs: string) {
-  const a = mine.split(' · ')[0]
-  const b = theirs.split(' · ')[0]
-  return `${a}${withParticle(a)} ${b}${subjectParticle(b)}`
-}
-
 const L2Clubs = () => {
   const navigate = useNavigate()
-  const { isManager } = useRole()
-  const [params, setParams] = useSearchParams()
-  const [switching, setSwitching] = useState(false)
+  const { membership, inClub, isManager } = useMembership()
 
-  const asked = params.get('tab') as TabKey | null
-  const allowed: TabKey[] = isManager ? ['recruit', 'received', 'sent'] : ['recruit', 'received']
-  const tab: TabKey = asked && allowed.includes(asked) ? asked : 'recruit'
-
-  const goTab = (next: TabKey) => {
-    const q = new URLSearchParams(params)
-    if (next === 'recruit') q.delete('tab')
-    else q.set('tab', next)
-    setParams(q)
-  }
-
-  const tabs: { key: TabKey; label: string }[] = [
-    { key: 'recruit', label: '팀 구해요' },
-    { key: 'received', label: `받은 제안 ${myClub.received}` },
-    ...(isManager ? [{ key: 'sent' as TabKey, label: '보낸 제안' }] : []),
-  ]
+  const following = clubFeed.following
 
   return (
     <Phone>
       <div className="lui-body">
         <div className="l2">
+          <div className="l2__gap-14" />
           <div className="l2__head">
-            <h1 className="l2__title">동아리 교류</h1>
-            {/* 그냥 라벨이면 눌러 볼 이유가 없습니다 — 내 동아리를 보여 주는 자리로 */}
+            <h1 className="l2__title">동아리</h1>
             <button
               type="button"
-              className="lui-pill lui-pill--soft l2__switch"
-              aria-haspopup="dialog"
-              onClick={() => setSwitching(true)}
+              className="l2__more"
+              onClick={() => navigate(P.search)}
+              aria-label="동아리 찾기"
             >
-              {myClub.switcher}
+              <Icon name="search" size={18} />
             </button>
           </div>
 
-          <div className="l2__gap-18" />
-          <DarkCard>
-            <button type="button" className="lui-darkcard__hit" onClick={() => goTab('received')}>
-              <span className="lui-darkcard__head">
-                <span className="lui-darkcard__avatar">{myClub.initial}</span>
-                <span className="lui-darkcard__main">
-                  <span className="lui-darkcard__name">{myClub.name}</span>
-                  <span className="lui-darkcard__sub">{myClub.sub}</span>
-                </span>
-              </span>
-              <span className="lui-darkcard__line" />
-              <span className="lui-darkcard__foot">
-                <span className="lui-darkcard__foot-text">
-                  받은 제안 <span className="lui-darkcard__count">{myClub.received}</span> · 보낸
-                  제안 {myClub.sent}
-                </span>
-                <Icon name="chevron-right" size={18} className="lui-darkcard__chev" />
-              </span>
-            </button>
+          {/* 동아리에 든 사람에게만 — 관객에게는 운영 자리를 아예 안 그립니다.
+              「운영진만 할 수 있어요」 를 띄우는 것보다 낫습니다. 가입 입구에서
+              이미 고르고 들어온 사람들이라서요. */}
+          {inClub && membership && (
+            <>
+              <div className="l2__gap-14" />
+              <div className="lui-card l2__mine">
+                <ListRow
+                  avatar={membership.clubName.slice(0, 1)}
+                  title={membership.clubName}
+                  sub={isManager ? '운영진 · 우리 동아리' : '부원 · 우리 동아리'}
+                  chevron
+                  onClick={() => navigate(P.club(membership.clubId))}
+                />
+                <ListRow
+                  avatar="공"
+                  title="다음 공연"
+                  sub={showRun.when}
+                  chevron
+                  onClick={() => navigate(P.run(showRun.showId))}
+                />
+                {isManager && (
+                  <ListRow
+                    avatar="팀"
+                    title="함께 설 팀 구하기"
+                    sub="모집 글 · 받은 제안 · 보낸 제안"
+                    chevron
+                    onClick={() => navigate(P.clubOps)}
+                  />
+                )}
+              </div>
+            </>
+          )}
 
-            <span className="lui-darkcard__line" />
-            {/* 부원이 이 화면에서 제일 먼저 찾는 것은 「우리 다음 공연에서 내 순서」 입니다.
-                예전에는 교류 제안과 연결 지도만 있어서, 자기 순서를 보려면 주소를
-                직접 쳐야 했습니다. */}
-            <button
-              type="button"
-              className="lui-darkcard__foot lui-darkcard__hit"
-              onClick={() => navigate(P.run(showRun.showId))}
-            >
-              <span className="lui-darkcard__foot-text">
-                <span className="lui-darkcard__strong">다음 공연</span> · {showRun.when}
-              </span>
-              <Icon name="chevron-right" size={18} className="lui-darkcard__chev" />
-            </button>
+          <div className="l2__gap-26" />
+          <SectionHeader
+            title="찜한 동아리"
+            aside={following.length > 0 ? String(following.length) : undefined}
+          />
 
-            <span className="lui-darkcard__line" />
-            {/* 연결 지도(C1)로 들어가는 길 */}
-            <button
-              type="button"
-              className="lui-darkcard__foot lui-darkcard__hit"
-              onClick={() => navigate(P.connections)}
-            >
-              <span className="lui-darkcard__foot-text">
-                <span className="lui-darkcard__strong">{myClub.connections.title}</span> ·{' '}
-                {myClub.connections.sub}
-              </span>
-              <Icon name="chevron-right" size={18} className="lui-darkcard__chev" />
-            </button>
-          </DarkCard>
+          {following.length === 0 ? (
+            <div className="lui-card l2-empty">
+              <p className="l2-empty__title">{clubFeed.emptyTitle}</p>
+              <p className="l2-empty__body">{clubFeed.emptyBody}</p>
+              <Button variant="ghost" onClick={() => navigate(P.search)}>
+                {clubFeed.emptyCta}
+              </Button>
+            </div>
+          ) : (
+            <div className="lui-card l2__group">
+              {following.map((club) => (
+                <ListRow
+                  key={club.id}
+                  avatar={club.initial}
+                  title={club.name}
+                  sub={
+                    club.next
+                      ? `${club.next.when} · ${club.next.venue}`
+                      : `${club.sub} · 예정된 공연 없음`
+                  }
+                  slot={
+                    club.next ? (
+                      <span className="lui-pill lui-pill--lg">{club.next.title}</span>
+                    ) : undefined
+                  }
+                  chevron
+                  onClick={() => navigate(P.club(club.id))}
+                />
+              ))}
+            </div>
+          )}
 
-          <div className="l2__gap-18" />
-          <div className="lui-utabs" role="tablist">
-            {tabs.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                role="tab"
-                aria-selected={t.key === tab}
-                className={`lui-utab${t.key === tab ? ' lui-utab--on' : ''}`}
-                onClick={() => goTab(t.key)}
-              >
-                {t.label}
-              </button>
+          <div className="l2__gap-26" />
+          <SectionHeader title="소식" />
+          <div className="lui-card l2__group">
+            {clubFeed.news.map((n) => (
+              <ListRow
+                key={n.id}
+                avatar={n.initial}
+                title={n.text}
+                sub={`${n.club} · ${n.at}`}
+                chevron
+                onClick={() =>
+                  navigate(n.to === 'show' ? P.show(showRun.showId) : P.club('melodic'))
+                }
+              />
             ))}
           </div>
 
-          <div className="l2__gap-18" />
-          {tab === 'recruit' && <RecruitTab />}
-          {tab === 'received' && <ReceivedTab />}
-          {tab === 'sent' && <SentTab />}
+          <div className="l2__gap-26" />
+          <SectionHeader
+            title={clubFeed.suggestTitle}
+            aside="더보기"
+            onAside={() => navigate(P.search)}
+          />
+          <p className="l2__note">{clubFeed.suggestNote}</p>
+          <div className="lui-card l2__group">
+            {suggestedClubs.map((club) => (
+              <ListRow
+                key={club.name}
+                avatar={club.initial}
+                title={club.name}
+                sub={club.lines.join(' · ')}
+                chevron
+                onClick={() => navigate(P.club(club.name))}
+              />
+            ))}
+          </div>
+
+          <div className="l2__gap-26" />
         </div>
       </div>
-      <Sheet
-        open={switching}
-        title={myClub.switcherSheet.title}
-        onClose={() => setSwitching(false)}
-      >
-        <div className="lui-menu">
-          {me.clubs.map((club) => (
-            <div key={club.name} className="l2-switch__row">
-              <span className="l2-switch__avatar">{club.initial}</span>
-              <span className="l2-switch__main">
-                <span className="l2-switch__name">{club.name}</span>
-                <span className="l2-switch__sub">{club.sub}</span>
-              </span>
-              <span className="lui-pill lui-pill--ink">지금</span>
-            </div>
-          ))}
-          <button
-            type="button"
-            className="lui-menu__item"
-            onClick={() => {
-              setSwitching(false)
-              navigate(P.me)
-            }}
-          >
-            <span className="lui-menu__label">{myClub.switcherSheet.joinTitle}</span>
-            <span className="lui-menu__sub">{myClub.switcherSheet.joinSub}</span>
-          </button>
-        </div>
-        <p className="lui-note l2__note">{myClub.switcherSheet.note}</p>
-      </Sheet>
-
       <TabBar active="club" />
     </Phone>
-  )
-}
-
-/* ── 팀 구해요 ──────────────────────────────────────── */
-const RecruitTab = () => {
-  const navigate = useNavigate()
-  const { isManager } = useRole()
-
-  return (
-    <>
-      <div className="l2__posts">
-        {recruitPosts.map((post) => (
-          <div key={post.id} className="lui-card l2-post">
-            <div className="l2-post__head">
-              <span className="l2-post__avatar">{post.initial}</span>
-              <span className="l2-post__who">
-                <span className="l2-post__club">{post.club}</span>
-                <span className="l2-post__clubsub">{post.clubSub}</span>
-              </span>
-              <span className={`lui-pill${post.badgeAccent ? '' : ' lui-pill--soft'}`}>
-                {post.badge}
-              </span>
-            </div>
-
-            <p className="l2-post__title">
-              {post.titleLines.map((line, i) => (
-                <span key={line}>
-                  {i > 0 && <br />}
-                  {line}
-                </span>
-              ))}
-            </p>
-
-            <div className="l2-post__info">
-              {post.info.map((row) => (
-                <div key={row.k} className="l2-post__row">
-                  <span className="l2-post__k">{row.k}</span>
-                  <span className={`l2-post__v${row.accent ? ' l2-post__v--accent' : ''}`}>
-                    {row.v}
-                  </span>
-                </div>
-              ))}
-              <div className="l2-post__row">
-                <span className="l2-post__k">모인 팀</span>
-                <span className="l2-post__joined">
-                  <Dots filled={post.joined} total={post.need} />
-                  <span className="l2-post__v">
-                    {post.joined} / {post.need}팀
-                  </span>
-                </span>
-              </div>
-            </div>
-
-            <div className="l2-post__actions">
-              {/* 제안을 보내는 건 운영진 일입니다 */}
-              {isManager && (
-                <Button variant="ghost" onClick={() => navigate(P.chat(post.id))}>
-                  제안 보내기
-                </Button>
-              )}
-              <Button variant="ghost" onClick={() => navigate(P.proposal(post.id))}>
-                자세히
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="l2__gap-28" />
-      <SectionHeader title="이런 동아리는 어때요" aside="더보기" onAside={() => navigate(P.search)} />
-      <div className="l2__suggest">
-        {suggestedClubs.map((club) => (
-          <div key={club.name} className="lui-card l2-sug">
-            <span className="l2-sug__avatar">{club.initial}</span>
-            <span className="l2-sug__name">{club.name}</span>
-            <span className="l2-sug__lines">
-              {club.lines[0]}
-              <br />
-              {club.lines[1]}
-            </span>
-            <Button variant="ghost" onClick={() => navigate(P.club(club.name))}>
-              제안
-            </Button>
-          </div>
-        ))}
-      </div>
-
-      <div className="l2__gap-18" />
-      {isManager ? (
-        /* 규칙 1 — 이 화면의 유일한 기본 버튼 */
-        <Button className="l2__write" onClick={() => navigate(P.recruitNew)}>
-          모집 글 쓰기
-        </Button>
-      ) : (
-        <p className="lui-note l2__note">모집 글은 운영진만 쓸 수 있어요.</p>
-      )}
-    </>
-  )
-}
-
-/* ── 받은 제안 (L2-b 304:2) ─────────────────────────── */
-const ReceivedTab = () => {
-  const navigate = useNavigate()
-  const { isManager } = useRole()
-  const [accepted, setAccepted] = useState<string[]>([])
-  const [confirming, setConfirming] = useState<string | null>(null)
-  // 수락한 순간 이 화면 위에 「연결되었어요」 가 덮입니다 (C4)
-  const [celebrating, setCelebrating] = useState<ReceivedProposal | null>(null)
-
-  const waiting = receivedProposals.waiting.filter((p) => !accepted.includes(p.id))
-  const past = [
-    ...receivedProposals.waiting
-      .filter((p) => accepted.includes(p.id))
-      .map((p) => ({ id: p.id, initial: p.initial, club: p.club, sub: p.title, state: '수락함' as const })),
-    ...receivedProposals.past,
-  ]
-  const target = receivedProposals.waiting.find((p) => p.id === confirming)
-
-  return (
-    <>
-      <SectionHeader title="답을 기다리는 제안" aside={String(waiting.length)} />
-      <div className="l2__gap-12" />
-      {waiting.length === 0 ? (
-        <p className="lui-note l2__note">답을 기다리는 제안이 없어요.</p>
-      ) : (
-        <div className="l2__posts">
-          {waiting.map((p) => (
-            <div key={p.id} className="lui-card l2-post">
-              <button
-                type="button"
-                className="l2-post__open"
-                onClick={() => navigate(P.proposal(p.id))}
-              >
-                <span className="l2-post__head">
-                  <span className="l2-post__avatar">{p.initial}</span>
-                  <span className="l2-post__who">
-                    <span className="l2-post__club">{p.club}</span>
-                    <span className="l2-post__clubsub">{p.clubSub}</span>
-                  </span>
-                  <span className={`lui-pill${p.badgeAccent ? '' : ' lui-pill--soft'}`}>
-                    {p.badge}
-                  </span>
-                </span>
-                <span className="l2-post__title">{p.title}</span>
-                <span className="l2-post__info">
-                  {p.terms.map((row) => (
-                    <span key={row.k} className="l2-post__row">
-                      <span className="l2-post__k">{row.k}</span>
-                      <span className={`l2-post__v${row.accent ? ' l2-post__v--accent' : ''}`}>
-                        {row.v}
-                      </span>
-                    </span>
-                  ))}
-                </span>
-              </button>
-
-              <div className="l2-post__actions">
-                {/* 목록에는 기본 버튼을 두지 않습니다 — 검정 수락은 상세(S6)에만 */}
-                {isManager && (
-                  <Button variant="ghost" onClick={() => setConfirming(p.id)}>
-                    수락
-                  </Button>
-                )}
-                <Button variant="ghost" onClick={() => navigate(P.proposal(p.id))}>
-                  자세히
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="l2__gap-28" />
-      <SectionHeader title="지난 제안" aside={String(past.length)} />
-      <div className="l2__gap-12" />
-      <div className="lui-card l2__pastlist">
-        {past.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            className="lui-row l2-pastrow"
-            onClick={() => navigate(P.proposal(p.id))}
-          >
-            <span className="l2-post__avatar">{p.initial}</span>
-            <span className="l2-post__who">
-              <span className="l2-post__club">{p.club}</span>
-              <span className="l2-post__clubsub">{p.sub}</span>
-            </span>
-            <span className={`lui-pill${p.state === '수락함' ? ' lui-pill--ink' : ' lui-pill--soft'}`}>
-              {p.state}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      <div className="l2__gap-18" />
-      <p className="lui-note l2__note">{receivedProposals.notice}</p>
-
-      <Sheet open={!!target} title="이 제안을 수락할까요?" onClose={() => setConfirming(null)}>
-        <p className="l2-sheet__text">
-          {target?.club} 의 「{target?.title}」 을 수락합니다. 수락하면 상대 동아리에 바로 알림이 가고,
-          대화방이 열립니다.
-        </p>
-        <div className="l2-sheet__actions">
-          <Button variant="ghost" onClick={() => setConfirming(null)}>
-            취소
-          </Button>
-          <Button
-            onClick={() => {
-              if (confirming) setAccepted((prev) => [...prev, confirming])
-              setCelebrating(target ?? null)
-              setConfirming(null)
-            }}
-          >
-            수락하기
-          </Button>
-        </div>
-      </Sheet>
-
-      {celebrating && (
-        <ConnectedResult
-          overlay
-          pair={[myClub.initial, celebrating.initial]}
-          headline={[connectedLine(myClub.name, celebrating.club), '연결되었어요']}
-          onSeeRecord={() => navigate(P.connection(celebrating.id))}
-          onSecondary={() => setCelebrating(null)}
-        />
-      )}
-    </>
-  )
-}
-
-/* ── 보낸 제안 (L2-c 305:2) ─────────────────────────── */
-const SentTab = () => {
-  const navigate = useNavigate()
-  const [cancelled, setCancelled] = useState<string[]>([])
-  const [confirming, setConfirming] = useState<string | null>(null)
-
-  const waiting = sentProposals.waiting.filter((p) => !cancelled.includes(p.id))
-  const target = sentProposals.waiting.find((p) => p.id === confirming)
-
-  return (
-    <>
-      <SectionHeader title="답을 기다리는 중" aside={String(waiting.length)} />
-      <div className="l2__gap-12" />
-      {waiting.length === 0 ? (
-        <p className="lui-note l2__note">보낸 뒤 답을 기다리는 제안이 없어요.</p>
-      ) : (
-        <div className="l2__posts">
-          {waiting.map((p) => (
-            <div key={p.id} className="lui-card l2-post">
-              <button
-                type="button"
-                className="l2-post__open"
-                onClick={() => navigate(P.proposal(p.id))}
-              >
-                <span className="l2-post__head">
-                  <span className="l2-post__avatar">{p.initial}</span>
-                  <span className="l2-post__who">
-                    <span className="l2-post__club">{p.club}</span>
-                    <span className="l2-post__clubsub">{p.clubSub}</span>
-                  </span>
-                  <span className="lui-pill lui-pill--soft">{p.badge}</span>
-                </span>
-                <span className="l2-post__title">{p.title}</span>
-                <span className="l2-post__info">
-                  {p.terms.map((row) => (
-                    <span key={row.k} className="l2-post__row">
-                      <span className="l2-post__k">{row.k}</span>
-                      <span className={`l2-post__v${row.accent ? ' l2-post__v--accent' : ''}`}>
-                        {row.v}
-                      </span>
-                    </span>
-                  ))}
-                </span>
-              </button>
-
-              <div className="l2-post__actions">
-                <Button variant="ghost" onClick={() => setConfirming(p.id)}>
-                  제안 취소
-                </Button>
-                <Button variant="ghost" onClick={() => navigate(P.chat(p.id))}>
-                  대화
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="l2__gap-28" />
-      <SectionHeader title="답이 온 제안" aside={String(sentProposals.answered.length)} />
-      <div className="l2__gap-12" />
-      <div className="l2__posts">
-        {sentProposals.answered.map((p) => (
-          <div key={p.id} className="lui-card l2-post">
-            <button
-              type="button"
-              className="l2-post__open"
-              onClick={() => navigate(P.proposal(p.id))}
-            >
-              <span className="l2-post__head">
-                <span className="l2-post__avatar">{p.initial}</span>
-                <span className="l2-post__who">
-                  <span className="l2-post__club">{p.club}</span>
-                  <span className="l2-post__clubsub">{p.clubSub}</span>
-                </span>
-                <span
-                  className={`lui-pill${p.state === '수락됨' ? ' lui-pill--ink' : ' lui-pill--soft'}`}
-                >
-                  {p.state}
-                </span>
-              </span>
-
-              {p.terms && (
-                <span className="l2-post__info">
-                  {p.terms.map((row) => (
-                    <span key={row.k} className="l2-post__row">
-                      <span className="l2-post__k">{row.k}</span>
-                      <span className="l2-post__v">{row.v}</span>
-                    </span>
-                  ))}
-                </span>
-              )}
-              {p.reply && <span className="l2-quote">“{p.reply}”</span>}
-            </button>
-
-            {p.state === '수락됨' && (
-              <div className="l2-post__actions">
-                <Button variant="ghost" onClick={() => navigate(P.show('glow'))}>
-                  공연 보기
-                </Button>
-                <Button variant="ghost" onClick={() => navigate(P.chat(p.id))}>
-                  대화
-                </Button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="l2__gap-12" />
-      <button type="button" className="lui-card l2-more" onClick={() => navigate(P.search)}>
-        <span className="l2-more__plus">+</span>
-        <span className="l2-post__who">
-          <span className="l2-post__club">{sentProposals.more.title}</span>
-          <span className="l2-post__clubsub">{sentProposals.more.sub}</span>
-        </span>
-        <Icon name="chevron-right" size={18} className="l2-more__chev" />
-      </button>
-
-      <div className="l2__gap-18" />
-      <p className="lui-note l2__note">{sentProposals.notice}</p>
-
-      <Sheet open={!!target} title="보낸 제안을 취소할까요?" onClose={() => setConfirming(null)}>
-        <p className="l2-sheet__text">
-          {target?.club} 에 보낸 「{target?.title}」 을 거둬들입니다. 상대 동아리 목록에서도 사라집니다.
-        </p>
-        <div className="l2-sheet__actions">
-          <Button variant="ghost" onClick={() => setConfirming(null)}>
-            그대로 두기
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => {
-              if (confirming) setCancelled((prev) => [...prev, confirming])
-              setConfirming(null)
-            }}
-          >
-            제안 취소
-          </Button>
-        </div>
-      </Sheet>
-    </>
   )
 }
 

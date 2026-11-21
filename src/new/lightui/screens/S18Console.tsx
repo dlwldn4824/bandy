@@ -36,6 +36,7 @@ const MenuRow = ({
 )
 
 const TO: Record<(typeof c.menu)[number]['key'], string> = {
+  teams: P.clubOps,
   run: P.run(),
   deposits: P.deposits,
   entry: P.entry,

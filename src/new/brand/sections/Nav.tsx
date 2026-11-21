@@ -34,10 +34,13 @@ export default function Nav() {
       </nav>
       <div className="b-nav__right">
         <Link to={links.my}>내 티켓</Link>
-        {/* 바로 운영진 코드 게이트로 보내지 않고, 무엇이 필요한지 설명하는 자리로 먼저 내려 줍니다 */}
-        <a className="b-pill" href="#start">
-          공연 올리기
-        </a>
+        {/* 「공연 올리기」 였는데, 처음 온 사람에게는 아직 할 수 없는 일입니다 —
+            동아리를 찾아 들어가고 운영진 확인까지 거쳐야 열립니다. 게다가 그
+            링크의 #start 는 id 가 두 군데에 있어 엉뚱한 섹션으로 갔습니다.
+            이 버튼이 할 일은 하나입니다 — 가입 입구로 보내기. */}
+        <Link className="b-pill" to={links.joinPick}>
+          시작하기
+        </Link>
       </div>
     </header>
   )

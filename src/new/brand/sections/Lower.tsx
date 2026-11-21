@@ -27,7 +27,7 @@ function Rise({ children, delay = 0 }: { children: React.ReactNode; delay?: numb
  * ────────────────────────────────────────────────────────── */
 export function Chapter() {
   return (
-    <section className="b-chapter" id="start">
+    <section className="b-chapter" id="how">
       <div className="b-chapter__ph" style={{ backgroundImage: `url("${photos.stage}")` }} role="img" aria-label="공연 중인 무대" />
       <div className="b-chapter__in">
         <Rise>
