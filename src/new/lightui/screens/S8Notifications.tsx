@@ -101,7 +101,7 @@ const S8Notifications = () => {
           </div>
         </div>
       </div>
-      <TabBar active="my" />
+      <TabBar active="noti" />
     </Phone>
   )
 }
