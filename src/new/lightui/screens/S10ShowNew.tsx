@@ -26,13 +26,17 @@ const S10ShowNew = () => {
   const navigate = useNavigate()
   const { membership } = useMembership()
   const [venue, setVenue] = useState(f.venueOptions[0].id)
+  // 「직접 잡은 공연장」 은 어디인지 적어야 합니다. 전에는 고르기만 하면
+  // 공연장 칸에 「직접 잡은 공연장」 이라는 **메뉴 이름**이 들어갔습니다.
+  const [place, setPlace] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const [poster, setPoster] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [at, setAt] = useState('')
   // 적어 둔 렉사·하모닉은 멜로딕이 부른 팀입니다 (clubs/owner.ts)
   const demo = useIsDemoClub()
-  const ready = title.trim() !== '' && at !== ''
+  // 「직접 잡은 공연장」 을 골랐으면 어디인지도 적어야 합니다
+  const ready = title.trim() !== '' && at !== '' && (venue !== 'own' || place.trim() !== '')
 
   return (
     <Phone>
@@ -113,6 +117,27 @@ const S10ShowNew = () => {
             ))}
           </div>
 
+          {venue === 'own' && (
+            <>
+              <div className="s10__gap-14" />
+              <input
+                className="lui-input"
+                value={place}
+                onChange={(e) => setPlace(e.target.value)}
+                placeholder="예) 몽향 · 노원구 공릉동"
+                maxLength={40}
+              />
+            </>
+          )}
+
+          {venue === 'bandy' && (
+            // 고른 것만으로는 자리가 잡힌 게 아닙니다. 그 사실을 여기서
+            // 말해 둬야 「왜 예매가 안 열리지」 로 이어지지 않습니다.
+            <p className="s10__pending">
+              빈 날이 맞춰지면 알려 드려요. 자리가 잡히기 전에는 예매를 열 수 없습니다.
+            </p>
+          )}
+
           <div className="s10__gap-14" />
           <span className="s10__label">함께 서는 팀</span>
           <div className="lui-card s10__lineup">
@@ -151,13 +176,15 @@ const S10ShowNew = () => {
             const made = createShow({
               title: title.trim(),
               at,
-              venue: f.venueOptions.find((o) => o.id === venue)?.title ?? '',
+              // 밴디 연결은 아직 자리가 없는 상태입니다 — 비워 둬야
+              // 「열기 전에 갖춰야 할 것」 이 공연장을 빠진 것으로 셉니다
+              venue: venue === 'own' ? place.trim() : '',
               poster: poster ?? undefined,
             })
             navigate(P.showStage(made.id))
           }}
         >
-          {ready ? '만들기' : '공연명과 일시를 적어 주세요'}
+          {ready ? '만들기' : venue === 'own' && title.trim() && at ? '공연장을 적어 주세요' : '공연명과 일시를 적어 주세요'}
         </Button>
       </div>
     </Phone>

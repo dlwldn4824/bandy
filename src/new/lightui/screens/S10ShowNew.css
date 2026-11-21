@@ -13,3 +13,8 @@
 
 /* 고르는 값이 아닌 칸 — 테두리 없이 글만 */
 .s10__fixed { font-size: 14px; font-weight: 600; color: var(--lui-ink); padding: 12px 2px; }
+
+/* 밴디가 연결해 주기를 기다리는 상태 — 고른 것만으로는 자리가 아닙니다 */
+.s10__pending {
+  margin: 10px 2px 0; font-size: 11.5px; line-height: 1.7; color: var(--lui-sub-2);
+}
