@@ -152,7 +152,8 @@ const S18Console = () => {
           공연 만들기
         </Button>
       </div>
-      <TabBar active="club" />
+      {/* 운영 화면의 집은 마이 > 운영입니다 — 들어온 길과 켜진 탭이 같아야 합니다 */}
+      <TabBar active="my" />
     </Phone>
   )
 }

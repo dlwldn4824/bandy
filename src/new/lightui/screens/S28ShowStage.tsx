@@ -183,7 +183,8 @@ const S28ShowStage = () => {
           )}
         </div>
       </Sheet>
-      <TabBar active="club" />
+      {/* 운영 화면의 집은 마이 > 운영입니다 — 들어온 길과 켜진 탭이 같아야 합니다 */}
+      <TabBar active="my" />
     </Phone>
   )
 }
