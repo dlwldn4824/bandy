@@ -20,6 +20,8 @@ const ROUTES = [
   ['/brand', '<div id="root">'],              // SPA 폴백
   ['/ui', '<div id="root">'],
   ['/ui/tickets', '<div id="root">'],
+  ['/ui/map', '<div id="root">'],      // 둘러보기로 넘기는 옛 주소 — 폴백이 살아 있어야 리다이렉트도 돈다
+  ['/ui/calendar', '<div id="root">'],
   ['/old', '<div id="root">'],
   ['/privacy', '개인정보 처리방침'],           // 정적 약관
   ['/terms', '이용약관'],
