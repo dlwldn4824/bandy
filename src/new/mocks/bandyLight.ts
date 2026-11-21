@@ -1785,7 +1785,23 @@ export const connected = {
 }
 
 /* ── P1 공연 정보 (예매 후) ─────────────────────────── */
-export const showLive = {
+export interface ShowLive {
+  hero: string
+  venue: VenuePlace
+  badges: { label: string; tone: 'ink' | 'accent' }[]
+  titleLines: [string, string]
+  when: string
+  entry: { title: string; sub: string }
+  timeline: { at: string; dur: string; title: string; sub: string; now?: boolean }[]
+  setlistOwner: string
+  setlist: { no: string; title: string; who: string }[]
+  canDo: { initial: string; title: string; sub: string; to: string; lock?: string }[]
+  notice: string
+  /** 순서도 셋리스트도 아직 안 올라온 공연 */
+  thin?: boolean
+}
+
+export const showLive: ShowLive = {
   hero: posters.glowHero,
   venue: radioGaga,
   badges: [
@@ -1814,6 +1830,40 @@ export const showLive = {
     { initial: '방', title: '방명록 남기기', sub: '공연이 끝나면 열려요', to: 'guestbook', lock: '끝나고' },
   ],
   notice: '공연 30분 전부터 입장할 수 있어요. 늦으면 곡과 곡 사이에 들어갑니다.',
+}
+
+/**
+ * 공연 당일 화면도 공연마다 다릅니다.
+ *
+ * 어느 공연을 열어도 멜로딕 11.22 의 순서와 셋리스트가 나왔습니다. 12월
+ * 부산 공연을 열어도 「19:00 멜로딕 · 광운대 · 3곡」 이었고 「지금 무대」
+ * 까지 붙어 있었습니다.
+ *
+ * 순서와 셋리스트는 주최가 올리는 것이라 없는 공연이 대부분입니다. 없으면
+ * **없다고 말합니다** — 남의 순서를 빌려다 놓으면 관객이 그 시각에 맞춰
+ * 옵니다.
+ */
+export const showLives: Record<string, ShowLive> = { glow: showLive }
+
+export function showLiveFor(id: string): ShowLive | null {
+  if (showLives[id]) return showLives[id]
+  const detail = showDetailFor(id)
+  if (!detail) return null
+  const map = mapShows.find((show) => show.id === id)
+  return {
+    hero: detail.hero,
+    venue: detail.venue,
+    badges: [],
+    titleLines: detail.titleLines,
+    when: map ? `${map.date} · ${map.venue}` : (detail.info[0]?.v ?? ''),
+    entry: { title: '입장 코드 보기', sub: '내 티켓에서 QR 을 엽니다' },
+    timeline: [],
+    setlistOwner: '',
+    setlist: [],
+    canDo: [],
+    notice: '순서와 셋리스트는 주최 동아리가 올리면 여기에 뜹니다.',
+    thin: true,
+  }
 }
 
 /**

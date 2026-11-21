@@ -70,3 +70,13 @@
 
 .p1__venue { padding: 4px 16px; }
 .p1__venue .lui-row { padding: 12px 0; }
+
+/* 없는 공연 */
+.p1-missing { padding: 20px 16px; display: flex; flex-direction: column; gap: 9px; align-items: flex-start; }
+.p1-missing__title { font-size: 15px; font-weight: 700; color: var(--lui-ink); }
+.p1-missing__body { font-size: 12.5px; line-height: 1.75; color: var(--lui-sub); word-break: keep-all; }
+.p1-missing .lui-btn { margin-top: 4px; height: 42px; padding: 0 16px; border-radius: 12px; font-size: 13px; }
+
+/* 포스터를 아직 안 올린 공연 */
+.p1__hero--none { background: var(--lui-soft); display: flex; align-items: center; justify-content: center; }
+.p1__hero-blank { font-size: 12.5px; color: var(--lui-sub-2); }

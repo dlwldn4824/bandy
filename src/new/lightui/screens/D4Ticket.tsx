@@ -12,7 +12,7 @@ import Icon from '../components/Icon.tsx'
 import Sheet from '../components/Sheet.tsx'
 import DirectionsSheet from '../components/DirectionsSheet.tsx'
 import { P } from '../paths.ts'
-import { ticketFor, ticketMissing, showLive } from '../../mocks/bandyLight.ts'
+import { ticketFor, ticketMissing, showLiveFor } from '../../mocks/bandyLight.ts'
 import { useTicketState } from '../pay/ticketState.ts'
 import qr from '../assets/ticket-qr.svg'
 import './D4Ticket.css'
@@ -32,6 +32,8 @@ const D4Ticket = () => {
    * 갔다가 거기서 막혔습니다. 막을 거면 집에서 알려 줘야 합니다.
    */
   const { state, canEnter, copy } = useTicketState(showId)
+  // 순서는 공연마다 다릅니다 — 어느 티켓에서나 멜로딕 11.22 순서가 떴습니다
+  const live = showLiveFor(showId)
   const [refund, setRefund] = useState(false)
   const [dirs, setDirs] = useState(false)
 
@@ -133,29 +135,39 @@ const D4Ticket = () => {
           )}
 
           {/* 예매하고 나면 다음으로 궁금한 건 「누가 언제 나오나」 입니다.
-              예전에는 화면 맨 아래 작은 글씨 링크뿐이라 아무도 거기까지 안 갔습니다. */}
-          <div className="d4__gap-26" />
-          <SectionHeader
-            title="공연 정보 · 셋리스트"
-            // 입장 줄은 팀이 아닙니다
-            aside={`${showLive.timeline.filter((x) => !x.title.includes('입장')).length}팀`}
-            onAside={() => navigate(P.live(showId))}
-          />
-          <button type="button" className="lui-card d4-lineup" onClick={() => navigate(P.live(showId))}>
-            <span className="d4-lineup__rows">
-              {showLive.timeline.slice(0, 3).map((row) => (
-                <span key={row.at} className="d4-lineup__row">
-                  <span className="d4-lineup__at">{row.at}</span>
-                  <span className="d4-lineup__title">{row.title}</span>
-                  <span className="d4-lineup__sub">{row.sub}</span>
+              예전에는 화면 맨 아래 작은 글씨 링크뿐이라 아무도 거기까지 안 갔습니다.
+              순서가 아직 안 올라온 공연에는 이 블록을 두지 않습니다 — 빈 칸을
+              두는 것보다 없는 편이 낫습니다. */}
+          {live && live.timeline.length > 0 && (
+            <>
+              <div className="d4__gap-26" />
+              <SectionHeader
+                title="공연 정보 · 셋리스트"
+                // 입장 줄은 팀이 아닙니다
+                aside={`${live.timeline.filter((x) => !x.title.includes('입장')).length}팀`}
+                onAside={() => navigate(P.live(showId))}
+              />
+              <button
+                type="button"
+                className="lui-card d4-lineup"
+                onClick={() => navigate(P.live(showId))}
+              >
+                <span className="d4-lineup__rows">
+                  {live.timeline.slice(0, 3).map((row) => (
+                    <span key={row.at} className="d4-lineup__row">
+                      <span className="d4-lineup__at">{row.at}</span>
+                      <span className="d4-lineup__title">{row.title}</span>
+                      <span className="d4-lineup__sub">{row.sub}</span>
+                    </span>
+                  ))}
                 </span>
-              ))}
-            </span>
-            <span className="d4-lineup__more">
-              셋리스트와 남은 순서 보기
-              <Icon name="chevron-right" size={15} />
-            </span>
-          </button>
+                <span className="d4-lineup__more">
+                  셋리스트와 남은 순서 보기
+                  <Icon name="chevron-right" size={15} />
+                </span>
+              </button>
+            </>
+          )}
 
           <div className="d4__gap-26" />
           <SectionHeader title="사전 구매" aside="현장 교환" />

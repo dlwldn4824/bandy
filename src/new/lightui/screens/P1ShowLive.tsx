@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
+import TopBar from '../components/TopBar.tsx'
+import TabBar from '../components/TabBar.tsx'
 import SectionHeader from '../components/SectionHeader.tsx'
 import ListRow from '../components/ListRow.tsx'
 import Button from '../components/Button.tsx'
@@ -8,16 +10,44 @@ import Icon from '../components/Icon.tsx'
 import DirectionsSheet from '../components/DirectionsSheet.tsx'
 import { P } from '../paths.ts'
 import { useGoBack } from '../useGoBack.ts'
-import { showLive as s } from '../../mocks/bandyLight.ts'
+import { showLiveFor, showMissing } from '../../mocks/bandyLight.ts'
 import './P1ShowLive.css'
 
-/** P1 공연 정보 (예매 후) — Figma 293:2 */
+/**
+ * P1 공연 정보 (예매 후) — Figma 293:2
+ *
+ * 어느 공연을 열어도 멜로딕 11.22 의 순서와 셋리스트가 나왔습니다. 12월
+ * 부산 공연에도 「19:00 멜로딕 · 광운대 · 3곡」 에 「지금 무대」 까지
+ * 붙어 있었습니다. 남의 순서를 빌려다 놓으면 관객이 그 시각에 맞춰 옵니다.
+ */
 const P1ShowLive = () => {
   const navigate = useNavigate()
   const goBack = useGoBack()
   const [liked, setLiked] = useState(false)
   const [dirs, setDirs] = useState(false)
   const { showId = 'glow' } = useParams()
+  const s = showLiveFor(showId)
+
+  if (!s) {
+    return (
+      <Phone>
+        <TopBar title="공연" />
+        <div className="lui-body">
+          <div className="p1">
+            <div className="p1__gap-26" />
+            <div className="lui-card p1-missing">
+              <p className="p1-missing__title">{showMissing.title}</p>
+              <p className="p1-missing__body">{showMissing.body}</p>
+              <Button variant="ghost" onClick={() => navigate(P.home)}>
+                {showMissing.cta}
+              </Button>
+            </div>
+          </div>
+        </div>
+        <TabBar active="home" />
+      </Phone>
+    )
+  }
 
   const go = (to: string) => {
     if (to === 'people') navigate(P.livePeople(showId))
@@ -28,8 +58,8 @@ const P1ShowLive = () => {
   return (
     <Phone>
       <div className="lui-body">
-        <div className="p1__hero">
-          <img src={s.hero} alt="" />
+        <div className={`p1__hero${s.hero ? '' : ' p1__hero--none'}`}>
+          {s.hero ? <img src={s.hero} alt="" /> : <span className="p1__hero-blank">포스터 없음</span>}
           <button type="button" className="p1__round" onClick={() => goBack()} aria-label="뒤로">
             <Icon name="chevron-left" size={20} />
           </button>
@@ -67,8 +97,12 @@ const P1ShowLive = () => {
           <div className="p1__gap-14" />
           <h1 className="p1__title">
             {s.titleLines[0]}
-            <br />
-            {s.titleLines[1]}
+            {s.titleLines[1] && (
+              <>
+                <br />
+                {s.titleLines[1]}
+              </>
+            )}
           </h1>
 
           <div className="p1__gap-14" />
@@ -85,6 +119,8 @@ const P1ShowLive = () => {
             />
           </div>
 
+          {s.timeline.length > 0 && (
+            <>
           <div className="p1__gap-26" />
           <SectionHeader title="오늘 순서" aside={`${s.timeline.length}팀`} />
           <div className="lui-card p1__timeline">
@@ -103,6 +139,11 @@ const P1ShowLive = () => {
             ))}
           </div>
 
+            </>
+          )}
+
+          {s.setlist.length > 0 && (
+            <>
           <div className="p1__gap-26" />
           <SectionHeader title="셋리스트" aside={s.setlistOwner} />
           <div className="lui-card p1__setlist">
@@ -115,6 +156,11 @@ const P1ShowLive = () => {
             ))}
           </div>
 
+            </>
+          )}
+
+          {s.canDo.length > 0 && (
+            <>
           <div className="p1__gap-26" />
           <SectionHeader title="이 공연에서 할 수 있는 것" />
           <div className="lui-card p1__cando">
@@ -134,6 +180,9 @@ const P1ShowLive = () => {
               )
             })}
           </div>
+
+            </>
+          )}
 
           <div className="p1__gap-26" />
           <SectionHeader title="공연장" aside="길찾기" onAside={() => setDirs(true)} />
