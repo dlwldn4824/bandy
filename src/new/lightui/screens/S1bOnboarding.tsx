@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import TopBar from '../components/TopBar.tsx'
 import Button from '../components/Button.tsx'
+import Icon from '../components/Icon.tsx'
+import Sheet from '../components/Sheet.tsx'
 import { P } from '../paths.ts'
 import { getSession, saveSession } from '../auth/kakao.ts'
 import { onboardingOptions } from '../../mocks/auth.ts'
@@ -25,73 +27,98 @@ const norm = (s: string) => s.replace(/\s+/g, '').toLowerCase()
  * 학교와 학과를 칩 네댓 개로만 주면 그 밖의 사람은 넣을 자리가 없습니다.
  * 적은 대로 저장되니 목록은 거들 뿐입니다.
  */
-const ComboField = ({
+/**
+ * 눌러서 고르는 칸.
+ *
+ * 전에는 그냥 입력칸이었습니다. 치기 전에는 목록이 안 나와서, 학교가
+ * 171개나 들어 있어도 화면만 보면 칩 네 개가 전부로 보였습니다. 무엇을
+ * 칠 수 있는지 모르는 채로 치라는 꼴이라, 아무도 검색을 못 썼습니다.
+ *
+ * 그래서 누르면 목록이 통째로 열리는 시트로 바꿉니다. 위에서 좁히고,
+ * 눌러서 고르고, 목록에 없으면 적은 그대로 씁니다.
+ */
+const PickerField = ({
   label,
   value,
   onChange,
   options,
-  top,
   placeholder,
+  sheetTitle,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   options: string[]
-  top: string[]
   placeholder: string
+  sheetTitle: string
 }) => {
   const [open, setOpen] = useState(false)
-  const q = norm(value)
-  const matches = q
-    ? options.filter((o) => norm(o).includes(q)).slice(0, 6)
-    : []
-  // 적은 것과 똑같은 항목 하나만 남으면 더 보여 줄 게 없습니다
-  const showList = open && matches.length > 0 && !(matches.length === 1 && norm(matches[0]) === q)
+  const [q, setQ] = useState('')
+
+  const nq = norm(q)
+  const matches = nq ? options.filter((o) => norm(o).includes(nq)) : options
+  // 적은 것과 똑같은 항목이 목록에 없으면 「그대로 쓰기」 를 내어 줍니다
+  const typed = q.trim()
+  const exact = matches.some((o) => norm(o) === nq)
+
+  const pick = (v: string) => {
+    onChange(v)
+    setOpen(false)
+    setQ('')
+  }
 
   return (
     <>
       <span className="ob__label">{label}</span>
-      <input
-        className="lui-input"
-        value={value}
-        onChange={(e) => {
-          onChange(e.target.value)
-          setOpen(true)
-        }}
-        onFocus={() => setOpen(true)}
-        // 목록을 누르는 사이에 닫히지 않게 한 박자 늦춥니다
-        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
-        placeholder={placeholder}
-        autoComplete="off"
-      />
+      <button
+        type="button"
+        className={`ob-pick${value ? ' ob-pick--filled' : ''}`}
+        onClick={() => setOpen(true)}
+      >
+        <span className="ob-pick__value">{value || placeholder}</span>
+        <Icon name="chevron-right" size={17} className="ob-pick__chev" />
+      </button>
 
-      {showList && (
-        <div className="lui-card ob__found">
-          {matches.map((o) => (
+      <Sheet open={open} title={sheetTitle} onClose={() => setOpen(false)}>
+        <input
+          className="lui-input"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="이름으로 찾기"
+          autoComplete="off"
+          autoFocus
+        />
+        <p className="ob-pick__count">
+          {nq ? `${matches.length}개` : `전체 ${options.length}개`}
+        </p>
+
+        <div className="ob-pick__list">
+          {matches.slice(0, 80).map((o) => (
             <button
               key={o}
               type="button"
-              className="ob-found__row"
-              onClick={() => {
-                onChange(o)
-                setOpen(false)
-              }}
+              className={`ob-pick__row${o === value ? ' ob-pick__row--on' : ''}`}
+              onClick={() => pick(o)}
             >
               {o}
             </button>
           ))}
-        </div>
-      )}
 
-      {!value && (
-        <div className="ob__chips">
-          {top.map((o) => (
-            <button key={o} type="button" className="ob-chip" onClick={() => onChange(o)}>
-              {o}
+          {matches.length > 80 && (
+            <p className="ob-pick__more">
+              {matches.length - 80}개 더 있습니다. 이름을 더 적어 좁혀 주세요.
+            </p>
+          )}
+
+          {typed && !exact && (
+            <button type="button" className="ob-pick__row ob-pick__row--new" onClick={() => pick(typed)}>
+              목록에 없어요 — <b>{typed}</b> 그대로 쓰기
             </button>
-          ))}
+          )}
+
+          {matches.length === 0 && !typed && <p className="ob-pick__more">목록이 비어 있습니다.</p>}
         </div>
-      )}
+      </Sheet>
     </>
   )
 }
@@ -312,22 +339,22 @@ const S1bOnboarding = () => {
           {needsSchool && (
             <>
               <div className="ob__gap-26" />
-              <ComboField
+              <PickerField
                 label="학교"
+                sheetTitle="학교 찾기"
                 value={school}
                 onChange={setSchool}
                 options={onboardingOptions.schools}
-                top={onboardingOptions.topSchools}
                 placeholder="학교 이름을 적어 주세요"
               />
 
               <div className="ob__gap-26" />
-              <ComboField
+              <PickerField
                 label="학과"
+                sheetTitle="학과 찾기"
                 value={department}
                 onChange={setDepartment}
                 options={onboardingOptions.departments}
-                top={onboardingOptions.topDepartments}
                 placeholder="학과 이름을 적어 주세요"
               />
             </>

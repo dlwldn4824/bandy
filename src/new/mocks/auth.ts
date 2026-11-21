@@ -185,7 +185,13 @@ export const onboardingOptions = {
 export interface KnownClub {
   id: string
   name: string
-  school: string
+  /**
+   * 학교. 연합 동아리 · 직장인 밴드 · 지역 밴드는 학교가 없습니다.
+   * 처음에 필수로 두었는데, 그러면 그런 동아리는 들어올 자리가 없습니다.
+   */
+  school: string | null
+  /** 학교가 없을 때 대신 보여 줄 것 — 「서울 연합」 「노원 직장인」 */
+  area?: string
   /** 부원 수 — 맞는 동아리인지 사람이 알아보는 단서 */
   members: number
   since: string
@@ -199,16 +205,34 @@ export const knownClubs: KnownClub[] = [
   { id: 'acappella', name: '아카펠라', school: '서울여자대학교', members: 11, since: '2017' },
   { id: 'soriul', name: '소리울', school: '서울여자대학교', members: 9, since: '2019' },
   { id: 'sonareum', name: '손아름', school: '인덕대학교', members: 14, since: '2012' },
+  // 학교가 없는 동아리도 있습니다 — 연합 · 직장인 · 지역 밴드
+  { id: 'nowon-union', name: '노원 연합밴드', school: null, area: '노원 연합', members: 31, since: '2020' },
+  { id: 'after6', name: '애프터식스', school: null, area: '직장인 밴드 · 공릉', members: 8, since: '2022' },
 ]
 
-/** 학교로 좁혀 동아리를 찾습니다. 학교를 안 고르면 전체에서 이름으로 찾습니다. */
+const normalize = (v: string) => v.replace(/\s+/g, '').toLowerCase()
+
+/** 화면에 뭐라고 쓸지 — 학교가 없으면 지역을 씁니다 */
+export function clubPlace(c: KnownClub): string {
+  return c.school ?? c.area ?? '학교 밖 동아리'
+}
+
+/**
+ * 동아리를 찾습니다.
+ *
+ * 학교로 좁히면 같은 이름이 학교마다 있는 문제가 풀립니다. 다만 학교가
+ * 없는 동아리(연합 · 직장인 · 지역)는 그렇게 좁히면 영영 안 나옵니다.
+ * 그래서 학교를 골랐어도 **이름을 적으면 학교 밖 동아리까지 같이** 찾습니다.
+ */
 export function findClubs(school: string, query: string): KnownClub[] {
-  const norm = (v: string) => v.replace(/\s+/g, '').toLowerCase()
-  const s = norm(school)
-  const q = norm(query)
+  const s = normalize(school)
+  const q = normalize(query)
   return knownClubs.filter((c) => {
-    const schoolOk = !s || norm(c.school).includes(s) || s.includes(norm(c.school))
-    const nameOk = !q || norm(c.name).includes(q)
-    return schoolOk && nameOk
+    if (q && !normalize(c.name).includes(q)) return false
+    if (!s) return true
+    // 이름으로 찾는 중이면 학교 밖 동아리도 보여 줍니다
+    if (c.school === null) return Boolean(q)
+    const cs = normalize(c.school)
+    return cs.includes(s) || s.includes(cs)
   })
 }

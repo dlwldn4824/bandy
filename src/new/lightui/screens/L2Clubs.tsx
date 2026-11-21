@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import TabBar from '../components/TabBar.tsx'
 import SectionHeader from '../components/SectionHeader.tsx'
-import ListRow from '../components/ListRow.tsx'
+import DarkCard from '../components/DarkCard.tsx'
 import Button from '../components/Button.tsx'
 import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
@@ -50,31 +50,56 @@ const L2Clubs = () => {
           {inClub && membership && (
             <>
               <div className="l2__gap-14" />
-              <div className="lui-card l2__mine">
-                <ListRow
-                  avatar={membership.clubName.slice(0, 1)}
-                  title={membership.clubName}
-                  sub={isManager ? '운영진 · 우리 동아리' : '부원 · 우리 동아리'}
-                  chevron
+              {/* 하나뿐인 「내 것」 이라 유일하게 어두운 덩어리로 둡니다 —
+                  아래 블록들과 섞이지 않게. */}
+              <DarkCard>
+                <button
+                  type="button"
+                  className="lui-darkcard__hit"
                   onClick={() => navigate(P.club(membership.clubId))}
-                />
-                <ListRow
-                  avatar="공"
-                  title="다음 공연"
-                  sub={showRun.when}
-                  chevron
+                >
+                  <span className="lui-darkcard__head">
+                    <span className="lui-darkcard__avatar">
+                      {membership.clubName.slice(0, 1)}
+                    </span>
+                    <span className="lui-darkcard__main">
+                      <span className="lui-darkcard__name">{membership.clubName}</span>
+                      <span className="lui-darkcard__sub">
+                        {isManager ? '운영진' : '부원'} · 우리 동아리
+                      </span>
+                    </span>
+                    <Icon name="chevron-right" size={18} className="lui-darkcard__chev" />
+                  </span>
+                </button>
+
+                <span className="lui-darkcard__line" />
+                <button
+                  type="button"
+                  className="lui-darkcard__foot lui-darkcard__hit"
                   onClick={() => navigate(P.run(showRun.showId))}
-                />
+                >
+                  <span className="lui-darkcard__foot-text">
+                    <span className="lui-darkcard__strong">다음 공연</span> · {showRun.when}
+                  </span>
+                  <Icon name="chevron-right" size={18} className="lui-darkcard__chev" />
+                </button>
+
                 {isManager && (
-                  <ListRow
-                    avatar="팀"
-                    title="함께 설 팀 구하기"
-                    sub="모집 글 · 받은 제안 · 보낸 제안"
-                    chevron
-                    onClick={() => navigate(P.clubOps)}
-                  />
+                  <>
+                    <span className="lui-darkcard__line" />
+                    <button
+                      type="button"
+                      className="lui-darkcard__foot lui-darkcard__hit"
+                      onClick={() => navigate(P.clubOps)}
+                    >
+                      <span className="lui-darkcard__foot-text">
+                        <span className="lui-darkcard__strong">함께 설 팀 구하기</span> · 모집 · 제안
+                      </span>
+                      <Icon name="chevron-right" size={18} className="lui-darkcard__chev" />
+                    </button>
+                  </>
                 )}
-              </div>
+              </DarkCard>
             </>
           )}
 
@@ -93,43 +118,54 @@ const L2Clubs = () => {
               </Button>
             </div>
           ) : (
-            <div className="lui-card l2__group">
+            /* 홈의 공연 줄과 같은 가로 흐름 — 다음 공연 포스터가 주인공입니다 */
+            <div className="l2__fav">
               {following.map((club) => (
-                <ListRow
+                <button
                   key={club.id}
-                  avatar={club.initial}
-                  title={club.name}
-                  sub={
-                    club.next
-                      ? `${club.next.when} · ${club.next.venue}`
-                      : `${club.sub} · 예정된 공연 없음`
-                  }
-                  slot={
-                    club.next ? (
-                      <span className="lui-pill lui-pill--lg">{club.next.title}</span>
-                    ) : undefined
-                  }
-                  chevron
+                  type="button"
+                  className="l2-fav"
                   onClick={() => navigate(P.club(club.id))}
-                />
+                >
+                  <span className={`l2-fav__poster${club.next ? '' : ' l2-fav__poster--none'}`}>
+                    {club.next?.poster ? (
+                      <img src={club.next.poster} alt="" />
+                    ) : (
+                      <span className="l2-fav__soon">{clubFeed.noNext}</span>
+                    )}
+                    <span className="l2-fav__badge">{club.initial}</span>
+                  </span>
+                  <span className="l2-fav__name">{club.name}</span>
+                  <span className="l2-fav__when">
+                    {club.next ? `${club.next.when.split(' ')[0]} · ${club.next.venue}` : club.sub}
+                  </span>
+                </button>
               ))}
             </div>
           )}
 
           <div className="l2__gap-26" />
           <SectionHeader title="소식" />
-          <div className="lui-card l2__group">
+          <div className="l2__gap-12" />
+          {/* 카드도 아바타도 없이 — 읽는 것이라 글이 앞에 섭니다 */}
+          <div className="l2__news">
             {clubFeed.news.map((n) => (
-              <ListRow
+              <button
                 key={n.id}
-                avatar={n.initial}
-                title={n.text}
-                sub={`${n.club} · ${n.at}`}
-                chevron
+                type="button"
+                className="l2-news"
                 onClick={() =>
                   navigate(n.to === 'show' ? P.show(showRun.showId) : P.club('melodic'))
                 }
-              />
+              >
+                <span className="l2-news__rail" aria-hidden />
+                <span className="l2-news__body">
+                  <span className="l2-news__text">{n.text}</span>
+                  <span className="l2-news__who">
+                    {n.club} · {n.at}
+                  </span>
+                </span>
+              </button>
             ))}
           </div>
 
@@ -140,16 +176,19 @@ const L2Clubs = () => {
             onAside={() => navigate(P.search)}
           />
           <p className="l2__note">{clubFeed.suggestNote}</p>
-          <div className="lui-card l2__group">
+          <div className="l2__gap-12" />
+          <div className="l2__sug">
             {suggestedClubs.map((club) => (
-              <ListRow
+              <button
                 key={club.name}
-                avatar={club.initial}
-                title={club.name}
-                sub={club.lines.join(' · ')}
-                chevron
+                type="button"
+                className="l2-sug"
                 onClick={() => navigate(P.club(club.name))}
-              />
+              >
+                <span className="l2-sug__avatar">{club.initial}</span>
+                <span className="l2-sug__name">{club.name}</span>
+                <span className="l2-sug__why">{club.lines.join(' · ')}</span>
+              </button>
             ))}
           </div>
 

@@ -70,3 +70,29 @@
 .ob-who__opt--on .ob-who__label { color: var(--lui-accent); }
 .ob-who__hint { font-size: 11px; color: var(--lui-sub); }
 .ob-who__opt--on .ob-who__hint { color: var(--lui-accent); opacity: 0.75; }
+
+/* 눌러서 고르는 칸 — 전에는 그냥 입력칸이라 목록이 있는 줄도 몰랐습니다 */
+.ob-pick {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 13px 14px; border-radius: var(--lui-r-card);
+  background: var(--lui-soft); text-align: left;
+}
+.ob-pick__value { flex: 1; min-width: 0; font-size: 14px; color: var(--lui-sub-2); }
+.ob-pick--filled .ob-pick__value { color: var(--lui-ink); font-weight: 600; }
+.ob-pick__chev { flex: none; color: var(--lui-sub-2); }
+
+.ob-pick__count { padding: 10px 2px 4px; font-size: 11.5px; color: var(--lui-sub-2); }
+.ob-pick__list {
+  display: flex; flex-direction: column;
+  max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+.ob-pick__row {
+  width: 100%; padding: 13px 2px; text-align: left;
+  font-size: 13.5px; color: var(--lui-body);
+}
+.ob-pick__row + .ob-pick__row { border-top: 1px solid var(--lui-hairline); }
+.ob-pick__row--on { color: var(--lui-accent); font-weight: 700; }
+/* 목록에 없는 이름을 그대로 쓰는 줄 */
+.ob-pick__row--new { color: var(--lui-sub); }
+.ob-pick__row--new b { color: var(--lui-ink); font-weight: 700; }
+.ob-pick__more { padding: 12px 2px; font-size: 11.5px; line-height: 1.7; color: var(--lui-sub-2); }

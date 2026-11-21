@@ -5,7 +5,7 @@ import TopBar from '../components/TopBar'
 import Button from '../components/Button'
 import Icon from '../components/Icon'
 import { P } from '../paths'
-import { findClubs, type KnownClub } from '../../mocks/auth'
+import { findClubs, clubPlace, type KnownClub } from '../../mocks/auth'
 import { rememberClubJoin } from '../auth/clubJoin'
 import './S1cClubPick.css'
 
@@ -35,7 +35,12 @@ const S1cClubPick = () => {
   const exact = matches.some((c) => c.name.replace(/\s+/g, '') === typed.replace(/\s+/g, ''))
 
   const joinExisting = (club: KnownClub) => {
-    rememberClubJoin({ kind: 'join', clubId: club.id, clubName: club.name, school: club.school })
+    rememberClubJoin({
+      kind: 'join',
+      clubId: club.id,
+      clubName: club.name,
+      school: club.school ?? clubPlace(club),
+    })
     navigate(P.clubJoinSent)
   }
 
@@ -70,6 +75,15 @@ const S1cClubPick = () => {
             autoFocus
           />
 
+          {/* 학교로 좁히면 학교 밖 동아리가 영영 안 나옵니다 — 이름을 적으면
+              같이 찾는다는 걸 말해 줍니다. 연합 · 직장인 · 지역 밴드도 있습니다. */}
+          {school && (
+            <p className="s1c__hint">
+              연합 동아리나 직장인 밴드처럼 학교가 없는 곳은 <b>이름을 적으면</b> 같이
+              나옵니다.
+            </p>
+          )}
+
           <div className="s1c__gap" />
 
           {matches.length > 0 && (
@@ -87,7 +101,7 @@ const S1cClubPick = () => {
                     <span className="s1c-row__main">
                       <span className="s1c-row__name">{club.name}</span>
                       <span className="s1c-row__sub">
-                        {club.school} · 부원 {club.members}명 · {club.since}년 창단
+                        {clubPlace(club)} · 부원 {club.members}명 · {club.since}년 창단
                       </span>
                     </span>
                     <span className="s1c-row__go">부원으로</span>
