@@ -9,7 +9,7 @@ import MoreMenu from '../components/MoreMenu.tsx'
 import Sheet from '../components/Sheet.tsx'
 import Button from '../components/Button.tsx'
 import { P } from '../paths.ts'
-import { signOut } from '../auth/kakao.ts'
+import { getSession, signOut } from '../auth/kakao.ts'
 import DeleteAccount from '../auth/DeleteAccount.tsx'
 import { useBlocked } from '../safety/report.ts'
 import { useRole } from '../auth/role.ts'
@@ -39,6 +39,29 @@ const MenuRow = ({
 )
 
 const MODES: ThemeMode[] = ['system', 'light', 'dark']
+
+/**
+ * 설정 줄이 어디로 가는지.
+ *
+ * 전에는 「알림 설정」 만 목적지가 있고 나머지 셋은 눌러도 아무 일이
+ * 없었습니다. 그중 「공연장으로 등록하기」 가 특히 아팠습니다 — 공연장
+ * 화면으로 가는 의도된 길이 **가입 첫 화면에서 공연장을 고르는 것 하나뿐**
+ * 이라, 나중에 공연장이 된 사람은 들어갈 데가 없었습니다.
+ *
+ * 갈 데가 아직 없는 줄은 「준비 중」 이라고 말합니다. 눌러도 아무 일이
+ * 없으면 고장으로 읽힙니다.
+ */
+const SETTING_TO: Record<string, string> = {
+  '알림 설정': P.notifications,
+  '공연장으로 등록하기': P.onboarding('venue'),
+}
+
+const SETTING_SOON: Record<string, string> = {
+  '계좌 · 환불 정보':
+    '환불 계좌는 지금 예매할 때마다 적습니다. 한 번 적어 두고 쓰는 자리는 준비 중이에요.',
+  문의하기:
+    '문의 창구를 준비 중입니다. 급한 일은 공연을 연 동아리에 바로 연락해 주세요 — 공연 화면에 연락처가 있습니다.',
+}
 const S14Me = () => {
   const navigate = useNavigate()
   const { mode, resolved, setMode } = useTheme()
@@ -57,6 +80,20 @@ const S14Me = () => {
   const sent = useClubJoin()
   const [delOpen, setDelOpen] = useState(false)
   const { count: blockedCount } = useBlocked()
+  const [soon, setSoon] = useState<{ title: string; text: string } | null>(null)
+
+  /**
+   * 프로필은 적어 둔 목이 아니라 **이 사람의 세션**에서 읽습니다.
+   *
+   * 전에는 한양대 실용음악과로 막 가입한 사람에게도 「이지우 · 광운대학교 ·
+   * jiwoo@kw.ac.kr」 이 떴습니다. 학교를 묻지 않은 직장인에게는 묻지도 않은
+   * 학교가, 모든 사람에게는 남의 이메일이 보였습니다.
+   */
+  const session = getSession()
+  const profileSub =
+    [session?.school, session?.department].filter(Boolean).join(' · ') ||
+    session?.email ||
+    (session ? '프로필을 채워 주세요' : '카카오나 이메일로 시작할 수 있어요')
 
   return (
     <Phone>
@@ -76,16 +113,17 @@ const S14Me = () => {
           <div className="s14__gap-14" />
           <div className="lui-card s14__profile">
             <ListRow
-              avatar={me.initial}
-              title={me.name}
-              sub={me.sub}
+              avatar={session?.initial || '?'}
+              title={session?.nickname || '로그인하기'}
+              sub={profileSub}
               chevron
-              onClick={() => navigate(P.onboarding())}
+              onClick={() => navigate(session ? P.onboarding() : P.join)}
             />
           </div>
 
           <div className="s14__gap-26" />
-          <SectionHeader title="내 동아리" aside={String(me.clubs.length)} />
+          {/* 적어 둔 목록의 길이가 아니라 실제 소속 수. 없으면 0 입니다 */}
+          <SectionHeader title="내 동아리" aside={membership ? '1' : '0'} />
           <div className="lui-card s14__group">
             {/* 적어 둔 목록이 아니라 실제 소속을 그립니다 */}
             {membership && (
@@ -220,8 +258,13 @@ const S14Me = () => {
               <MenuRow
                 key={row.title}
                 title={row.title}
-                value={row.value}
-                onClick={() => (row.title === '알림 설정' ? navigate(P.notifications) : undefined)}
+                value={SETTING_TO[row.title] || !SETTING_SOON[row.title] ? row.value : '준비 중'}
+                onClick={() => {
+                  const to = SETTING_TO[row.title]
+                  if (to) return navigate(to)
+                  const text = SETTING_SOON[row.title]
+                  if (text) setSoon({ title: row.title, text })
+                }}
               />
             ))}
           </div>
@@ -339,6 +382,13 @@ const S14Me = () => {
           </>
         )}
       </Sheet>
+      <Sheet open={!!soon} title={soon?.title} onClose={() => setSoon(null)}>
+        <p className="lui-menu__note">{soon?.text}</p>
+        <Button block onClick={() => setSoon(null)}>
+          확인
+        </Button>
+      </Sheet>
+
       <DeleteAccount open={delOpen} onClose={() => setDelOpen(false)} />
       <TabBar active="my" />
     </Phone>
