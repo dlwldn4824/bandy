@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import TopBar from '../components/TopBar.tsx'
@@ -10,6 +10,14 @@ import { P } from '../paths.ts'
 import { depositGuide as d, booking } from '../../mocks/bandyLight.ts'
 import CardPay from '../pay/CardPay.tsx'
 import { PAY_CONFIGURED } from '../pay/portone.ts'
+import {
+  BANK,
+  BANK_READY,
+  BANK_UNSET,
+  deadlineFrom,
+  dueText,
+  remainText,
+} from '../pay/deposit.ts'
 import glossSoft from '../assets/gloss-soft-accent.svg'
 import glossSpec from '../assets/gloss-spec-accent.svg'
 import './D3Deposit.css'
@@ -28,6 +36,15 @@ const D3Deposit = () => {
   // 결제 수단 탭. 카드가 준비되기 전에는 탭 자체를 그리지 않습니다 —
   // 고를 게 하나뿐인데 탭을 보여 주면 고를 수 있는 것처럼 보입니다.
   const [pay, setPay] = useState<'transfer' | 'card'>('transfer')
+
+  // 기한은 화면을 연 시각에서 계산하고, 남은 시간은 1초마다 다시 셉니다.
+  // 적어 둔 「23:41:02」 는 어제 봐도 오늘 봐도 23:41:02 였습니다.
+  const due = useMemo(() => deadlineFrom(), [])
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [])
 
   const copy = async (what: 'account' | 'name', text: string) => {
     try {
@@ -79,9 +96,10 @@ const D3Deposit = () => {
             </span>
             <p className="lui-banner__title">아직 입금 전이에요</p>
             <p className="lui-banner__body">
-              {d.due}
+              {dueText(due)}
               <br />
-              남은 시간 <span className="lui-banner__strong">{d.remain}</span>
+              남은 시간{' '}
+              <span className="lui-banner__strong">{remainText(due.getTime() - now)}</span>
             </p>
           </div>
 
@@ -90,19 +108,30 @@ const D3Deposit = () => {
             <span className="d3__amount-value">{d.amount}</span>
           </div>
 
-          {pay === 'transfer' && (
+          {/* 계좌가 등록돼 있을 때만 숫자를 그립니다. 없으면 지어내지 않고
+              「아직 등록 전」 이라고 말합니다 — 그럴듯한 번호를 띄워 두면
+              누군가는 그리로 보냅니다. */}
+          {pay === 'transfer' && BANK_READY && (
           <div className="lui-card d3__account">
-            {d.account.map((row) => (
-              <div key={row.k} className="d3__row">
-                <span className="d3__k">{row.k}</span>
-                <span className={`d3__v${'accent' in row && row.accent ? ' d3__v--accent' : ''}`}>
-                  {row.v}
-                </span>
-              </div>
-            ))}
+            <div className="d3__row">
+              <span className="d3__k">은행</span>
+              <span className="d3__v">{BANK.name}</span>
+            </div>
+            <div className="d3__row">
+              <span className="d3__k">계좌번호</span>
+              <span className="d3__v">{BANK.account}</span>
+            </div>
+            <div className="d3__row">
+              <span className="d3__k">예금주</span>
+              <span className="d3__v">{BANK.holder}</span>
+            </div>
+            <div className="d3__row">
+              <span className="d3__k">입금자명</span>
+              <span className="d3__v d3__v--accent">{d.depositorName}</span>
+            </div>
             <div className="d3__spacer" />
             <div className="d3__copy">
-              <Button variant="ghost" onClick={() => copy('account', d.accountNumber)}>
+              <Button variant="ghost" onClick={() => copy('account', BANK.account)}>
                 {copied === 'account' ? '복사했어요' : '계좌 복사'}
               </Button>
               <Button variant="ghost" onClick={() => copy('name', d.depositorName)}>
@@ -110,6 +139,13 @@ const D3Deposit = () => {
               </Button>
             </div>
           </div>
+          )}
+
+          {pay === 'transfer' && !BANK_READY && (
+            <div className="lui-card d3__unset">
+              <p className="d3__unset-title">{BANK_UNSET.title}</p>
+              <p className="d3__unset-body">{BANK_UNSET.body}</p>
+            </div>
           )}
 
           {/* 카드 탭을 골랐을 때. 키가 없으면 탭도 이 자리도 없습니다 —
@@ -150,8 +186,11 @@ const D3Deposit = () => {
       <div className="lui-bottombar d3__bottom">
         {/* 규칙 1 — 보조 동작(예매 취소)은 외곽선 */}
         <Button variant="ghost">예매 취소</Button>
+        {/* 보낼 계좌가 없으면 「입금했어요」 도 누를 수 없어야 합니다 */}
         {pay === 'transfer' && (
-          <Button onClick={() => navigate(P.ticket(showId))}>입금했어요</Button>
+          <Button disabled={!BANK_READY} onClick={() => navigate(P.ticket(showId))}>
+            입금했어요
+          </Button>
         )}
       </div>
     </Phone>
