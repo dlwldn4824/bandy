@@ -426,10 +426,10 @@ const ISSUES = {
     where: 'S1cClubPick.tsx:58 · mocks/auth.ts findClubs',
   },
   'clubpick-empty-never': {
-    fixed: 'fd26456 — 동아리 없는 학교에 빈 상태를 둡니다',
+    fixed: 'f8d7e32 — 학교가 화면에 닿으니 빈 상태도 닿습니다 (문구는 fd26456)',
     kind: 'empty', sev: 'minor',
     title: '「이 학교에 등록된 동아리가 없습니다」 빈 상태가 실제로는 나오지 않는다',
-    where: 'S1cClubPick.tsx:131',
+    where: 'S1cClubPick.tsx — 빈 상태는 있었는데 닿지 않았습니다',
   },
   'demo-membership-leak': {
     fixed: 'membership.ts — 가입 이력 없는 기기에서만 데모입니다',
@@ -644,7 +644,9 @@ function walk(p) {
     // SIDE_FORM.club.to = P.clubPick() 이라 학교가 주소에 실리지 않습니다
     hit('clubpick-school-lost')
     if (!p.needsSchool) hit('clubpick-no-school-premise')
-    // 학교가 비면 findClubs 가 전부 돌려주므로 빈 상태는 나오지 않습니다
+    // 빈 상태 자체는 처음부터 화면에 있었습니다. 다만 학교가 주소에 안 실려서
+    // findClubs 가 늘 전부 돌려줬고, 그래서 matches 가 빌 일이 없었습니다 —
+    // 「빈 상태가 없다」 가 아니라 「빈 상태에 닿지 못한다」 였습니다.
     hit('clubpick-empty-never')
 
     if (p.clubPath === 'join-existing' || p.clubPath === 'create-new') {
