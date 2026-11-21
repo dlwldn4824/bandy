@@ -202,6 +202,18 @@ function checkSource() {
     /useParams/.test(invite) && /inviteFor/.test(invite),
     '코드를 안 읽으면 다른 공연에 초대받은 사람이 엉뚱한 공연을 예매합니다')
 
+  // 공연을 만들면 그 공연이 생기는가
+  const shownew = read('src/new/lightui/screens/S10ShowNew.tsx')
+  check('FIX_SHOWNEW_CREATES',
+    !/navigate\(P\.show\('glow'\)\)/.test(strip(shownew)) && /createShow/.test(shownew),
+    '만든 공연이 아니라 멜로딕 단독 공연으로 갑니다')
+
+  // 정산 요청이 요청됐다고 말하는가
+  const settle = read('src/new/lightui/screens/S13Settlement.tsx')
+  check('FIX_SETTLE_SAYS_SOMETHING',
+    /useSettleRequest/.test(settle) && /requested/.test(settle),
+    '돈을 달라고 한 자리에서 아무 말이 없으면 눌렀는지도 모릅니다')
+
   // 마이가 세션을 읽는가 (M1)
   check('FIX_ME_FROM_SESSION', /getSession\(\)/.test(me),
     '마이가 목을 그리면 모든 사람에게 남의 이름과 이메일이 뜹니다')
@@ -522,8 +534,8 @@ const ISSUES = {
   },
   'guest-no-login-gate': {
     kind: 'premise', sev: 'major',
-    title: '로그인 없이 예매·티켓·마이가 다 열리고, 티켓이 계정에 붙지 않는다',
-    where: 'routes.tsx (로그인 가드 없음) · D2Book',
+    title: '로그인 없이 산 티켓이 계정에 안 붙는다 (막지는 않되 말해는 줍니다)',
+    where: 'D2Book — dde54b4 로 「이 기기에만 남는다」 고 적습니다. 티켓을 계정에 붙이는 길은 아직 없습니다',
   },
   'kakao-server-missing': {
     kind: 'config', sev: 'blocker',
@@ -576,11 +588,13 @@ const ISSUES = {
     where: 'shows/stage.ts openChecklist → 갈 곳 없음',
   },
   'shownew-goes-to-demo-show': {
+    fixed: '1f225ef — 만든 공연이 실제로 생기고 그 공연의 상태 화면으로 갑니다',
     kind: 'premise', sev: 'blocker',
     title: '공연을 만들면 내 공연이 아니라 멜로딕 단독 공연으로 간다',
     where: "S10ShowNew.tsx:112 — navigate(P.show('glow')) 가 박혀 있습니다",
   },
   'settle-request-silent': {
+    fixed: '50633f0 — 얼마가 어느 계좌로 가는지 묻고, 요청한 때를 남깁니다',
     kind: 'deadend', sev: 'major',
     title: '「정산 요청」 을 누르면 마이로 떨어지고 아무 말이 없다',
     where: 'S13Settlement.tsx:131 — navigate(P.me) 뿐입니다',
