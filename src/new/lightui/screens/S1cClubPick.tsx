@@ -88,7 +88,11 @@ const S1cClubPick = () => {
 
           {matches.length > 0 && (
             <>
-              <p className="s1c__label">{typed ? '찾은 동아리' : '이 학교의 동아리'}</p>
+              {/* 학교를 안 묻는 사람(직장인·그 외)에게는 목록이 전국입니다 —
+                  「이 학교의」 라고 하면 어느 학교를 말하는지 알 수 없습니다 */}
+              <p className="s1c__label">
+                {typed ? '찾은 동아리' : school ? '이 학교의 동아리' : '등록된 동아리'}
+              </p>
               <div className="lui-card s1c__list">
                 {matches.map((club) => (
                   <button

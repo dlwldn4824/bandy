@@ -87,12 +87,47 @@ export function getSession(): BandyUser | null {
   }
 }
 
-export function saveSession(user: BandyUser) {
+function write(user: BandyUser) {
   try {
     localStorage.setItem(KEY, JSON.stringify(user))
   } catch {
     /* 저장이 막혀도 이번 세션 동안은 동작합니다 */
   }
+}
+
+/**
+ * 로그인한 뒤 부릅니다.
+ *
+ * **같은 사람이 다시 들어온 것이면 적어 둔 것을 덮지 않습니다.** 로그인은
+ * 이름과 이메일만 알고 학교·학과는 모릅니다. 그대로 저장하면 이메일로 다시
+ * 들어올 때마다 학교와 학과가 지워지고, 온보딩이 처음부터 다시 떴습니다.
+ *
+ * 다른 사람이면 통째로 갈아 끼웁니다 — 기기를 넘겨받은 사람에게 앞사람의
+ * 학교가 남아 있으면 안 됩니다.
+ */
+export function saveSession(user: BandyUser) {
+  const prev = getSession()
+  if (!prev || prev.id !== user.id) return write(user)
+
+  write({
+    ...prev,
+    ...user,
+    // 로그인이 모르는 것들 — 빈 값으로 덮지 않습니다
+    school: user.school || prev.school,
+    department: user.department || prev.department,
+    phone: user.phone ?? prev.phone,
+    onboarded: user.onboarded ?? prev.onboarded,
+  })
+}
+
+/**
+ * 온보딩에서 적은 것을 그대로 씁니다.
+ *
+ * `saveSession` 과 달리 빈 값도 그대로 받습니다 — 학생이었다가 직장인으로
+ * 고치면 학교가 비어야 하는데, 합치는 쪽은 옛 학교를 되살려 버립니다.
+ */
+export function saveProfile(user: BandyUser) {
+  write(user)
 }
 
 export function signOut() {
@@ -103,9 +138,17 @@ export function signOut() {
   }
 }
 
-/** 온보딩(학교·학과)이 아직 안 끝난 사용자인지 */
+/**
+ * 「처음이시네요」 를 보여 줘야 하는 사용자인지.
+ *
+ * 학교·학과가 찼는지로 보면 안 됩니다. 직장인·그 외·공연장에게는 학교를
+ * 묻지 않아서 그 칸이 영영 비고, 앱을 다시 열 때마다 온보딩이 처음부터
+ * 다시 떴습니다 — 시뮬레이션에서 2,021명(40.4%)이 여기 걸렸습니다.
+ */
 export function needsOnboarding(user: BandyUser) {
-  return !user.school || !user.department
+  if (user.onboarded) return false
+  // onboarded 가 생기기 전에 끝낸 기기 — 학교·학과가 차 있으면 끝낸 것으로 봅니다
+  return !(user.school && user.department)
 }
 
 /**

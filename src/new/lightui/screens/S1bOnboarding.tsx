@@ -6,7 +6,7 @@ import Button from '../components/Button.tsx'
 import Icon from '../components/Icon.tsx'
 import Sheet from '../components/Sheet.tsx'
 import { P } from '../paths.ts'
-import { getSession, saveSession } from '../auth/kakao.ts'
+import { getSession, saveProfile } from '../auth/kakao.ts'
 import { onboardingOptions } from '../../mocks/auth.ts'
 import { forgetSide, readSide } from '../auth/side.ts'
 import type { JoinSide } from '../../mocks/auth.ts'
@@ -273,18 +273,22 @@ const S1bOnboarding = () => {
 
   const submit = () => {
     if (!ready || !session) return navigate(P.home)
-    saveSession({
+    saveProfile({
       ...session,
       nickname: nickname.trim(),
-      school,
-      department,
+      // 학교를 안 묻는 사람(직장인·그 외·공연장)은 비워 둡니다. 빈 값이
+      // 맞는 답이라 적어 두고, 끝냈다는 것은 onboarded 로 따로 남깁니다.
+      school: needsSchool ? school : '',
+      department: needsSchool ? department : '',
       initial: nickname.trim()[0],
+      onboarded: true,
     })
     forgetSide()
     clearDraft()
-    // 동아리는 여기서 끝나지 않습니다 — 학교를 들고 「우리 동아리 찾기」 로 넘어갑니다.
-    // 운영진인지 부원인지는 거기서 갈라집니다.
-    navigate(form.to ?? P.clubPick(school))
+    // 동아리는 여기서 끝나지 않습니다 — 방금 고른 학교를 들고 「우리 동아리
+    // 찾기」 로 넘어갑니다. SIDE_FORM 의 to 는 학교를 모르는 채로 만들어 둔
+    // 주소라, 그것만 쓰면 다음 화면이 학교를 못 받습니다.
+    navigate(side === 'club' ? P.clubPick(needsSchool ? school : undefined) : form.to)
   }
 
   return (
