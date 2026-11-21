@@ -143,7 +143,11 @@ const S14Me = () => {
               <div className="s14-theme-row__head">
                 <span className="s14-theme-row__title">화면 테마</span>
                 <span className="s14-theme-row__now">
-                  {mode === 'system' ? `시스템 · 지금 ${THEME_LABELS[resolved]}` : THEME_LABELS[mode]}
+                  {/* 「시스템 · 지금 라이트」 는 라이트를 고른 것과 같은 말로 읽힙니다.
+                      따라가는 것과 고정하는 것이 다르다는 걸 문장으로 말합니다. */}
+                  {mode === 'system'
+                    ? `휴대폰 설정을 따라갑니다 · 지금은 ${THEME_LABELS[resolved]}`
+                    : `항상 ${THEME_LABELS[mode]}`}
                 </span>
               </div>
               <div className="lui-themepick" role="group" aria-label="화면 테마">

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import TopBar from '../components/TopBar.tsx'
@@ -106,6 +106,70 @@ const ComboField = ({
  * 한 화면이 세 모습을 하는 게 화면을 셋으로 나누는 것보다 낫습니다 —
  * 공통인 닉네임·동의 부분이 셋으로 복사되지 않습니다.
  */
+/**
+ * 어떤 분인지.
+ *
+ * 처음에는 모두 대학생이라고 보고 학교·학과를 필수로 받았습니다. 그런데
+ * 졸업생도 동아리에 남아 있고, 공연장 쪽은 아예 학생이 아니고, 관객 중에는
+ * 직장인이 많습니다. 학교 칸을 비울 수 없어서 아무 학교나 적고 넘어가면
+ * 그 데이터는 쓸모가 없어집니다.
+ *
+ * 그래서 먼저 묻고, 답에 따라 학교를 묻거나 묻지 않습니다.
+ */
+const WHO = [
+  { key: 'student', label: '대학생', needsSchool: true, hint: '재학 중' },
+  { key: 'alumni', label: '졸업생', needsSchool: true, hint: '동아리에 남아 있어요' },
+  { key: 'worker', label: '직장인', needsSchool: false, hint: '' },
+  { key: 'other', label: '그 외', needsSchool: false, hint: '' },
+] as const
+
+type WhoKey = (typeof WHO)[number]['key']
+
+/**
+ * 적던 것을 잠깐 적어 둡니다.
+ *
+ * 약관이나 개인정보 처리방침을 보려면 이 화면을 떠나야 하는데, 돌아오면
+ * 컴포넌트가 새로 그려져서 닉네임부터 다시 적어야 했습니다. 읽어 보라고
+ * 링크를 걸어 놓고 읽으면 벌을 주는 꼴이라, 떠날 때 적어 두고 돌아오면
+ * 되살립니다.
+ *
+ * sessionStorage 라 탭을 닫으면 사라집니다 — 남의 기기에 남길 값이 아닙니다.
+ */
+const DRAFT_KEY = 'bandy.lightui.onboardingDraft'
+
+interface Draft {
+  nickname: string
+  who: string | null
+  school: string
+  department: string
+  club: string
+  agreed: boolean
+}
+
+function readDraft(): Partial<Draft> {
+  try {
+    return JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}') as Partial<Draft>
+  } catch {
+    return {}
+  }
+}
+
+function writeDraft(d: Draft) {
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d))
+  } catch {
+    /* 저장이 막히면 예전처럼 사라집니다 — 흐름 자체는 막지 않습니다 */
+  }
+}
+
+function clearDraft() {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY)
+  } catch {
+    /* 무시 */
+  }
+}
+
 const SIDE_FORM: Record<
   JoinSide,
   {
@@ -151,21 +215,34 @@ const S1bOnboarding = () => {
   // S0 에서 고른 쪽 — 입장마다 받는 것과 갈 곳이 다릅니다
   const side = readSide(params.get('as')) ?? 'audience'
   const form = SIDE_FORM[side]
-  const [nickname, setNickname] = useState(session?.nickname ?? '')
-  const [school, setSchool] = useState(session?.school ?? '')
-  const [department, setDepartment] = useState(session?.department ?? '')
-  const [club, setClub] = useState('')
+  // 약관을 보러 나갔다 돌아왔을 때 적던 것을 되살립니다
+  const draft = readDraft()
+  const [nickname, setNickname] = useState(draft.nickname ?? session?.nickname ?? '')
+  // 공연장으로 들어온 사람에게는 신분을 묻지 않습니다 — 학생인지가 상관없는 쪽입니다
+  const [who, setWho] = useState<WhoKey | null>(
+    (draft.who as WhoKey | null | undefined) ?? (side === 'venue' ? 'other' : null),
+  )
+  const needsSchool = form.school && (WHO.find((w) => w.key === who)?.needsSchool ?? false)
+  const [school, setSchool] = useState(draft.school ?? session?.school ?? '')
+  const [department, setDepartment] = useState(draft.department ?? session?.department ?? '')
+  const [club, setClub] = useState(draft.club ?? '')
 
   // 「불쾌한 내용을 올리지 않겠다」 에 대한 동의는 이용자 글이 있는 앱이면
   // 받아야 합니다 (Apple 1.2). 약관 안에 묻어 두지 않고 따로 체크를 받습니다.
-  const [agreed, setAgreed] = useState(false)
+  const [agreed, setAgreed] = useState(draft.agreed ?? false)
 
   // 공연장은 학교·학과가 해당 없고, 부원의 참여 코드는 비워 둬도 됩니다
   const ready =
     nickname.trim() &&
-    (!form.school || (school.trim() && department.trim())) &&
+    who !== null &&
+    (!needsSchool || (school.trim() && department.trim())) &&
     (side === 'venue' ? club.trim() : true) &&
     agreed
+
+  // 적을 때마다 적어 둡니다. 약관을 보러 나갔다 와도 그대로 남습니다.
+  useEffect(() => {
+    writeDraft({ nickname, who, school, department, club, agreed })
+  }, [nickname, who, school, department, club, agreed])
 
   const submit = () => {
     if (!ready || !session) return navigate(P.home)
@@ -177,6 +254,7 @@ const S1bOnboarding = () => {
       initial: nickname.trim()[0],
     })
     forgetSide()
+    clearDraft()
     // 동아리는 여기서 끝나지 않습니다 — 학교를 들고 「우리 동아리 찾기」 로 넘어갑니다.
     // 운영진인지 부원인지는 거기서 갈라집니다.
     navigate(form.to ?? P.clubPick(school))
@@ -203,8 +281,35 @@ const S1bOnboarding = () => {
             maxLength={12}
           />
 
+          {side !== 'venue' && (
+            <>
+              <div className="ob__gap-26" />
+              <span className="ob__label">어떤 분이세요?</span>
+              <div className="ob-who">
+                {WHO.map((w) => (
+                  <button
+                    key={w.key}
+                    type="button"
+                    className={`ob-who__opt${w.key === who ? ' ob-who__opt--on' : ''}`}
+                    aria-pressed={w.key === who}
+                    onClick={() => setWho(w.key)}
+                  >
+                    <span className="ob-who__label">{w.label}</span>
+                    {w.hint && <span className="ob-who__hint">{w.hint}</span>}
+                  </button>
+                ))}
+              </div>
+              {who && !needsSchool && form.school && (
+                <p className="ob__hint">
+                  학교는 묻지 않습니다. 가까운 공연을 찾을 때만 쓰는 값이라, 없으면
+                  지도에서 직접 고르시면 돼요.
+                </p>
+              )}
+            </>
+          )}
+
           {/* 공연장은 학교·학과가 해당 없습니다 */}
-          {form.school && (
+          {needsSchool && (
             <>
               <div className="ob__gap-26" />
               <ComboField

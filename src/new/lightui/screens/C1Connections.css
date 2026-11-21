@@ -31,8 +31,11 @@
 .c1-row__fill--warm { background: var(--lui-accent); }
 .c1-row__chev { font-size: 14px; color: var(--lui-icon-faint); }
 
-.c1__archive { padding: 14px; }
-.c1__archive .lui-row { padding: 0; }
+/* 줄의 세로 여백을 0 으로 두니 두 줄이 맞붙고 카드 위아래만 떠서 눌려 보였습니다.
+   여백을 줄로 내려 구분선 위아래가 같아지게 합니다. */
+.c1__archive { padding: 2px 14px; }
+.c1__archive .lui-row { padding: 13px 0; }
+.c1__archive .lui-row + .lui-row { border-top: 1px solid var(--lui-hairline); }
 .c1__archive .lui-row__avatar { width: 40px; height: 40px; background: var(--lui-chip); color: var(--lui-ink); }
 .c1__notice { font-size: 11.5px; line-height: 20.125px; color: var(--lui-sub-2); }
 

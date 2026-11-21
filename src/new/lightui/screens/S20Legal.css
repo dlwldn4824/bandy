@@ -9,7 +9,11 @@
   background: var(--lui-bg);
 }
 .s20__tab {
-  flex: 1; padding: 9px 4px; border-radius: var(--lui-r-pill);
+  /* 글자 길이가 제각각이라 flex:1 만으로는 글자가 가운데로 안 옵니다.
+     폭을 똑같이 나누고 글자를 가운데에 둡니다. */
+  flex: 1 1 0; min-width: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 9px 4px; border-radius: var(--lui-r-pill);
   background: var(--lui-soft); color: var(--lui-sub);
   font-size: 12px; font-weight: 700; letter-spacing: -0.2px;
 }
