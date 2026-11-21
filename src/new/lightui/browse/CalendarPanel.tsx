@@ -1,8 +1,5 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Phone from '../components/Phone.tsx'
-import TopBar from '../components/TopBar.tsx'
-import TabBar from '../components/TabBar.tsx'
 import SectionHeader from '../components/SectionHeader.tsx'
 import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
@@ -21,15 +18,15 @@ import {
   ymOf,
   type YearMonth,
 } from '../calendar.ts'
-import './S23Calendar.css'
+import '../screens/S23Calendar.css'
 
 /**
- * 공연 일정 (월 단위) — Figma 프레임 없음.
+ * 둘러보기의 「달력」 칸 — Figma 프레임 없음.
  *
  * 홈에는 「이번 주 열리는 행사」밖에 없어서 이번 달·다음 달을 훑을 곳이 없다는
  * 사용자 피드백으로 만든 화면입니다. 날짜 계산은 `calendar.ts` 에 모아 두었습니다.
  */
-const S23Calendar = () => {
+const CalendarPanel = () => {
   const navigate = useNavigate()
   const now = today()
 
@@ -80,28 +77,7 @@ const S23Calendar = () => {
   const total = daysInMonth(month)
 
   return (
-    <Phone>
-      <TopBar
-        title="공연 일정"
-        back={P.home}
-        right={
-          isThisMonth ? (
-            <span className="lui-topbar__side" />
-          ) : (
-            <button
-              type="button"
-              className="cal__today"
-              onClick={() => {
-                setMonth({ y: now.y, m: now.m })
-                setPicked(null)
-              }}
-            >
-              오늘
-            </button>
-          )
-        }
-      />
-      <div className="lui-body">
+    <div className="lui-body">
         <div className="cal">
           <div className="cal__gap-14" />
 
@@ -116,6 +92,19 @@ const S23Calendar = () => {
             <span className="cal__count">
               {monthShows.length > 0 ? `공연 ${monthShows.length}개` : '공연 없음'}
             </span>
+            {/* 상단 바가 없어진 자리 — 멀리 간 달에서 오늘로 돌아오는 길 */}
+            {!isThisMonth && (
+              <button
+                type="button"
+                className="cal__today"
+                onClick={() => {
+                  setMonth({ y: now.y, m: now.m })
+                  setPicked(null)
+                }}
+              >
+                오늘
+              </button>
+            )}
           </div>
 
           <div className="lui-card cal__grid">
@@ -219,9 +208,7 @@ const S23Calendar = () => {
           <div className="cal__gap-26" />
         </div>
       </div>
-      <TabBar active="home" />
-    </Phone>
   )
 }
 
-export default S23Calendar
+export default CalendarPanel

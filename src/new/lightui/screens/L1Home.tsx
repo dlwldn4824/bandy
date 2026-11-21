@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import TabBar from '../components/TabBar.tsx'
 import SectionHeader from '../components/SectionHeader.tsx'
@@ -8,34 +8,96 @@ import Icon from '../components/Icon.tsx'
 import Logo from '../components/Logo.tsx'
 import RadarMap from '../components/RadarMap.tsx'
 import CountUp from '../components/CountUp.tsx'
+import MapPanel from '../browse/MapPanel.tsx'
+import CalendarPanel from '../browse/CalendarPanel.tsx'
 import { P } from '../paths.ts'
 import { useLikes } from '../likes.ts'
 import { weekShows, nearby } from '../../mocks/bandyLight.ts'
 import './L1Home.css'
 
-/** L1 홈 (포스터) — Figma 181:2 */
+/**
+ * 둘러보기 — Figma 181:2 (L1)
+ *
+ * 목록 · 지도 · 달력은 같은 공연을 보는 세 방식이라 한 화면에 모았습니다.
+ * 예전에는 지도가 탭 하나를 차지하고 달력은 홈에서 한 번 더 들어가야 했습니다.
+ * 어떤 보기인지는 `?view=` 에 남아 뒤로가기로 돌아올 수 있습니다.
+ */
+type View = 'list' | 'map' | 'calendar'
+
+const VIEWS: { key: View; label: string }[] = [
+  { key: 'list', label: '목록' },
+  { key: 'map', label: '지도' },
+  { key: 'calendar', label: '달력' },
+]
+
 const L1Home = () => {
   const navigate = useNavigate()
   // 레이더 스윕이 끝나면 아래 줄의 숫자가 올라갑니다
   const [counted, setCounted] = useState(false)
   const { isLiked, toggleLike } = useLikes()
+  const [params, setParams] = useSearchParams()
+
+  const asked = params.get('view') as View | null
+  const view: View = VIEWS.some((v) => v.key === asked) ? (asked as View) : 'list'
+
+  const goView = (next: View) => {
+    const q = new URLSearchParams(params)
+    if (next === 'list') q.delete('view')
+    else q.set('view', next)
+    setParams(q)
+  }
+
+  const switcher = (
+    <div className="l1__views" role="tablist" aria-label="보기">
+      {VIEWS.map((v) => (
+        <button
+          key={v.key}
+          type="button"
+          role="tab"
+          aria-selected={v.key === view}
+          className={`l1-view${v.key === view ? ' l1-view--on' : ''}`}
+          onClick={() => goView(v.key)}
+        >
+          {v.label}
+        </button>
+      ))}
+    </div>
+  )
+
+  const head = (
+    <div className="l1__top">
+      <Logo className="l1__logo" alt="BANDY" />
+      {/* 규칙 3 — 사진 위가 아니라 원형 배경 없이 아이콘만 */}
+      <button
+        type="button"
+        className="l1__bell"
+        onClick={() => navigate(P.notifications)}
+        aria-label="알림"
+      >
+        <Icon name="bell" size={18} />
+      </button>
+    </div>
+  )
+
+  if (view !== 'list') {
+    return (
+      <Phone>
+        <div className="l1__chrome">
+          <div className="l1">{head}</div>
+          {switcher}
+        </div>
+        {view === 'map' ? <MapPanel /> : <CalendarPanel />}
+        <TabBar active="home" />
+      </Phone>
+    )
+  }
 
   return (
     <Phone>
       <div className="lui-body">
         <div className="l1">
-          <div className="l1__top">
-            <Logo className="l1__logo" alt="BANDY" />
-            {/* 규칙 3 — 사진 위가 아니라 원형 배경 없이 아이콘만 */}
-            <button
-              type="button"
-              className="l1__bell"
-              onClick={() => navigate(P.notifications)}
-              aria-label="알림"
-            >
-              <Icon name="bell" size={18} />
-            </button>
-          </div>
+          {head}
+          {switcher}
 
           <h1 className="l1__heading">
             오늘은 어떤
@@ -47,7 +109,7 @@ const L1Home = () => {
           <SectionHeader
             title="이번 주 열리는 행사"
             aside="달력으로"
-            onAside={() => navigate(P.calendar)}
+            onAside={() => goView('calendar')}
           />
 
           <div className="l1__shows">
@@ -86,7 +148,7 @@ const L1Home = () => {
 
           <div className="l1__gap" />
 
-          <SectionHeader title="내 주변" aside="지도로 보기" onAside={() => navigate(P.map)} />
+          <SectionHeader title="내 주변" aside="지도로 보기" onAside={() => goView('map')} />
 
           <div className="lui-card l1__map">
             <RadarMap className="l1__map-canvas" onDone={() => setCounted(true)} />
@@ -100,7 +162,7 @@ const L1Home = () => {
               }
               sub={nearby.sub}
               chevron
-              onClick={() => navigate(P.map)}
+              onClick={() => goView('map')}
             />
           </div>
         </div>

@@ -1,12 +1,10 @@
-import { Route } from 'react-router-dom'
+import { Navigate, Route } from 'react-router-dom'
 import ManagerOnly from './components/ManagerOnly.tsx'
 import L1Home from './screens/L1Home.tsx'
 import D1Show from './screens/D1Show.tsx'
 import D2Book from './screens/D2Book.tsx'
 import D3Deposit from './screens/D3Deposit.tsx'
 import D4Ticket from './screens/D4Ticket.tsx'
-import S2Map from './screens/S2Map.tsx'
-import S23Calendar from './screens/S23Calendar.tsx'
 import L2Clubs from './screens/L2Clubs.tsx'
 import S18Console from './screens/S18Console.tsx'
 import S25ClubOps from './screens/S25ClubOps.tsx'
@@ -65,8 +63,8 @@ export const lightUiRoutes = [
   <Route key="ui-book" path="/ui/show/:showId/book" element={<D2Book />} />,
   <Route key="ui-deposit" path="/ui/show/:showId/deposit" element={<D3Deposit />} />,
   <Route key="ui-ticket" path="/ui/ticket/:showId" element={<D4Ticket />} />,
-  <Route key="ui-map" path="/ui/map" element={<S2Map />} />,
-  <Route key="ui-calendar" path="/ui/calendar" element={<S23Calendar />} />,
+  <Route key="ui-map" path="/ui/map" element={<Navigate to="/ui?view=map" replace />} />,
+  <Route key="ui-calendar" path="/ui/calendar" element={<Navigate to="/ui?view=calendar" replace />} />,
   <Route key="ui-clubs" path="/ui/clubs" element={<L2Clubs />} />,
   <Route key="ui-clubops" path="/ui/console/teams" element={<S25ClubOps />} />,
   <Route key="ui-console" path="/ui/console" element={

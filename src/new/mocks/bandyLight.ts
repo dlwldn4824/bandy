@@ -1686,14 +1686,14 @@ export const clubFeed = {
       initial: '멜',
       name: '멜로딕',
       sub: '광운대 · 밴드',
-      next: { title: '겨울의 소리', when: '11.22 (일) 19:00', venue: '라디오가가' },
+      next: { title: '겨울의 소리', when: '11.22 (일) 19:00', venue: '라디오가가', poster: posters.glowCard },
     },
     {
       id: 'lexa',
       initial: '렉',
       name: '렉사',
       sub: '한양대 · 밴드',
-      next: { title: 'CUSTOM', when: '11.29 (일) 18:00', venue: '몽향' },
+      next: { title: 'CUSTOM', when: '11.29 (일) 18:00', venue: '몽향', poster: posters.union },
     },
     {
       id: 'harmonic',
@@ -1731,6 +1731,9 @@ export const clubFeed = {
       to: 'club' as const,
     },
   ],
+
+  /** 다음 공연이 없는 동아리 자리에 넣는 말 */
+  noNext: '다음 공연 준비 중',
 
   /** 추천 — 찜한 동아리와 함께 선 적 있는 곳부터 */
   suggestTitle: '이런 동아리는 어때요',

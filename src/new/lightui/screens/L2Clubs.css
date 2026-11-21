@@ -51,32 +51,6 @@
 .l2-post__actions .lui-btn { flex: 1; min-width: 0; height: 42px; border-radius: 12px; font-size: 13px; }
 
 /* 이런 동아리는 어때요 */
-.l2__suggest {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 -20px;
-  padding: 0 20px;
-}
-.l2__suggest::-webkit-scrollbar { display: none; }
-.l2-sug {
-  width: 146px;
-  flex: none;
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.l2-sug__avatar {
-  width: 38px; height: 38px;
-  border-radius: var(--lui-r-pill);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: 700; color: var(--lui-ink);
-}
-.l2-sug__name { font-size: 14.5px; font-weight: 700; line-height: 19.575px; letter-spacing: -0.145px; }
-.l2-sug__lines { font-size: 11.5px; line-height: 18.4px; color: var(--lui-sub); }
-.l2-sug .lui-btn { height: auto; padding: 9px 0; border-radius: 12px; font-size: 12px; width: 100%; }
 
 .l2__write { width: 100%; height: auto; padding: 12px 0; border-radius: 12px; font-size: 13px; }
 

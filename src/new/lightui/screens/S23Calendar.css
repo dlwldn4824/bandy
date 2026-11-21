@@ -97,3 +97,6 @@
 }
 .cal-row__sub { font-size: 11.5px; color: var(--lui-sub); }
 .cal-row__chev { color: var(--lui-icon-faint); flex: none; }
+
+/* 달 넘기기 줄 안에서 — 상단 바가 없는 패널에서는 여기 붙습니다 */
+.cal__nav .cal__today { margin-left: 10px; }

@@ -1,22 +1,23 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Phone from '../components/Phone.tsx'
-import TabBar from '../components/TabBar.tsx'
 import SectionHeader from '../components/SectionHeader.tsx'
 import ShowMap from '../components/ShowMap.tsx'
 import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
 import { mapShows, mapHome, myLocation, mapFilters, type MapShow } from '../../mocks/bandyLight.ts'
-import './S2Map.css'
+import '../screens/S2Map.css'
 
 /**
- * S2 탐색 · 지도 — Figma 205:2
+ * 둘러보기의 「지도」 칸 — Figma 205:2 (S2)
+ *
+ * 탭 하나를 차지하고 있었는데, 목록·달력과 같은 공연을 보는 방식일 뿐이라
+ * 둘러보기 안으로 접었습니다. 이 파일은 그 한 칸을 그리는 조각입니다.
  *
  * 지도만 Figma 의 점·레이더 일러스트 대신 실제 지도(Leaflet + OpenStreetMap)를 씁니다.
  * 지도를 움직이면 아래 시트의 「이 지역 공연 N개」 가 화면 안에 들어온 공연으로 바뀝니다 —
  * 노원에서 신촌·홍대로, 다시 부산으로 옮겨 가며 볼 수 있습니다.
  */
-const S2Map = () => {
+const MapPanel = () => {
   const navigate = useNavigate()
   const [filter, setFilter] = useState(mapFilters[0])
   const [visible, setVisible] = useState<MapShow[]>(mapShows)
@@ -41,8 +42,7 @@ const S2Map = () => {
   const handleView = useCallback((shows: MapShow[]) => setVisible(shows), [])
 
   return (
-    <Phone>
-      <div className="lui-body">
+    <div className="lui-body">
         <div className="s2__top">
           <div className="s2__gap" />
           <button type="button" className="s2__search" onClick={() => navigate(P.search)}>
@@ -116,9 +116,7 @@ const S2Map = () => {
           )}
         </div>
       </div>
-      <TabBar active="map" />
-    </Phone>
   )
 }
 
-export default S2Map
+export default MapPanel

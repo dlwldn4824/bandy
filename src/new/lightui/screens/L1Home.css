@@ -84,3 +84,25 @@
 .l1__map { border-radius: 20px; overflow: hidden; }
 .l1__map-canvas { height: 238px; }
 .l1__map-row { border-top: 1px solid var(--lui-line-2); }
+
+/* ── 보기 전환 — 목록 · 지도 · 달력 ──
+   같은 공연을 보는 세 방식이라 탭이 아니라 화면 안의 전환입니다. */
+.l1__views { display: flex; gap: 6px; padding: 12px 0 2px; }
+.l1-view {
+  padding: 7px 14px;
+  border-radius: var(--lui-r-pill);
+  border: 1px solid var(--lui-line);
+  background: transparent;
+  color: var(--lui-sub);
+  font-size: 13px;
+  font-weight: 600;
+}
+.l1-view--on {
+  background: var(--lui-inverse-bg);
+  border-color: var(--lui-inverse-bg);
+  color: var(--lui-inverse-fg);
+  font-weight: 700;
+}
+/* 지도·달력 보기에서는 머리와 전환만 고정으로 두고 아래를 패널이 채웁니다 */
+.l1__chrome { padding: 0 20px; flex: none; }
+.l1__chrome .l1 { padding: 0; }

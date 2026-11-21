@@ -11,8 +11,10 @@ import { useSyncExternalStore } from 'react'
  *   아무 데도 안 든 사람  → 관객 (운영 화면이 아예 안 보입니다)
  *
  * MOCK: 기기에만 저장합니다. 실제로는 동아리 멤버 문서를 읽게 됩니다.
- * 첫 실행은 데모가 비어 보이지 않게 멜로딕 운영진으로 시작합니다 —
- * 마이에서 나가거나 바꿀 수 있습니다.
+ *
+ * 가입을 한 번도 안 한 기기에서만 데모용으로 멜로딕 운영진을 보여 줍니다.
+ * 가입을 거친 사람은 **실제로 든 동아리만** 따릅니다 — 관객으로 가입했는데
+ * 「우리 동아리」 가 보이면 가입 때 고른 것이 무시된 셈이니까요.
  */
 
 export type ClubRole = 'manager' | 'member'
@@ -36,11 +38,16 @@ export const DEMO_MEMBERSHIP: Membership = {
 const KEY = 'bandy.lightui.membership'
 const listeners = new Set<() => void>()
 
+/** 가입을 거친 기기인지 — 로그인 세션이 있으면 거친 것입니다 */
+const SESSION_KEY = 'bandy.lightui.user'
+
 function read(): Membership | null {
   try {
     const raw = localStorage.getItem(KEY)
     if (raw === 'none') return null
     if (raw) return JSON.parse(raw) as Membership
+    // 가입은 했는데 동아리에 든 적이 없다 = 관객. 데모를 끼워 넣지 않습니다.
+    if (localStorage.getItem(SESSION_KEY)) return null
   } catch {
     /* 사생활 보호 모드 등 */
   }
