@@ -28,3 +28,6 @@
 /* 되돌릴 수 없는 동작 — 규칙 7 에 따라 여기만 빨강 */
 .s14-menu-row--danger .s14-menu-row__title { color: var(--lui-accent); }
 .s14-menu-row--danger .s14-menu-row__chev { color: var(--lui-accent); }
+
+.s14__leave { display: flex; gap: 8px; }
+.s14__leave .lui-btn { flex: 1; min-width: 0; height: 46px; border-radius: 13px; font-size: 14px; }

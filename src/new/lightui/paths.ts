@@ -18,6 +18,10 @@ export const P = {
   onboarding: (as?: JoinSide) =>
     as ? `/ui/start/profile?as=${as}` : '/ui/start/profile',  // 온보딩 (Figma 프레임 없음)
   kakaoReturn: '/ui/auth/kakao',                        // 카카오가 돌려보내는 자리
+  /** 우리 동아리 찾기 — 있으면 부원으로, 없으면 새로 만들기 */
+  clubPick: (school?: string) =>
+    school ? `/ui/start/club?school=${encodeURIComponent(school)}` : '/ui/start/club',
+  clubJoinSent: '/ui/start/club/sent',                  // 신청 보냄 · 승인 대기
   /** 카카오 말고 하나 더 — 애플 4.8 과 심사자 로그인 때문에 필요합니다 */
   email: (as?: JoinSide) => (as ? `/ui/start/email?as=${as}` : '/ui/start/email'),
   home: '/ui',                                          // L1

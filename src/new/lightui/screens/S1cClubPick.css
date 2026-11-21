@@ -1,0 +1,30 @@
+/* 우리 동아리 찾기 */
+.s1c { display: flex; flex-direction: column; padding: 18px 20px 24px; }
+.s1c__gap { height: 22px; }
+.s1c__lead { font-size: 13px; line-height: 1.8; color: var(--lui-body); padding-bottom: 14px; }
+.s1c__lead b { color: var(--lui-ink); font-weight: 700; }
+.s1c__label { font-size: 11px; font-weight: 800; letter-spacing: 0.2px; color: var(--lui-sub); padding-bottom: 8px; }
+.s1c__list { padding: 0 16px; }
+
+.s1c-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 0; text-align: left; }
+.s1c-row + .s1c-row { border-top: 1px solid var(--lui-hairline); }
+.s1c-row__avatar {
+  width: 38px; height: 38px; flex: none; border-radius: var(--lui-r-pill);
+  background: var(--lui-soft); color: var(--lui-ink);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800;
+}
+.s1c-row__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.s1c-row__name { font-size: 14px; font-weight: 700; color: var(--lui-ink); }
+.s1c-row__sub { font-size: 11.5px; color: var(--lui-sub); }
+.s1c-row__go { flex: none; font-size: 11.5px; font-weight: 700; color: var(--lui-accent); }
+.s1c-row__chev { flex: none; color: var(--lui-sub-2); }
+
+/* 새로 만들기 — 되돌리기 번거로운 쪽이라 기본 버튼을 뺏지 않습니다 */
+.s1c-new { display: flex; flex-direction: column; gap: 5px; width: 100%; padding: 15px 16px; text-align: left; }
+.s1c-new__title { font-size: 14px; color: var(--lui-ink); }
+.s1c-new__title b { font-weight: 800; }
+.s1c-new__sub { font-size: 11.5px; line-height: 1.7; color: var(--lui-sub); }
+
+.s1c__empty { padding: 28px 0; font-size: 12.5px; line-height: 1.9; color: var(--lui-sub); text-align: center; }
+.s1c__note { font-size: 11.5px; line-height: 1.7; color: var(--lui-sub-2); }

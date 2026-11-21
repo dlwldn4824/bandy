@@ -1,56 +1,21 @@
-import { useSyncExternalStore } from 'react'
+import { useMembership, type ClubRole } from './membership.ts'
 
 /**
- * 계정 권한 — 운영진 / 부원.
+ * 권한 — 소속에서 읽습니다.
  *
- * 제안 보내기·모집 글 쓰기·공연 만들기·입금 관리·정산·입장 관리는 운영진만 합니다.
- * 부원 계정에서는 그런 버튼을 아예 그리지 않거나, 자리를 비울 수 없는 곳에는
- * 「운영진만 할 수 있어요」 안내(`lui-note`)를 대신 둡니다.
+ * 모집 글 쓰기·제안 보내기·공연 만들기·입금·입장·정산은 운영진만 합니다.
+ * 동아리에 안 든 사람(관객)에게는 그런 자리가 아예 없습니다.
  *
- * MOCK: 지금은 기기에만 저장합니다. 실제로는 동아리 멤버 문서의 역할 필드를 읽게 됩니다.
+ * 예전에는 여기서 'manager' / 'member' 를 직접 들고 있었는데, 그건 고르는 값이
+ * 아니라 소속에서 나오는 값이라 `membership.ts` 로 옮겼습니다. 이 파일은
+ * 쓰던 곳이 많아 그대로 두고, 값만 소속에서 읽어 옵니다.
  */
 
-export type ClubRole = 'manager' | 'member'
-
-const KEY = 'bandy.lightui.role'
-const listeners = new Set<() => void>()
-
-function read(): ClubRole {
-  try {
-    const v = localStorage.getItem(KEY)
-    if (v === 'manager' || v === 'member') return v
-  } catch {
-    /* 사생활 보호 모드 등에서 막히면 기본값으로 */
-  }
-  return 'manager'
-}
-
-let role: ClubRole = read()
-
-export function getRole() {
-  return role
-}
-
-export function setRole(next: ClubRole) {
-  role = next
-  try {
-    localStorage.setItem(KEY, next)
-  } catch {
-    /* 저장이 막혀도 이번 세션 동안은 동작합니다 */
-  }
-  listeners.forEach((fn) => fn())
-}
-
-function subscribe(fn: () => void) {
-  listeners.add(fn)
-  return () => {
-    listeners.delete(fn)
-  }
-}
+export type { ClubRole }
 
 export function useRole() {
-  const current = useSyncExternalStore(subscribe, getRole, getRole)
-  return { role: current, isManager: current === 'manager', setRole }
+  const { membership, inClub, isManager } = useMembership()
+  return { role: membership?.role, inClub, isManager }
 }
 
 /** 권한이 없을 때 버튼 자리에 대신 두는 문구 */

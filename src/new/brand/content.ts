@@ -99,9 +99,9 @@ export const links = {
   my: '/ui/tickets',        // 내 티켓
   console: '/ui/console',   // 운영진 허브(공연·입금·입장·정산) — 이미 쓰는 사람용
   /* 처음 온 사람은 로그인부터입니다. 고른 쪽을 ?as= 로 들고 가서 가입 단계가 갈라집니다.
-     입장은 넷입니다 — 운영진 · 부원 · 관객 · 공연장. 랜딩에서는 「공연을 여는 쪽」과
-     「보러 가는 쪽」만 바로 보내고, 나머지 둘은 /ui/join 에서 고릅니다. */
-  joinClub: '/ui/start?as=manager',
+     입장은 셋입니다 — 동아리 · 관객 · 공연장. 동아리 안에서 운영진인지 부원인지는
+     학교와 동아리 이름을 받은 뒤에 갈라집니다 (/ui/start/club). */
+  joinClub: '/ui/start?as=club',
   joinAudience: '/ui/start?as=audience',
   joinPick: '/ui/join',
   newShow: '/ui/show/new',  // 공연 올리기 — 바로 공연 만들기

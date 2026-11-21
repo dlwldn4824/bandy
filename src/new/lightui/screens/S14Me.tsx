@@ -12,7 +12,8 @@ import { P } from '../paths.ts'
 import { signOut } from '../auth/kakao.ts'
 import DeleteAccount from '../auth/DeleteAccount.tsx'
 import { useBlocked } from '../safety/report.ts'
-import { useRole, type ClubRole } from '../auth/role.ts'
+import { useRole } from '../auth/role.ts'
+import { useMembership } from '../auth/membership.ts'
 import { me } from '../../mocks/bandyLight.ts'
 import { THEME_LABELS, useTheme, type ThemeMode } from '../theme.ts'
 import './S14Me.css'
@@ -35,16 +36,12 @@ const MenuRow = ({
 )
 
 const MODES: ThemeMode[] = ['system', 'light', 'dark']
-const ROLES: { key: ClubRole; label: string }[] = [
-  { key: 'manager', label: '운영진' },
-  { key: 'member', label: '부원' },
-]
-
 const S14Me = () => {
   const navigate = useNavigate()
   const { mode, resolved, setMode } = useTheme()
-  const { role, setRole, isManager } = useRole()
-  const [joinOpen, setJoinOpen] = useState(false)
+  const { role, isManager } = useRole()
+  const { membership, inClub, setMembership } = useMembership()
+  const [leaveOpen, setLeaveOpen] = useState(false)
   const [delOpen, setDelOpen] = useState(false)
   const { count: blockedCount } = useBlocked()
 
@@ -77,23 +74,37 @@ const S14Me = () => {
           <div className="s14__gap-26" />
           <SectionHeader title="내 동아리" aside={String(me.clubs.length)} />
           <div className="lui-card s14__group">
-            {me.clubs.map((club) => (
+            {/* 적어 둔 목록이 아니라 실제 소속을 그립니다 */}
+            {membership && (
               <ListRow
-                key={club.name}
-                avatar={club.initial}
-                title={club.name}
-                sub={club.sub}
-                slot={<span className="lui-pill lui-pill--lg">{club.badge}</span>}
-                onClick={() => navigate(P.club('melodic'))}
+                avatar={membership.clubName.slice(0, 1)}
+                title={membership.clubName}
+                sub={`${membership.role === 'manager' ? '운영진' : '부원'} · 참여 코드 ${membership.code}`}
+                slot={
+                  <span className="lui-pill lui-pill--lg">
+                    {membership.role === 'manager' ? '운영진' : '부원'}
+                  </span>
+                }
+                onClick={() => navigate(P.club(membership.clubId))}
               />
-            ))}
-            <ListRow
-              avatar={me.joinClub.initial}
-              title={me.joinClub.title}
-              sub={me.joinClub.sub}
-              chevron
-              onClick={() => setJoinOpen(true)}
-            />
+            )}
+            {inClub ? (
+              <ListRow
+                avatar="–"
+                title="동아리에서 나가기"
+                sub="나가면 운영 화면이 닫히고 관객으로 돌아갑니다"
+                chevron
+                onClick={() => setLeaveOpen(true)}
+              />
+            ) : (
+              <ListRow
+                avatar="+"
+                title="동아리 만들기 · 참여하기"
+                sub="만들면 운영진, 참여 코드로 들어오면 부원이 됩니다"
+                chevron
+                onClick={() => navigate(P.clubPick())}
+              />
+            )}
           </div>
 
           {/* 운영진에게만 — 입금·입장·정산 화면으로 들어가는 상설 입구 */}
@@ -149,26 +160,19 @@ const S14Me = () => {
                 ))}
               </div>
             </div>
-            {/* 운영진만 할 수 있는 일이 있어서, 두 눈으로 다 볼 수 있게 둡니다 */}
+            {/* 권한은 고르는 값이 아니라 소속에서 나옵니다 (auth/membership.ts).
+                예전에는 여기서 운영진·부원을 직접 바꿀 수 있었는데, 그러면
+                아무나 운영진 화면을 열 수 있습니다. 지금 상태만 보여 줍니다. */}
             <div className="s14-theme-row">
               <div className="s14-theme-row__head">
-                <span className="s14-theme-row__title">계정 권한</span>
+                <span className="s14-theme-row__title">내 권한</span>
                 <span className="s14-theme-row__now">
-                  {role === 'manager' ? '운영진 · 전부 할 수 있어요' : '부원 · 보기만 할 수 있어요'}
+                  {role === 'manager'
+                    ? '운영진 · 공연을 올리고 정산까지 할 수 있어요'
+                    : role === 'member'
+                      ? '부원 · 우리 공연과 내 순서를 봐요'
+                      : '동아리에 속해 있지 않아요'}
                 </span>
-              </div>
-              <div className="lui-themepick" role="group" aria-label="계정 권한">
-                {ROLES.map((r) => (
-                  <button
-                    key={r.key}
-                    type="button"
-                    className={`lui-themepick__opt${r.key === role ? ' lui-themepick__opt--on' : ''}`}
-                    aria-pressed={r.key === role}
-                    onClick={() => setRole(r.key)}
-                  >
-                    {r.label}
-                  </button>
-                ))}
               </div>
             </div>
             {me.settings.map((row) => (
@@ -221,14 +225,25 @@ const S14Me = () => {
           <p className="s14__version">{me.version}</p>
         </div>
       </div>
-      <Sheet open={joinOpen} title="동아리 만들기 · 참여하기" onClose={() => setJoinOpen(false)}>
+      <Sheet open={leaveOpen} title="동아리에서 나갈까요?" onClose={() => setLeaveOpen(false)}>
         <p className="lui-menu__note">
-          이미 있는 동아리에는 운영진이 알려 준 참여 코드로 들어갑니다. 새로 만들면 만든 사람이 첫
-          운영진이 됩니다.
+          {membership?.clubName} 에서 나갑니다. 운영 화면이 닫히고 관객으로 돌아갑니다. 참여 코드가
+          있으면 언제든 다시 들어올 수 있어요.
         </p>
-        <Button block onClick={() => setJoinOpen(false)}>
-          확인
-        </Button>
+        <div className="s14__leave">
+          <Button variant="ghost" onClick={() => setLeaveOpen(false)}>
+            그대로 두기
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              setMembership(null)
+              setLeaveOpen(false)
+            }}
+          >
+            나가기
+          </Button>
+        </div>
       </Sheet>
       <DeleteAccount open={delOpen} onClose={() => setDelOpen(false)} />
       <TabBar active="my" />

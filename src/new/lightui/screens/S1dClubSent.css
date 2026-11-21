@@ -1,0 +1,50 @@
+/* 신청 보냄 · 승인 대기 */
+.s1d { display: flex; flex-direction: column; padding: 20px; }
+.s1d__gap { height: 20px; }
+.s1d__none { padding: 56px 20px; text-align: center; font-size: 13px; color: var(--lui-sub); }
+
+.s1d__badge {
+  align-self: flex-start; padding: 5px 11px; border-radius: var(--lui-r-pill);
+  background: var(--lui-tint); color: var(--lui-accent);
+  font-size: 11px; font-weight: 800;
+}
+.s1d__title {
+  margin: 14px 0 0; font-size: 23px; line-height: 1.4; letter-spacing: -0.7px;
+  font-weight: 700; color: var(--lui-ink);
+}
+.s1d__title b { font-weight: 800; }
+.s1d__lead { margin: 12px 0 0; font-size: 13px; line-height: 1.8; color: var(--lui-body); }
+
+/* 확인 방법 */
+.s1d-verify { display: flex; flex-direction: column; gap: 10px; padding: 16px; }
+.s1d-verify__head { font-size: 13px; font-weight: 800; color: var(--lui-ink); }
+.s1d-verify__body { font-size: 12.5px; line-height: 1.75; color: var(--lui-sub); }
+.s1d-verify__body b { color: var(--lui-ink); font-weight: 700; }
+.s1d-verify__code {
+  padding: 13px; border-radius: var(--lui-r-card); background: var(--lui-soft);
+  font-size: 17px; font-weight: 800; letter-spacing: 1.5px; text-align: center;
+  color: var(--lui-ink);
+}
+
+.s1d__why {
+  padding: 13px 15px; border-radius: var(--lui-r-card); background: var(--lui-soft);
+  font-size: 12px; line-height: 1.75; color: var(--lui-sub);
+}
+.s1d__why b { color: var(--lui-ink); font-weight: 700; }
+
+.s1d-sum { padding: 4px 16px; }
+.s1d-sum__row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0; font-size: 12.5px; color: var(--lui-sub);
+}
+.s1d-sum__row + .s1d-sum__row { border-top: 1px solid var(--lui-hairline); }
+.s1d-sum__row b { font-weight: 700; color: var(--lui-ink); }
+
+.s1d__note { font-size: 11.5px; line-height: 1.7; color: var(--lui-sub-2); }
+.s1d__cancel {
+  display: block; margin: 0 auto; padding: 6px;
+  font-size: 12px; font-weight: 600; color: var(--lui-sub);
+}
+
+/* 버튼과 취소 링크를 한 줄에 두면 둘 다 버튼처럼 보입니다. 위아래로 쌓습니다. */
+.s1d__bar { flex-direction: column; align-items: stretch; gap: 10px; }

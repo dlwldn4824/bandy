@@ -7,7 +7,6 @@ import { P } from '../paths.ts'
 import { getSession, saveSession } from '../auth/kakao.ts'
 import { onboardingOptions } from '../../mocks/auth.ts'
 import { forgetSide, readSide } from '../auth/side.ts'
-import { useRole } from '../auth/role.ts'
 import type { JoinSide } from '../../mocks/auth.ts'
 import './S1bOnboarding.css'
 
@@ -100,11 +99,11 @@ const ComboField = ({
 /**
  * 입장마다 받을 것도, 끝나고 갈 곳도 다릅니다.
  *
- * 운영진은 동아리가 있어야 공연을 올릴 수 있어서 동아리 칸이 필수이고,
- * 부원은 참여 코드만 있으면 됩니다. 공연장은 학교·학과가 아예 해당이
- * 없어서 공연장 이름과 주소를 대신 받습니다.
+ * 동아리는 여기서 동아리를 정하지 않습니다 — 닉네임·학교까지만 받고 다음 화면(S24)에서
+ * 만들지 코드로 들어갈지 고릅니다. 그래야 「운영진이세요 부원이세요」 를 묻지 않아도 됩니다.
+ * 공연장은 학교·학과가 아예 해당이 없어서 공연장 이름과 주소를 대신 받습니다.
  *
- * 한 화면이 네 모습을 하는 게 화면을 넷으로 나누는 것보다 낫습니다 —
+ * 한 화면이 세 모습을 하는 게 화면을 셋으로 나누는 것보다 낫습니다 —
  * 공통인 닉네임·동의 부분이 셋으로 복사되지 않습니다.
  */
 const SIDE_FORM: Record<
@@ -114,53 +113,34 @@ const SIDE_FORM: Record<
     lead: string
     /** 학교·학과를 받을지 (공연장은 안 받습니다) */
     school: boolean
-    /** 동아리 칸 — 라벨이 없으면 안 받습니다 */
-    clubLabel?: string
-    clubPlaceholder?: string
-    clubHint?: string
+    /** 공연장 이름처럼 한 칸 더 받을 때 */
+    extraLabel?: string
+    extraPlaceholder?: string
+    extraHint?: string
     /** 끝나고 갈 곳 */
     to: string
-    /** 이 입장으로 들어오면 운영진 권한으로 시작합니다 */
-    manager: boolean
   }
 > = {
-  manager: {
-    title: '어느 동아리세요?',
-    lead: '공연을 올리려면 동아리가 있어야 합니다. 학교는 가까운 공연을 찾을 때 씁니다.',
-    school: true,
-    clubLabel: '동아리',
-    clubPlaceholder: '동아리 이름 또는 참여 코드',
-    clubHint:
-      '이미 있는 동아리면 운영진이 알려 준 참여 코드를 넣어 주세요. 새 이름을 적으면 새로 만들고, 적은 사람이 첫 운영진이 됩니다.',
-    to: P.console,
-    manager: true,
-  },
-  member: {
-    title: '어느 동아리 부원이세요?',
-    lead: '운영진이 알려 준 참여 코드를 넣으면 우리 동아리 공연과 내 순서가 보입니다.',
-    school: true,
-    clubLabel: '참여 코드',
-    clubPlaceholder: '운영진에게 받은 코드',
-    clubHint: '코드를 모르면 비워 두고 시작해도 됩니다. 마이에서 나중에 넣을 수 있어요.',
-    to: P.home,
-    manager: false,
-  },
   audience: {
     title: '어디서 오셨어요?',
-    lead: '동아리를 찾고 공연을 추천할 때만 씁니다.',
+    lead: '가까운 공연을 찾고 동아리를 추천할 때만 씁니다.',
     school: true,
     to: P.home,
-    manager: false,
+  },
+  club: {
+    title: '어디서 오셨어요?',
+    lead: '다음 화면에서 우리 동아리를 찾습니다. 없으면 새로 만들 수 있어요.',
+    school: true,
+    to: P.clubPick(),
   },
   venue: {
     title: '어떤 공연장이세요?',
     lead: '비는 날을 올려 두면 설 팀을 찾아 넣습니다. 대관료 대신 티켓 매출의 일부를 받습니다.',
     school: false,
-    clubLabel: '공연장 이름과 주소',
-    clubPlaceholder: '예) 라디오가가 · 서울 노원구 …',
-    clubHint: '확인 뒤 공연장 화면이 열립니다. 비는 날은 거기서 올립니다.',
+    extraLabel: '공연장 이름과 주소',
+    extraPlaceholder: '예) 라디오가가 · 서울 노원구 …',
+    extraHint: '확인 뒤 공연장 화면이 열립니다. 비는 날은 거기서 올립니다.',
     to: P.venue,
-    manager: true,
   },
 }
 
@@ -168,7 +148,6 @@ const S1bOnboarding = () => {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const session = getSession()
-  const { setRole } = useRole()
   // S0 에서 고른 쪽 — 입장마다 받는 것과 갈 곳이 다릅니다
   const side = readSide(params.get('as')) ?? 'audience'
   const form = SIDE_FORM[side]
@@ -185,7 +164,7 @@ const S1bOnboarding = () => {
   const ready =
     nickname.trim() &&
     (!form.school || (school.trim() && department.trim())) &&
-    (side !== 'manager' && side !== 'venue' ? true : club.trim()) &&
+    (side === 'venue' ? club.trim() : true) &&
     agreed
 
   const submit = () => {
@@ -196,13 +175,11 @@ const S1bOnboarding = () => {
       school,
       department,
       initial: nickname.trim()[0],
-      role: form.manager ? 'manager' : 'member',
     })
-    // 운영진·공연장은 돈과 입장을 다루므로 권한도 같이 올려 둡니다
-    setRole(form.manager ? 'manager' : 'member')
     forgetSide()
-    // 들어온 쪽마다 바로 할 일이 있는 곳으로 — 관객만 둘러보기부터
-    navigate(form.to)
+    // 동아리는 여기서 끝나지 않습니다 — 학교를 들고 「우리 동아리 찾기」 로 넘어갑니다.
+    // 운영진인지 부원인지는 거기서 갈라집니다.
+    navigate(form.to ?? P.clubPick(school))
   }
 
   return (
@@ -251,18 +228,18 @@ const S1bOnboarding = () => {
             </>
           )}
 
-          {form.clubLabel && (
+          {form.extraLabel && (
             <>
               <div className="ob__gap-26" />
-              <span className="ob__label">{form.clubLabel}</span>
+              <span className="ob__label">{form.extraLabel}</span>
               <input
                 className="lui-input"
                 value={club}
                 onChange={(e) => setClub(e.target.value)}
-                placeholder={form.clubPlaceholder}
+                placeholder={form.extraPlaceholder}
                 maxLength={60}
               />
-              <p className="ob__hint">{form.clubHint}</p>
+              <p className="ob__hint">{form.extraHint}</p>
             </>
           )}
 
@@ -292,7 +269,7 @@ const S1bOnboarding = () => {
 
       <div className="lui-bottombar lui-bottombar--stack">
         <Button block disabled={!ready} onClick={submit}>
-          시작하기
+          {side === 'club' ? '다음 — 우리 동아리 찾기' : '시작하기'}
         </Button>
         {/* 다 채우지 않아도 막히지 않게 — 마이에서 나중에 바꿀 수 있습니다 */}
         <button type="button" className="ob__later" onClick={() => navigate(P.home)}>

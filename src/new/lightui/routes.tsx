@@ -23,6 +23,8 @@ import S0Join from './screens/S0Join.tsx'
 import S1Start from './screens/S1Start.tsx'
 import S1bOnboarding from './screens/S1bOnboarding.tsx'
 import S1cKakaoReturn from './screens/S1cKakaoReturn.tsx'
+import S1cClubPick from './screens/S1cClubPick.tsx'
+import S1dClubSent from './screens/S1dClubSent.tsx'
 import S3Search from './screens/S3Search.tsx'
 import S7Tickets from './screens/S7Tickets.tsx'
 import S8Notifications from './screens/S8Notifications.tsx'
@@ -53,6 +55,9 @@ export const lightUiRoutes = [
   <Route key="ui-legal" path="/ui/legal/:doc" element={<S20Legal />} />,
   <Route key="ui-legal-i" path="/ui/legal" element={<S20Legal />} />,
   <Route key="ui-email" path="/ui/start/email" element={<S21Email />} />,
+  // 동아리로 들어온 사람은 온보딩 뒤 여기서 우리 동아리를 찾습니다
+  <Route key="ui-clubpick" path="/ui/start/club" element={<S1cClubPick />} />,
+  <Route key="ui-clubsent" path="/ui/start/club/sent" element={<S1dClubSent />} />,
   <Route key="ui-blocked" path="/ui/blocked" element={<S22Blocked />} />,
   <Route key="ui-home" path="/ui" element={<L1Home />} />,
   <Route key="ui-show" path="/ui/show/:showId" element={<D1Show />} />,
