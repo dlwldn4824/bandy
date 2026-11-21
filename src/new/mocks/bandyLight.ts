@@ -889,11 +889,8 @@ export const chat = {
 /* ── S10 공연 만들기 ────────────────────────────────── */
 export const showForm = {
   upload: { title: '포스터 올리기', sub: '3:4 비율 · 최대 5MB' },
-  fields: [
-    { label: '공연명', value: '멜로딕 단독 공연 〈겨울의 소리〉' },
-    { label: '주최 동아리', value: '멜로딕 · 광운대' },
-    { label: '일시', value: '2026. 11. 22 (토) 19:00' },
-  ],
+  /** 미리 적어 두지 않습니다 — 그건 남의 공연 이름이었습니다 */
+  titlePlaceholder: '예) 겨울 정기공연 〈첫눈〉',
   venueOptions: [
     {
       id: 'bandy',

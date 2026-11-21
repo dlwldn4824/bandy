@@ -117,6 +117,12 @@ export function openChecklist(show: { at?: string; venue?: string }) {
   ]
 }
 
+/** 훅 밖에서 단계를 적습니다 — 공연을 만들 때 초안으로 두는 자리 */
+export function setStage(showId: string, next: SetStage) {
+  current = { ...current, [showId]: next }
+  publish()
+}
+
 export function useStage(showId: string, at?: string) {
   const all = useSyncExternalStore(subscribe, get, get)
   const set = all[showId]
@@ -126,8 +132,7 @@ export function useStage(showId: string, at?: string) {
     /** 날짜가 정한 단계는 운영진이 못 바꿉니다 */
     locked: stage === 'today' || stage === 'settling',
     move(next: SetStage) {
-      current = { ...current, [showId]: next }
-      publish()
+      setStage(showId, next)
     },
   }
 }

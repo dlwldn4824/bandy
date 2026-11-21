@@ -13,6 +13,7 @@ import { useLikes } from '../likes.ts'
 import { useGoBack } from '../useGoBack.ts'
 import { showDetailFor, showMissing, mapShows } from '../../mocks/bandyLight.ts'
 import { useStage } from '../shows/stage.ts'
+import { getMyShow } from '../shows/myShows.ts'
 import mapVenue from '../assets/map-venue.svg'
 import './D1Show.css'
 
@@ -32,8 +33,34 @@ const D1Show = () => {
   const { showId = 'glow' } = useParams()
   const { isLiked, toggleLike } = useLikes()
   const [dirs, setDirs] = useState(false)
-  const s = showDetailFor(showId)
-  const at = mapShows.find((show) => show.id === showId)?.at
+  /**
+   * 우리가 만든 공연도 상세가 있어야 합니다. 예매를 열어 놓고 관객이
+   * 눌렀더니 「그 공연을 찾을 수 없어요」 면 연 적이 없는 것과 같습니다.
+   * 아직 적은 것이 제목·일시·공연장뿐이라 그만큼만 그립니다.
+   */
+  const mine = getMyShow(showId)
+  const s = mine
+    ? {
+        id: mine.id,
+        hero: mine.poster ?? '',
+        badges: ['우리 공연'],
+        titleLines: [mine.title, ''] as [string, string],
+        host: mine.clubName,
+        info: [
+          { k: '일시', v: mine.at.replace('T', ' ') },
+          { k: '장소', v: mine.venue },
+        ],
+        lineup: [],
+        about: [],
+        venue: { name: mine.venue, address: '', lat: 37.5665, lng: 126.978 },
+        notice: '아직 자세한 내용을 올리지 않았습니다.',
+        price: '가격 미정',
+        priceValue: 0,
+        remain: '',
+        thin: true,
+      }
+    : showDetailFor(showId)
+  const at = mine?.at ?? mapShows.find((show) => show.id === showId)?.at
   const { stage } = useStage(showId, at)
 
   // 모르는 공연이면 없다고 말합니다 — 남의 공연을 보여 주지 않습니다

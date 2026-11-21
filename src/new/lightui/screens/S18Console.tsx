@@ -12,6 +12,7 @@ import { useMembers } from '../auth/members.ts'
 import { useJoinInbox } from '../auth/joinInbox.ts'
 import { useMembership } from '../auth/membership.ts'
 import { freshClub, useIsDemoClub } from '../clubs/owner.ts'
+import { useMyShows } from '../shows/myShows.ts'
 import { STAGE, useStages } from '../shows/stage.ts'
 import { clubConsole as c } from '../../mocks/bandyLight.ts'
 import './S18Console.css'
@@ -69,7 +70,18 @@ const S18Console = () => {
    * 남의 42건을 보여 주느니 빈 화면이 낫습니다 — 그게 실제 모습입니다.
    */
   const demo = useIsDemoClub()
-  const upcoming = demo ? c.upcoming : []
+  /** 우리가 만든 공연이 먼저입니다 — 방금 만들었는데 안 보이면 안 만들어진 것입니다 */
+  const made = useMyShows().map((show) => ({
+    id: show.id,
+    thumb: show.poster,
+    title: show.title,
+    when: show.venue,
+    at: show.at,
+    paid: 0,
+    total: 0,
+    urgent: false,
+  }))
+  const upcoming = [...made, ...(demo ? c.upcoming : [])]
   const past = demo ? c.past : []
 
   return (
@@ -89,7 +101,14 @@ const S18Console = () => {
         <div className="s18">
           <p className="s18__club">{membership?.clubName ?? c.club.name}</p>
           <div className="s18__gap-6" />
-          <p className="s18__line">{demo ? c.summaryLine : '아직 올린 공연이 없어요'}</p>
+          <p className="s18__line">
+            {/* 셉니다 — 방금 만든 공연이 있는데 「없어요」 라고 하면 안 만들어진 줄 압니다 */}
+            {demo
+              ? c.summaryLine
+              : upcoming.length === 0
+                ? freshClub.shows
+                : `다가오는 공연 ${upcoming.length}개`}
+          </p>
 
           <div className="s18__gap-22" />
           <SectionHeader title="다가오는 공연" aside={String(upcoming.length)} />
@@ -103,14 +122,18 @@ const S18Console = () => {
             {upcoming.map((show) => (
               <ListRow
                 key={show.id}
-                avatar={<img src={show.thumb} alt="" />}
+                /* 포스터를 아직 안 올린 공연 — 남의 포스터를 빌려 쓰지 않습니다 */
+                avatar={show.thumb ? <img src={show.thumb} alt="" /> : '공연'}
                 title={show.title}
                 sub={`${STAGE[stageOf(show)].label} · ${show.when}`}
                 slot={
-                  /* 규칙 7 — 미입금이 남은 공연만 빨강 */
-                  <span className={`lui-pill lui-pill--lg${show.urgent ? '' : ' lui-pill--outline'}`}>
-                    입금 {show.paid}/{show.total}
-                  </span>
+                  /* 아직 안 판 공연에 「입금 0/0」 은 셀 것이 없다는 뜻이 아닙니다 */
+                  show.total > 0 ? (
+                    /* 규칙 7 — 미입금이 남은 공연만 빨강 */
+                    <span className={`lui-pill lui-pill--lg${show.urgent ? '' : ' lui-pill--outline'}`}>
+                      입금 {show.paid}/{show.total}
+                    </span>
+                  ) : undefined
                 }
                 chevron
                 onClick={() => navigate(P.showStage(show.id))}
@@ -125,7 +148,8 @@ const S18Console = () => {
             {past.map((show) => (
               <ListRow
                 key={show.id}
-                avatar={<img src={show.thumb} alt="" />}
+                /* 포스터를 아직 안 올린 공연 — 남의 포스터를 빌려 쓰지 않습니다 */
+                avatar={show.thumb ? <img src={show.thumb} alt="" /> : '공연'}
                 title={show.title}
                 sub={show.when}
                 slot={<span className="lui-pill lui-pill--lg lui-pill--outline">{show.state}</span>}
