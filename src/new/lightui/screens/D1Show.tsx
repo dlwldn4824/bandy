@@ -14,6 +14,7 @@ import { useGoBack } from '../useGoBack.ts'
 import { showDetailFor, showMissing, mapShows } from '../../mocks/bandyLight.ts'
 import { useStage } from '../shows/stage.ts'
 import { getMyShow } from '../shows/myShows.ts'
+import { showWhen } from '../calendar.ts'
 import mapVenue from '../assets/map-venue.svg'
 import './D1Show.css'
 
@@ -47,7 +48,7 @@ const D1Show = () => {
         titleLines: [mine.title, ''] as [string, string],
         host: mine.clubName,
         info: [
-          { k: '일시', v: mine.at.replace('T', ' ') },
+          { k: '일시', v: showWhen(mine.at) },
           { k: '장소', v: mine.venue },
         ],
         lineup: [],

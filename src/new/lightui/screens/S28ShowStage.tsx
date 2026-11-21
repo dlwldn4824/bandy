@@ -11,6 +11,7 @@ import { P } from '../paths.ts'
 import { STAGES, openChecklist, useStage, type SetStage } from '../shows/stage.ts'
 import { useBankAccount } from '../pay/bankAccount.ts'
 import { getMyShow } from '../shows/myShows.ts'
+import { showWhen } from '../calendar.ts'
 import { clubConsole as c, showMissing } from '../../mocks/bandyLight.ts'
 import './S28ShowStage.css'
 
@@ -30,7 +31,7 @@ const S28ShowStage = () => {
   // 모르는 공연이면 첫 공연으로 대신하지 않습니다 — 남의 공연 단계를 바꾸게 됩니다
   const mine = getMyShow(showId)
   const show = mine
-    ? { id: mine.id, title: mine.title, when: `${mine.at.replace('T', ' ')} · ${mine.venue}`, at: mine.at }
+    ? { id: mine.id, title: mine.title, when: `${showWhen(mine.at)} · ${mine.venue}`, at: mine.at }
     : [...c.upcoming, ...c.past].find((row) => row.id === showId)
   const t = c.stageCopy
 

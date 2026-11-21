@@ -69,3 +69,17 @@ export function timeLabel(at: string) {
   const { hh, mm } = parseAt(at)
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
 }
+
+/**
+ * '12.20 (일) 19:00' — 공연 줄에 쓰는 형식.
+ *
+ * 저장은 `2026-12-20T19:00` 으로 두고 **그릴 때만** 요일을 붙입니다.
+ * 적어 둔 「11.22 (토)」 가 2026년에는 일요일이던 것처럼, 요일을 글로
+ * 들고 있으면 반드시 어긋납니다.
+ */
+export function showWhen(at: string) {
+  const { y, m, d } = parseAt(at)
+  const mm = String(m).padStart(2, '0')
+  const dd = String(d).padStart(2, '0')
+  return `${mm}.${dd} (${WEEKDAYS[weekdayOf(y, m, d)]}) ${timeLabel(at)}`
+}

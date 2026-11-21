@@ -13,6 +13,7 @@ import { useJoinInbox } from '../auth/joinInbox.ts'
 import { useMembership } from '../auth/membership.ts'
 import { freshClub, useIsDemoClub } from '../clubs/owner.ts'
 import { useMyShows } from '../shows/myShows.ts'
+import { showWhen } from '../calendar.ts'
 import { STAGE, useStages } from '../shows/stage.ts'
 import { clubConsole as c } from '../../mocks/bandyLight.ts'
 import './S18Console.css'
@@ -75,7 +76,7 @@ const S18Console = () => {
     id: show.id,
     thumb: show.poster,
     title: show.title,
-    when: show.venue,
+    when: `${showWhen(show.at)} · ${show.venue}`,
     at: show.at,
     paid: 0,
     total: 0,
