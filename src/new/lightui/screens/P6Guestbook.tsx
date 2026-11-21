@@ -27,7 +27,7 @@ const P6Guestbook = () => {
         right={
           <MoreMenu
             items={[
-              { label: '같이 온 사람들', to: P.livePeople() },
+              { label: '같이 온 사람들', to: P.livePeople(showId) },
               {
                 label: '신고 · 차단',
                 danger: true,

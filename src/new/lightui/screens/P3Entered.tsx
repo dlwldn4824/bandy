@@ -38,7 +38,7 @@ const P3Entered = () => {
         right={
           <MoreMenu
             items={[
-              { label: '내 티켓 보기', to: P.ticket() },
+              { label: '내 티켓 보기', to: P.ticket(showId) },
               { label: '공연 정보', to: P.live(showId) },
             ]}
           />

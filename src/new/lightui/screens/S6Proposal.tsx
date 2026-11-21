@@ -10,6 +10,7 @@ import Button from '../components/Button.tsx'
 import ConnectedResult from '../components/ConnectedResult.tsx'
 import { P } from '../paths.ts'
 import { myClub, proposal as pr } from '../../mocks/bandyLight.ts'
+import { DEMO_CLUB_ID } from '../clubs/owner.ts'
 import { subjectParticle, withParticle } from '../korean.ts'
 import './S6Proposal.css'
 
@@ -34,7 +35,8 @@ const S6Proposal = () => {
           <MoreMenu
             items={[
               { label: '대화 열기', to: P.chat('1') },
-              { label: '상대 동아리 보기', to: P.club() },
+              // 제안 목에 상대 동아리 id 가 없습니다 (S9Chat 과 같은 자리)
+              { label: '상대 동아리 보기', to: P.club(DEMO_CLUB_ID) },
               {
                 label: '신고하기',
                 danger: true,

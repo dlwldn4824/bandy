@@ -7,6 +7,7 @@ import Button from '../components/Button.tsx'
 import { P } from '../paths.ts'
 import ReportMenu from '../safety/ReportMenu.tsx'
 import { chat } from '../../mocks/bandyLight.ts'
+import { DEMO_CLUB_ID } from '../clubs/owner.ts'
 import sendButton from '../assets/send-button.svg'
 import './S9Chat.css'
 
@@ -36,7 +37,9 @@ const S9Chat = () => {
         right={
           <MoreMenu
             items={[
-              { label: '상대 동아리 보기', to: P.club() },
+              // 대화 목에 상대 동아리 id 가 없습니다. 기본값에 숨기지 않고
+              // 데모 동아리라고 드러내 둡니다 — 목에 id 가 붙으면 여기로 옵니다.
+              { label: '상대 동아리 보기', to: P.club(DEMO_CLUB_ID) },
               { label: '제안 내용 다시 보기', to: P.proposal('1') },
               {
                 label: '신고 · 차단',

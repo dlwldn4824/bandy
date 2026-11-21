@@ -24,7 +24,7 @@ const C2Relation = () => {
           <MoreMenu
             items={[
               { label: '대화 열기', to: P.chat('1') },
-              { label: '동아리 소개 보기', to: P.club() },
+              { label: '동아리 소개 보기', to: P.club(relationId) },
               {
                 label: '신고하기',
                 danger: true,

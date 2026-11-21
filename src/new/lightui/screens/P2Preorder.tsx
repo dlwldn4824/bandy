@@ -47,7 +47,7 @@ const P2Preorder = () => {
         right={
           <MoreMenu
             items={[
-              { label: '내 티켓 보기', to: P.ticket() },
+              { label: '내 티켓 보기', to: P.ticket(showId) },
               {
                 label: '수령 안내',
                 note: '선주문한 굿즈는 공연 당일 현장 굿즈 부스에서 티켓 QR 을 보여 주고 받습니다.',

@@ -5,7 +5,7 @@ import MoreMenu from '../components/MoreMenu.tsx'
 import TopBar from '../components/TopBar.tsx'
 import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
-import { inviteSms as m } from '../../mocks/bandyLight.ts'
+import { invite as iv, inviteSms as m } from '../../mocks/bandyLight.ts'
 import inviteTicket from '../assets/invite-ticket.png'
 import './S16InviteSms.css'
 
@@ -30,7 +30,7 @@ const S16InviteSms = () => {
           <MoreMenu
             items={[
               { label: '다른 방법으로 초대', to: P.invite },
-              { label: '초대 카드 미리 보기', to: P.inviteCard() },
+              { label: '초대 카드 미리 보기', to: P.inviteCard(iv.eventId) },
             ]}
           />
         }
@@ -39,7 +39,7 @@ const S16InviteSms = () => {
         <div className="s16">
           <p className="s16__at">{m.at}</p>
 
-          <button type="button" className="s16__card" onClick={() => navigate(P.inviteCard())}>
+          <button type="button" className="s16__card" onClick={() => navigate(P.inviteCard(iv.eventId))}>
             <img src={inviteTicket} alt="" />
             <span className="s16__card-body">
               <span className="s16__card-title">{m.card.title}</span>

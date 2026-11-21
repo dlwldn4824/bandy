@@ -28,10 +28,10 @@ export const P = {
   calendar: '/ui/calendar',                             // S23 월 단위 공연 일정
   map: '/ui/map',                                       // S2
   search: '/ui/search',                                 // S3
-  show: (id = 'glow') => `/ui/show/${id}`,              // D1
-  book: (id = 'glow') => `/ui/show/${id}/book`,         // D2
-  deposit: (id = 'glow') => `/ui/show/${id}/deposit`,   // D3
-  ticket: (id = 'glow') => `/ui/ticket/${id}`,          // D4
+  show: (id: string) => `/ui/show/${id}`,              // D1
+  book: (id: string) => `/ui/show/${id}/book`,         // D2
+  deposit: (id: string) => `/ui/show/${id}/deposit`,   // D3
+  ticket: (id: string) => `/ui/ticket/${id}`,          // D4
   tickets: '/ui/tickets',                               // S7
   notifications: '/ui/notifications',                   // S8
   me: '/ui/me',                                         // S14
@@ -48,14 +48,14 @@ export const P = {
   /** 부원 목록과 운영진 권한 — 운영진은 둘 이상을 권합니다 */
   clubMembers: '/ui/console/members',                   // S26
   console: '/ui/console',                               // S18 운영진 출발점
-  club: (id = 'melodic') => `/ui/club/${id}`,           // S4
+  club: (id: string) => `/ui/club/${id}`,           // S4
   recruitNew: '/ui/recruit/new',                        // S5
   proposal: (id = '1') => `/ui/proposal/${id}`,         // S6
   chat: (id = '1') => `/ui/chat/${id}`,                 // S9
   showNew: '/ui/show/new',                              // S10
   /** 공연이 지금 어디쯤인지 — 초안·팀 모으는 중·예매 중·마감 */
-  showStage: (id = 'glow') => `/ui/show/${id}/stage`,   // S28
-  run: (id = 'glow') => `/ui/show/${id}/run`,            // S19 공연 당일 운영 (타임라인·공지)
+  showStage: (id: string) => `/ui/show/${id}/stage`,   // S28
+  run: (id: string) => `/ui/show/${id}/run`,            // S19 공연 당일 운영 (타임라인·공지)
   /** 입금 계좌 — 예매자가 돈을 보낼 곳. 없으면 예매를 못 엽니다 */
   bankAccount: '/ui/console/account',                   // S29
   deposits: '/ui/deposits',                             // S11
@@ -68,19 +68,19 @@ export const P = {
   // 초대
   invite: '/ui/invite',                                 // S15
   inviteSms: '/ui/invite/sms',                          // S16
-  inviteCard: (code = 'glow') => `/ui/i/${code}`,       // S17
+  inviteCard: (code: string) => `/ui/i/${code}`,       // S17
 
   // 공연 당일 (티켓 구매 이후)
-  live: (id = 'glow') => `/ui/live/${id}`,                      // P1
-  liveStore: (id = 'glow') => `/ui/live/${id}/store`,           // P2
-  liveEntered: (id = 'glow') => `/ui/live/${id}/entered`,       // P3
-  livePeople: (id = 'glow') => `/ui/live/${id}/people`,         // P4
-  liveTap: (id = 'glow') => `/ui/live/${id}/tap`,               // P5
-  liveGuestbook: (id = 'glow') => `/ui/live/${id}/guestbook`,   // P6
+  live: (id: string) => `/ui/live/${id}`,                      // P1
+  liveStore: (id: string) => `/ui/live/${id}/store`,           // P2
+  liveEntered: (id: string) => `/ui/live/${id}/entered`,       // P3
+  livePeople: (id: string) => `/ui/live/${id}/people`,         // P4
+  liveTap: (id: string) => `/ui/live/${id}/tap`,               // P5
+  liveGuestbook: (id: string) => `/ui/live/${id}/guestbook`,   // P6
 
   // 연결
   connections: '/ui/connections',                       // C1
-  connection: (id = 'melodic') => `/ui/connections/${id}`, // C2
+  connection: (id: string) => `/ui/connections/${id}`, // C2
   connectionStages: '/ui/connections/stages',           // C3
   connected: '/ui/connections/new',                     // C4
 } as const

@@ -101,7 +101,7 @@ const S15Invite = () => {
           <MoreMenu
             items={[
               { label: '문자로 초대', to: P.inviteSms },
-              { label: '초대 카드 미리 보기', to: P.inviteCard() },
+              { label: '초대 카드 미리 보기', to: P.inviteCard(iv.eventId) },
             ]}
           />
         }
