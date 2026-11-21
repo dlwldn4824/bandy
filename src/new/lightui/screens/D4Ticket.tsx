@@ -13,6 +13,7 @@ import Sheet from '../components/Sheet.tsx'
 import DirectionsSheet from '../components/DirectionsSheet.tsx'
 import { P } from '../paths.ts'
 import { ticketFor, showLive } from '../../mocks/bandyLight.ts'
+import { useTicketState } from '../pay/ticketState.ts'
 import qr from '../assets/ticket-qr.svg'
 import './D4Ticket.css'
 
@@ -25,6 +26,12 @@ const D4Ticket = () => {
   const { showId = 'glow' } = useParams()
   // 공연마다 다른 티켓입니다 — 예전에는 어느 티켓을 눌러도 같은 화면이 나왔습니다
   const t = ticketFor(showId)
+  /**
+   * QR 과 입장 번호는 **돈이 확인된 뒤에만** 엽니다.
+   * 예전에는 입금 대기인 티켓에서도 열려서, 입금 안 한 사람이 입구까지
+   * 갔다가 거기서 막혔습니다. 막을 거면 집에서 알려 줘야 합니다.
+   */
+  const { state, canEnter, copy } = useTicketState(showId)
   const [refund, setRefund] = useState(false)
   const [dirs, setDirs] = useState(false)
 
@@ -49,8 +56,9 @@ const D4Ticket = () => {
         <div className="d4">
           <div className="d4__gap-14" />
           <div className="d4__status">
-            <span className="lui-pill lui-pill--ink">{t.status}</span>
-            <span className="lui-pill lui-pill--soft">{t.entry}</span>
+            <span className="lui-pill lui-pill--ink">{copy.pill}</span>
+            {/* 입장 번호는 확인된 티켓에만 있습니다 */}
+            {canEnter && <span className="lui-pill lui-pill--soft">{t.entry}</span>}
           </div>
 
           <div className="d4__gap-14" />
@@ -61,9 +69,19 @@ const D4Ticket = () => {
             </div>
             <div className="d4__notch" />
             <div className="d4__ticket-body">
-              <div className="d4__qr">
-                <img src={qr} alt="입장 QR" />
-              </div>
+              {canEnter ? (
+                <div className="d4__qr">
+                  <img src={qr} alt="입장 QR" />
+                </div>
+              ) : (
+                /* 빈 네모만 두면 고장으로 읽힙니다 — 왜 닫혀 있는지 적습니다 */
+                <div className="d4__qr d4__qr--locked">
+                  <span className="d4__locked-title">
+                    {state === 'cancelled' ? '취소한 예매예요' : 'QR 은 아직 닫혀 있어요'}
+                  </span>
+                  <span className="d4__locked-body">{copy.short}</span>
+                </div>
+              )}
               <div className="d4__facts">
                 {t.facts.map((f) => (
                   <div key={f.k} className="d4__fact">
@@ -76,10 +94,13 @@ const D4Ticket = () => {
           </div>
 
           <div className="d4__gap-26" />
-          <p className="d4__guide">{t.guide}</p>
+          <p className="d4__guide">{canEnter ? t.guide : copy.guide}</p>
 
           {/* MOCK: 입구 단말이 QR 을 읽으면 서버가 알려 줄 자리입니다.
-              붙기 전까지는 이 버튼으로 입장 완료(P3) 를 볼 수 있게 둡니다. */}
+              붙기 전까지는 이 버튼으로 입장 완료(P3) 를 볼 수 있게 둡니다.
+              입장할 수 없는 티켓에는 두지 않습니다 — 막아 둔 걸 옆에서 열어
+              주면 막은 적이 없는 것입니다. */}
+          {canEnter && (
           <button
             type="button"
             className="d4__demo"
@@ -87,6 +108,7 @@ const D4Ticket = () => {
           >
             입장 처리됨 (데모)
           </button>
+          )}
 
           {/* 예매하고 나면 다음으로 궁금한 건 「누가 언제 나오나」 입니다.
               예전에는 화면 맨 아래 작은 글씨 링크뿐이라 아무도 거기까지 안 갔습니다. */}

@@ -76,3 +76,18 @@
   padding-top: 11px; border-top: 1px solid var(--lui-hairline);
   font-size: 12.5px; font-weight: 700; color: var(--lui-accent);
 }
+
+/* 입금 확인 전 — QR 자리에 까닭을 둡니다 */
+.d4__qr--locked {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  padding: 14px;
+  border: 1px dashed var(--lui-field-line);
+  background: transparent;
+  text-align: left;
+}
+/* 티켓 안은 라이트·다크 상관없이 검정이라 글자색을 고정합니다 */
+.d4__locked-title { font-size: 13.5px; font-weight: 700; color: #fff; }
+.d4__locked-body { font-size: 11.5px; line-height: 17px; color: #9ba0a8; word-break: keep-all; }

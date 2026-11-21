@@ -5,6 +5,7 @@ import SectionHeader from '../components/SectionHeader.tsx'
 import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
 import { myTickets as t } from '../../mocks/bandyLight.ts'
+import { useTicketStates } from '../pay/ticketState.ts'
 import './S7Tickets.css'
 
 type TabKey = 'upcoming' | 'past' | 'cancelled'
@@ -21,7 +22,30 @@ const S7Tickets = () => {
 
   const asked = params.get('tab') as TabKey | null
   const tab: TabKey = t.tabs.some((x) => x.key === asked) ? (asked as TabKey) : 'upcoming'
-  const items = t.items.filter((item) => item.tab === tab)
+  /**
+   * 취소한 예매는 「취소 · 환불」 로 옮겨 갑니다 — D3 에서 취소를 누르면서
+   * 그렇게 말해 놓고 목록이 그대로면 취소가 안 된 것으로 보입니다.
+   */
+  const { stateOf } = useTicketStates()
+  const all = t.items.map((item) =>
+    stateOf(item.id) === 'cancelled'
+      ? // 취소한 예매에 「오늘」 빨강 배지가 그대로 붙어 있으면 아직 가는 줄 압니다
+        { ...item, tab: 'cancelled', badge: '취소함', urgent: false, today: false }
+      : item,
+  )
+  const items = all.filter((item) => item.tab === tab)
+
+  /**
+   * 날짜별 예매 수는 적어 둔 값이었습니다 — 취소해도 그대로 남습니다.
+   * 목록에서 셉니다. 「일반 2매 · 음료 1잔」 에서 매수만 꺼냅니다.
+   */
+  const counts = all
+    .filter((item) => item.tab === 'upcoming')
+    .map((item) => ({
+      k: item.when.split(' ')[0],
+      value: Number(/(\d+)매/.exec(item.what)?.[1] ?? 1),
+    }))
+  const countMax = Math.max(1, ...counts.map((c) => c.value))
 
   const goTab = (next: TabKey) => {
     const q = new URLSearchParams(params)
@@ -102,13 +126,14 @@ const S7Tickets = () => {
           <div className="s7__gap-26" />
           <SectionHeader title="다가오는 공연 예매 수" />
           <div className="lui-meters">
-            {t.counts.map((row) => (
+            {counts.map((row, i) => (
               <div key={row.k} className="lui-meter">
                 <span className="lui-meter__k">{row.k}</span>
                 <span className="lui-meter__track">
                   <span
-                    className={`lui-meter__fill lui-meter__fill--${row.tone}`}
-                    style={{ width: `${(row.value / t.countMax) * 100}%` }}
+                    /* 규칙 7 — 제일 가까운 공연 하나만 빨강 */
+                    className={`lui-meter__fill lui-meter__fill--${i === 0 ? 'accent' : 'soft'}`}
+                    style={{ width: `${(row.value / countMax) * 100}%` }}
                   />
                 </span>
                 <span className="lui-meter__v">{row.value}매</span>

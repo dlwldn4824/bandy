@@ -6,10 +6,12 @@ import Steps from '../components/Steps.tsx'
 import SectionHeader from '../components/SectionHeader.tsx'
 import SummaryBox from '../components/SummaryBox.tsx'
 import Button from '../components/Button.tsx'
+import Sheet from '../components/Sheet.tsx'
 import { P } from '../paths.ts'
 import { depositGuide as d, booking } from '../../mocks/bandyLight.ts'
 import CardPay from '../pay/CardPay.tsx'
 import { PAY_CONFIGURED } from '../pay/portone.ts'
+import { useTicketState } from '../pay/ticketState.ts'
 import {
   BANK,
   BANK_READY,
@@ -36,6 +38,14 @@ const D3Deposit = () => {
   // 결제 수단 탭. 카드가 준비되기 전에는 탭 자체를 그리지 않습니다 —
   // 고를 게 하나뿐인데 탭을 보여 주면 고를 수 있는 것처럼 보입니다.
   const [pay, setPay] = useState<'transfer' | 'card'>('transfer')
+  const [cancelling, setCancelling] = useState(false)
+  /**
+   * 「입금했어요」 는 **보냈다고 알리는 것**이지 확인이 아닙니다.
+   * 예전에는 누르면 바로 「입금 확인됨」 티켓이 나왔습니다 — 운영진이 통장을
+   * 보기도 전에요.
+   */
+  const { state, report, cancel } = useTicketState(showId)
+  const reported = state === 'reported'
 
   // 기한은 화면을 연 시각에서 계산하고, 남은 시간은 1초마다 다시 셉니다.
   // 적어 둔 「23:41:02」 는 어제 봐도 오늘 봐도 23:41:02 였습니다.
@@ -94,7 +104,9 @@ const D3Deposit = () => {
             <span className="lui-gloss lui-gloss--spec" aria-hidden>
               <img src={glossSpec} alt="" />
             </span>
-            <p className="lui-banner__title">아직 입금 전이에요</p>
+            <p className="lui-banner__title">
+              {reported ? '보냈다고 알렸어요' : '아직 입금 전이에요'}
+            </p>
             <p className="lui-banner__body">
               {dueText(due)}
               <br />
@@ -185,14 +197,44 @@ const D3Deposit = () => {
 
       <div className="lui-bottombar d3__bottom">
         {/* 규칙 1 — 보조 동작(예매 취소)은 외곽선 */}
-        <Button variant="ghost">예매 취소</Button>
-        {/* 보낼 계좌가 없으면 「입금했어요」 도 누를 수 없어야 합니다 */}
+        <Button variant="ghost" onClick={() => setCancelling(true)}>
+          예매 취소
+        </Button>
+        {/* 막는 까닭이 둘입니다 — 보낼 계좌가 없는 것과, 이미 알린 것.
+            같은 버튼이라도 이유가 다르니 글자를 달리 적습니다 */}
         {pay === 'transfer' && (
-          <Button disabled={!BANK_READY} onClick={() => navigate(P.ticket(showId))}>
-            입금했어요
+          <Button
+            disabled={!BANK_READY || reported}
+            onClick={() => {
+              report()
+              navigate(P.ticket(showId))
+            }}
+          >
+            {reported ? '확인 기다리는 중' : '입금했어요'}
           </Button>
         )}
       </div>
+      <Sheet open={cancelling} title="예매를 취소할까요?" onClose={() => setCancelling(false)}>
+        <p className="lui-menu__note">
+          자리가 풀리고 티켓은 「취소 · 환불」 로 옮겨 갑니다. 이미 보낸 돈이 있으면 운영진이
+          확인한 뒤 돌려줍니다. 같은 공연을 다시 예매할 수는 있지만 자리가 남아 있어야 합니다.
+        </p>
+        <div className="d3__pair">
+          <Button variant="ghost" onClick={() => setCancelling(false)}>
+            그대로 두기
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              cancel()
+              setCancelling(false)
+              navigate(P.show(showId))
+            }}
+          >
+            예매 취소
+          </Button>
+        </div>
+      </Sheet>
     </Phone>
   )
 }

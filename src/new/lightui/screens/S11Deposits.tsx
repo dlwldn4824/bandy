@@ -5,16 +5,29 @@ import TopBar from '../components/TopBar.tsx'
 import TabBar from '../components/TabBar.tsx'
 import { P } from '../paths.ts'
 import { deposits as d, type DepositRow } from '../../mocks/bandyLight.ts'
+import { COPY, useTicketStates } from '../pay/ticketState.ts'
 import './S11Deposits.css'
 
 /** S11 입금 관리 (주최자) — Figma 214:2 */
-const Row = ({ row, line, onConfirm }: { row: DepositRow; line?: boolean; onConfirm?: () => void }) => (
+const Row = ({
+  row,
+  line,
+  onConfirm,
+  live,
+}: {
+  row: DepositRow
+  line?: boolean
+  onConfirm?: () => void
+  /** 이 기기의 티켓과 묶인 줄 — 눌러서 실제로 열리는 유일한 줄입니다 */
+  live?: boolean
+}) => (
   <div className={`s11-row${line ? ' s11-row--line' : ''}`}>
     <div className="s11-row__top">
       <span className="s11-row__who">
         <span className="s11-row__name">{row.name}</span>
         {/* 입금 신고 = 예매자가 보냈다고 알린 건 (입금 대기와 구분) */}
         {row.reported && <span className="s11__reported">입금 신고</span>}
+        {live && <span className="s11__live">이 기기</span>}
       </span>
       <span className="s11-row__amount">{row.amount}</span>
     </div>
@@ -36,15 +49,22 @@ type FilterKey = (typeof d.filters)[number]['key']
 const S11Deposits = () => {
   const [filter, setFilter] = useState<FilterKey>('need')
   const [confirmed, setConfirmed] = useState<string[]>([])
+  // 묶인 줄은 적어 둔 값이 아니라 티켓 상태에서 읽습니다.
+  // 예매자가 「입금했어요」 를 누르면 여기 「입금 신고」 가 뜨고, 여기서
+  // 확인을 누르면 저쪽 QR 이 열립니다 — 그게 수동 확인의 전부입니다.
+  const { stateOf, confirm } = useTicketStates()
+  const live = d.needCheck.map((r) =>
+    r.showId ? { ...r, reported: stateOf(r.showId) === 'reported', state: COPY[stateOf(r.showId)].pill } : r,
+  )
 
-  const rows = d.needCheck.filter((r) => !confirmed.includes(r.name))
+  const rows = live.filter((r) => !confirmed.includes(r.name) && r.state !== '입금 확인됨')
   // 확인을 누르면 그만큼 「입금 완료」 쪽으로 옮겨 갑니다
-  const movedToPaid = d.needCheck.filter((r) => confirmed.includes(r.name))
+  const movedToPaid = live.filter((r) => confirmed.includes(r.name) || r.state === '입금 확인됨')
   const paid = [...movedToPaid.map((r) => ({ ...r, reported: false, state: '입금 완료' })), ...d.paid]
 
   const counts: Record<FilterKey, number> = {
     need: rows.length,
-    paid: d.done + confirmed.length,
+    paid: d.done + movedToPaid.length,
     refund: d.refunded.length,
   }
 
@@ -69,7 +89,7 @@ const S11Deposits = () => {
           <p className="s11__line">{d.summaryLine}</p>
           <div className="s11__gap-6" />
           <p className="s11__big">
-            {d.done + confirmed.length} <em>/ {d.total}</em>
+            {d.done + movedToPaid.length} <em>/ {d.total}</em>
           </p>
           <div className="s11__gap-18" />
           <div className="s11__filters">
@@ -103,7 +123,11 @@ const S11Deposits = () => {
                     key={row.name}
                     row={row}
                     line={i < rows.length - 1}
-                    onConfirm={() => setConfirmed((prev) => [...prev, row.name])}
+                    live={Boolean(row.showId)}
+                    onConfirm={() => {
+                      if (row.showId) confirm(row.showId)
+                      setConfirmed((prev) => [...prev, row.name])
+                    }}
                   />
                 ))
               )}

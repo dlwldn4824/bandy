@@ -805,6 +805,12 @@ export interface DepositRow {
   reported?: boolean
   /** 확인 버튼 대신 보여 줄 상태 문구 */
   state?: string
+  /**
+   * 이 기기의 티켓과 묶인 줄. 있으면 상태를 적어 둔 값이 아니라
+   * 실제 티켓 상태에서 읽습니다 — 눌러서 열리는 것을 보려면 하나는
+   * 진짜여야 합니다.
+   */
+  showId?: string
 }
 
 /**
@@ -870,7 +876,8 @@ export const deposits = {
     { key: 'refund' as const, label: '환불' },
   ],
   needCheck: [
-    { name: '이지우', amount: '34,000원', sub: '2매 · 11.20까지', reported: true },
+    // 이 기기가 산 티켓과 같은 줄입니다 (D3 → 여기 → D4 로 이어집니다)
+    { name: '이지우', amount: '34,000원', sub: '2매 · 11.20까지', showId: 'glow' },
     { name: '김민지', amount: '16,000원', sub: '1매 · 11.21까지', state: '입금 대기' },
     { name: '박서준', amount: '16,000원', sub: '1매 · 11.21까지', state: '입금 대기' },
     { name: '최유성', amount: '31,000원', sub: '2매 · 11.20까지', reported: true },

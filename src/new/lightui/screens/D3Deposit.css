@@ -52,3 +52,7 @@
 .d3__unset-body {
   margin: 8px 0 0; font-size: 12.5px; line-height: 1.75; color: var(--lui-sub);
 }
+
+/* 예매 취소 확인 */
+.d3__pair { display: flex; gap: 8px; }
+.d3__pair .lui-btn { flex: 1; min-width: 0; height: 46px; border-radius: 13px; font-size: 14px; }

@@ -62,3 +62,13 @@
 
 /* 이 칩에 보여 줄 게 없을 때 */
 .s11__empty { font-size: 12.5px; line-height: 20px; color: var(--lui-sub); padding: 14px 2px; }
+
+/* 이 기기의 티켓과 묶인 줄 */
+.s11__live {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--lui-r-pill);
+  background: var(--lui-chip);
+  color: var(--lui-sub);
+}
