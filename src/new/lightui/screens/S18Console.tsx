@@ -10,6 +10,7 @@ import MoreMenu from '../components/MoreMenu.tsx'
 import { P } from '../paths.ts'
 import { useMembers } from '../auth/members.ts'
 import { useJoinInbox } from '../auth/joinInbox.ts'
+import { useMembership } from '../auth/membership.ts'
 import { STAGE, useStages } from '../shows/stage.ts'
 import { clubConsole as c } from '../../mocks/bandyLight.ts'
 import './S18Console.css'
@@ -55,6 +56,13 @@ const S18Console = () => {
   const { pending } = useJoinInbox()
   // 공연이 지금 어디쯤인지 — 「입금 35/42」 만 있으면 아직 안 연 공연도 같아 보입니다
   const stageOf = useStages()
+  /**
+   * 머리에 쓰는 동아리는 **내 동아리**입니다 (M7).
+   * 목에 「멜로딕 · 광운대」 가 박혀 있어서, 다른 동아리 운영진으로 들어와도
+   * 멜로딕 운영 화면처럼 보였습니다. 아래 공연 목록은 아직 목이라 멜로딕
+   * 것이지만, 적어도 이름이 거짓말을 하지는 않게 둡니다.
+   */
+  const { membership } = useMembership()
 
   return (
     <Phone>
@@ -71,7 +79,7 @@ const S18Console = () => {
       />
       <div className="lui-body">
         <div className="s18">
-          <p className="s18__club">{c.club.name}</p>
+          <p className="s18__club">{membership?.clubName ?? c.club.name}</p>
           <div className="s18__gap-6" />
           <p className="s18__line">{c.summaryLine}</p>
 
