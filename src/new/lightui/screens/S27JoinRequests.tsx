@@ -6,6 +6,7 @@ import SectionHeader from '../components/SectionHeader.tsx'
 import Button from '../components/Button.tsx'
 import Sheet from '../components/Sheet.tsx'
 import { useJoinInbox } from '../auth/joinInbox.ts'
+import { approveJoin, rejectClubJoin } from '../auth/clubJoin.ts'
 import { useMembers } from '../auth/members.ts'
 import { joinInboxCopy as t, ourSchool, type JoinRequest } from '../../mocks/bandyLight.ts'
 import './S27JoinRequests.css'
@@ -22,7 +23,7 @@ import './S27JoinRequests.css'
  * 다른 학교면 눈에 띄게 적습니다.
  */
 const S27JoinRequests = () => {
-  const { pending, done, accept, reject } = useJoinInbox()
+  const { pending, done, accept, reject, mineId } = useJoinInbox()
   const { add } = useMembers()
   const [ask, setAsk] = useState<{ r: JoinRequest; to: 'accept' | 'reject' } | null>(null)
   /** 고른 까닭. 직접 쓰기면 own 에 들어갑니다 */
@@ -39,6 +40,8 @@ const S27JoinRequests = () => {
 
   const card = (r: JoinRequest) => {
     const outside = r.school !== ourSchool
+    // 목 세 줄과 섞이니 어느 것이 진짜인지 적습니다
+    const real = r.id === mineId
     return (
       <div key={r.id} className="lui-card s27-req">
         <div className="s27-req__head">
@@ -53,6 +56,8 @@ const S27JoinRequests = () => {
         </div>
 
         {/* 규칙 7 — 다른 학교는 틀린 게 아니라 확인할 것이라, 빨강 대신 테두리 */}
+        {real && <p className="s27-req__real">{t.realNote}</p>}
+
         {outside && (
           <p className="s27-req__flag">
             <span className="s27-req__flagtag">{t.other}</span>
@@ -155,16 +160,22 @@ const S27JoinRequests = () => {
             <Button
               onClick={() => {
                 if (!ask) return
-                accept(ask.r.id)
-                // 받으면 바로 부원 목록에 섭니다 — 받았는데 어디에도 없으면 안 받은 것입니다
-                add({
-                  id: ask.r.id,
-                  initial: ask.r.initial,
-                  name: ask.r.name,
-                  sub: ask.r.sub,
-                })
-                // TODO(피어): 신청자 기기의 소속도 여기서 생겨야 합니다 —
-                // auth/clubJoin.ts 의 approveJoin(ask.r.id) 를 이 자리에서 부르세요.
+                if (ask.r.id === mineId) {
+                  // 신청한 사람이 곧 나라서 부원 목록에 또 세우지 않습니다
+                } else {
+                  accept(ask.r.id)
+                  // 받으면 바로 부원 목록에 섭니다 — 받았는데 어디에도 없으면 안 받은 것입니다
+                  add({
+                    id: ask.r.id,
+                    initial: ask.r.initial,
+                    name: ask.r.name,
+                    sub: ask.r.sub,
+                  })
+                }
+                // 받아 준 줄이 이 기기가 보낸 신청이면 소속까지 여기서 생깁니다.
+                // 남의 신청을 받아 줬다고 운영진 자신의 소속이 바뀌면 안 되므로
+                // approveJoin 이 id 를 맞춰 보고 아니면 아무것도 하지 않습니다.
+                approveJoin(ask.r.id)
                 close()
               }}
             >
@@ -176,7 +187,8 @@ const S27JoinRequests = () => {
               disabled={!reason.trim()}
               onClick={() => {
                 if (!ask) return
-                reject(ask.r.id, reason)
+                if (ask.r.id === mineId) rejectClubJoin(reason.trim())
+                else reject(ask.r.id, reason)
                 close()
               }}
             >

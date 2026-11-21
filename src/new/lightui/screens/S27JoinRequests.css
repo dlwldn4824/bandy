@@ -98,3 +98,14 @@
 
 .s27__ask { display: flex; gap: 8px; }
 .s27__ask .lui-btn { flex: 1; min-width: 0; height: 46px; border-radius: 13px; font-size: 14px; }
+
+/* 목 사이에 섞인 진짜 신청 — 어느 줄이 실제로 동작하는지 */
+.s27-req__real {
+  font-size: 11.5px;
+  line-height: 17px;
+  color: var(--lui-accent-soft);
+  background: var(--lui-tint);
+  border-radius: 10px;
+  padding: 9px 11px;
+  word-break: keep-all;
+}
