@@ -8,6 +8,7 @@ import Icon from '../components/Icon.tsx'
 import Sheet from '../components/Sheet.tsx'
 import { P } from '../paths.ts'
 import { subjectParticle } from '../korean.ts'
+import { useRemembered } from '../local/remember.ts'
 import { venueBoard as v } from '../../mocks/bandyLight.ts'
 import { useMembership } from '../auth/membership.ts'
 import { freshVenue, useIsDemoVenue } from '../clubs/owner.ts'
@@ -23,13 +24,15 @@ const L3Venue = () => {
   const navigate = useNavigate()
   const appsRef = useRef<HTMLDivElement>(null)
   const [weekIndex, setWeekIndex] = useState(1)
-  const [open, setOpen] = useState(true)
-  const [rejected, setRejected] = useState<string[]>([])
+  // 공개를 내렸으면 내린 채로 — 다시 들어와서 또 공개돼 있으면 내렸는지 알 수 없습니다
+  const [open, setOpen] = useRemembered('venueOpen', true)
+  // 거절한 팀이 다시 목록에 서면 거절이 안 간 것처럼 보여 또 거절하게 됩니다
+  const [rejected, setRejected] = useRemembered<string[]>('venueRejected', [])
   const [rejecting, setRejecting] = useState<string | null>(null)
   // 수락도 거절과 같은 자리에서 끝나야 합니다. 전에는 「수락」 이 동아리
   // 입금 관리로 보냈는데, 공연장은 동아리가 아니라서 그 화면의 운영진
   // 게이트에 막혔습니다 — 자기 지원 팀을 받는 일인데 들어가지 못했습니다.
-  const [accepted, setAccepted] = useState<string[]>([])
+  const [accepted, setAccepted] = useRemembered<string[]>('venueAccepted', [])
   const [accepting, setAccepting] = useState<string | null>(null)
   const [note, setNote] = useState<{ title: string; text: string } | null>(null)
 
@@ -170,7 +173,7 @@ const L3Venue = () => {
               >
                 조건 수정
               </Button>
-              <Button variant="ghost" onClick={() => setOpen((on) => !on)}>
+              <Button variant="ghost" onClick={() => setOpen(!open)}>
                 {open ? '공개 내리기' : '다시 공개'}
               </Button>
             </div>
@@ -269,7 +272,7 @@ const L3Venue = () => {
           </Button>
           <Button
             onClick={() => {
-              if (accepting) setAccepted((prev) => [...prev, accepting])
+              if (accepting) setAccepted([...accepted, accepting])
               setAccepting(null)
             }}
           >
@@ -290,7 +293,7 @@ const L3Venue = () => {
           <Button
             variant="danger"
             onClick={() => {
-              if (rejecting) setRejected((prev) => [...prev, rejecting])
+              if (rejecting) setRejected([...rejected, rejecting])
               setRejecting(null)
             }}
           >

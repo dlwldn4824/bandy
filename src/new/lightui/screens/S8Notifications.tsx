@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import MoreMenu from '../components/MoreMenu.tsx'
@@ -13,6 +12,7 @@ import { useRole } from '../auth/role.ts'
 import { getSession } from '../auth/kakao.ts'
 import PushRow from '../push/PushRow.tsx'
 import { usePushPrefs } from '../push/prefs.ts'
+import { useRemembered } from '../local/remember.ts'
 import { notifications as n } from '../../mocks/bandyLight.ts'
 import './S8Notifications.css'
 
@@ -57,8 +57,10 @@ const S8Notifications = () => {
   const thisWeek = n.thisWeek.filter((i) => canSee(i.who))
   const rows = n.settings.filter((r) => canSee(r.who))
   const nothing = today.length === 0 && thisWeek.length === 0
-  // 「모두 읽음으로」 를 누르면 안 읽음 점을 전부 지웁니다
-  const [allRead, setAllRead] = useState(false)
+  // 「모두 읽음으로」 를 누르면 안 읽음 점을 전부 지웁니다. 다시 들어와도
+  // 지워진 채여야 합니다 — 읽음 표시가 되살아나면 읽은 사람이 안 읽은
+  // 것처럼 보이고, 무엇이 새 소식인지 알 수 없게 됩니다.
+  const [allRead, setAllRead] = useRemembered('notiAllRead', false)
 
   return (
     <Phone>
