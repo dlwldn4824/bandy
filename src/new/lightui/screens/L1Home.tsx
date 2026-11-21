@@ -43,7 +43,12 @@ const L1Home = () => {
             밴드와 연결할까요?
           </h1>
 
-          <SectionHeader title="이번 주 열리는 행사" aside={nearby.weekCount} />
+          {/* 이번 주만 보여 주면 다음 달 공연을 찾을 곳이 없습니다 */}
+          <SectionHeader
+            title="이번 주 열리는 행사"
+            aside="달력으로"
+            onAside={() => navigate(P.calendar)}
+          />
 
           <div className="l1__shows">
             {weekShows.map((show) => (

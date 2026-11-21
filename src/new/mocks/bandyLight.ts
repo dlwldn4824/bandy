@@ -268,6 +268,11 @@ export interface MapShow {
   lng: number
   poster?: string
   real?: boolean
+  /**
+   * 달력이 쓰는 기계용 날짜 — `YYYY-MM-DDTHH:mm`.
+   * 화면에 보이는 `date` 와 같은 날이어야 합니다. 둘이 어긋나면 달력이 거짓말을 합니다.
+   */
+  at: string
   /** 필터 칩이 거를 거리 — 오늘은 11.22 기준입니다 */
   when: 'today' | 'week' | 'later'
   genre: string
@@ -275,14 +280,14 @@ export interface MapShow {
 }
 
 export const mapShows: MapShow[] = [
-  { id: 'glow', title: '멜로딕 단독 공연', venue: '라디오가가', region: '서울 노원', date: '11.22 (토) 19:00', distance: '0.4km', lat: 37.6186, lng: 127.0583, poster: posters.draft, real: true, when: 'today', genre: '밴드' },
-  { id: 'lexa-melodic', title: '렉사 X 멜로딕', venue: '몽향', region: '서울 노원', date: '11.29 (토) 18:00', distance: '1.2km', lat: 37.6256, lng: 127.0629, poster: posters.union, real: true, when: 'week', genre: '밴드' },
-  { id: 'alive-night', title: '얼라이브 합동 공연', venue: '얼라이브홀', region: '서울 홍대', date: '12.06 (토) 19:30', distance: '11.8km', lat: 37.5556, lng: 126.923, poster: posters.glowCard, real: true, when: 'later', genre: '밴드' },
-  { id: 'sinchon-winter', title: '신촌 겨울 밴드전', venue: '신촌 파랑홀', region: '서울 신촌', date: '12.13 (토) 18:00', distance: '10.4km', lat: 37.5558, lng: 126.9365, when: 'later', genre: '밴드', free: true },
-  { id: 'seongsu-live', title: '성수 라이브 나이트', venue: '성수 언더스테이지', region: '서울 성수', date: '12.20 (토) 19:00', distance: '8.1km', lat: 37.5447, lng: 127.0557, when: 'later', genre: '밴드' },
-  { id: 'busan-seomyeon', title: '서면 인디 데이', venue: '서면 오방가라지', region: '부산 서면', date: '12.07 (일) 17:00', lat: 35.1578, lng: 129.0595, when: 'later', genre: '인디' },
-  { id: 'busan-gwangalli', title: '광안리 바다밴드', venue: '광안리 인디고', region: '부산 광안리', date: '12.14 (일) 18:00', lat: 35.1532, lng: 129.1186, when: 'later', genre: '밴드', free: true },
-  { id: 'daegu-heavy', title: '대구 합동 공연', venue: '대구 헤비', region: '대구 동성로', date: '12.21 (일) 18:00', lat: 35.8686, lng: 128.5944, when: 'later', genre: '밴드' },
+  { id: 'glow', title: '멜로딕 단독 공연', venue: '라디오가가', region: '서울 노원', date: '11.22 (토) 19:00', distance: '0.4km', lat: 37.6186, lng: 127.0583, poster: posters.draft, real: true, at: '2026-11-22T19:00', when: 'today', genre: '밴드' },
+  { id: 'lexa-melodic', title: '렉사 X 멜로딕', venue: '몽향', region: '서울 노원', date: '11.29 (토) 18:00', distance: '1.2km', lat: 37.6256, lng: 127.0629, poster: posters.union, real: true, at: '2026-11-29T18:00', when: 'week', genre: '밴드' },
+  { id: 'alive-night', title: '얼라이브 합동 공연', venue: '얼라이브홀', region: '서울 홍대', date: '12.06 (토) 19:30', distance: '11.8km', lat: 37.5556, lng: 126.923, poster: posters.glowCard, real: true, at: '2026-12-06T19:30', when: 'later', genre: '밴드' },
+  { id: 'sinchon-winter', title: '신촌 겨울 밴드전', venue: '신촌 파랑홀', region: '서울 신촌', date: '12.13 (토) 18:00', distance: '10.4km', lat: 37.5558, lng: 126.9365, at: '2026-12-13T18:00', when: 'later', genre: '밴드', free: true },
+  { id: 'seongsu-live', title: '성수 라이브 나이트', venue: '성수 언더스테이지', region: '서울 성수', date: '12.20 (토) 19:00', distance: '8.1km', lat: 37.5447, lng: 127.0557, at: '2026-12-20T19:00', when: 'later', genre: '밴드' },
+  { id: 'busan-seomyeon', title: '서면 인디 데이', venue: '서면 오방가라지', region: '부산 서면', date: '12.07 (일) 17:00', lat: 35.1578, lng: 129.0595, at: '2026-12-07T17:00', when: 'later', genre: '인디' },
+  { id: 'busan-gwangalli', title: '광안리 바다밴드', venue: '광안리 인디고', region: '부산 광안리', date: '12.14 (일) 18:00', lat: 35.1532, lng: 129.1186, at: '2026-12-14T18:00', when: 'later', genre: '밴드', free: true },
+  { id: 'daegu-heavy', title: '대구 합동 공연', venue: '대구 헤비', region: '대구 동성로', date: '12.21 (일) 18:00', lat: 35.8686, lng: 128.5944, at: '2026-12-21T18:00', when: 'later', genre: '밴드' },
 ]
 
 /** 지도를 처음 열었을 때 보이는 범위 — 노원 월계동 기준 */

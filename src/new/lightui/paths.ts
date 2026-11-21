@@ -21,6 +21,7 @@ export const P = {
   /** 카카오 말고 하나 더 — 애플 4.8 과 심사자 로그인 때문에 필요합니다 */
   email: (as?: JoinSide) => (as ? `/ui/start/email?as=${as}` : '/ui/start/email'),
   home: '/ui',                                          // L1
+  calendar: '/ui/calendar',                             // S23 월 단위 공연 일정
   map: '/ui/map',                                       // S2
   search: '/ui/search',                                 // S3
   show: (id = 'glow') => `/ui/show/${id}`,              // D1

@@ -6,6 +6,7 @@ import D2Book from './screens/D2Book.tsx'
 import D3Deposit from './screens/D3Deposit.tsx'
 import D4Ticket from './screens/D4Ticket.tsx'
 import S2Map from './screens/S2Map.tsx'
+import S23Calendar from './screens/S23Calendar.tsx'
 import L2Clubs from './screens/L2Clubs.tsx'
 import S18Console from './screens/S18Console.tsx'
 import S19Run from './screens/S19Run.tsx'
@@ -59,6 +60,7 @@ export const lightUiRoutes = [
   <Route key="ui-deposit" path="/ui/show/:showId/deposit" element={<D3Deposit />} />,
   <Route key="ui-ticket" path="/ui/ticket/:showId" element={<D4Ticket />} />,
   <Route key="ui-map" path="/ui/map" element={<S2Map />} />,
+  <Route key="ui-calendar" path="/ui/calendar" element={<S23Calendar />} />,
   <Route key="ui-clubs" path="/ui/clubs" element={<L2Clubs />} />,
   <Route key="ui-console" path="/ui/console" element={
       <ManagerOnly title="공연 관리" what="공연 관리">

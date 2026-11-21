@@ -40,6 +40,11 @@
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: 'tnum';
+  /* 한글은 글자 단위로 끊으면 「라디오가 / 가」 처럼 단어가 두 줄로 갈라집니다.
+     keep-all 로 띄어쓰기에서만 끊고, 띄어쓰기가 없는 긴 문자열(주소·토큰)은
+     anywhere 로 빠져나갈 길을 둡니다 — 없으면 화면 밖으로 삐져나갑니다. */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   overflow-x: clip;
 }
 
