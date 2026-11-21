@@ -200,22 +200,30 @@ export interface KnownClub {
   school: string | null
   /** 학교가 없을 때 대신 보여 줄 것 — 「서울 연합」 「노원 직장인」 */
   area?: string
+  /**
+   * 참여 코드 — 운영진이 단톡에 올리는 값.
+   *
+   * 앱은 다섯 군데에서 「운영진에게 받은 참여 코드로 들어온다」 고 말하는데
+   * 그 코드를 넣을 자리가 없었습니다. 이름으로만 찾을 수 있었습니다.
+   * 이제 이름 칸에 코드를 적어도 찾습니다.
+   */
+  code: string
   /** 부원 수 — 맞는 동아리인지 사람이 알아보는 단서 */
   members: number
   since: string
 }
 
 export const knownClubs: KnownClub[] = [
-  { id: 'melodic', name: '멜로딕', school: '광운대학교', members: 18, since: '2008' },
-  { id: 'bluenote', name: '블루노트', school: '광운대학교', members: 12, since: '2015' },
-  { id: 'lexa', name: '렉사', school: '한양대학교', members: 24, since: '2011' },
-  { id: 'harmonic', name: '하모닉', school: '삼육대학교', members: 15, since: '2013' },
-  { id: 'acappella', name: '아카펠라', school: '서울여자대학교', members: 11, since: '2017' },
-  { id: 'soriul', name: '소리울', school: '서울여자대학교', members: 9, since: '2019' },
-  { id: 'sonareum', name: '손아름', school: '인덕대학교', members: 14, since: '2012' },
+  { id: 'melodic', name: '멜로딕', school: '광운대학교', members: 18, since: '2008' , code: 'MELODIC26' },
+  { id: 'bluenote', name: '블루노트', school: '광운대학교', members: 12, since: '2015' , code: 'BLUENOTE26' },
+  { id: 'lexa', name: '렉사', school: '한양대학교', members: 24, since: '2011' , code: 'LEXA26' },
+  { id: 'harmonic', name: '하모닉', school: '삼육대학교', members: 15, since: '2013' , code: 'HARMONIC26' },
+  { id: 'acappella', name: '아카펠라', school: '서울여자대학교', members: 11, since: '2017' , code: 'ACAPPELLA26' },
+  { id: 'soriul', name: '소리울', school: '서울여자대학교', members: 9, since: '2019' , code: 'SORIUL26' },
+  { id: 'sonareum', name: '손아름', school: '인덕대학교', members: 14, since: '2012' , code: 'SONAREUM26' },
   // 학교가 없는 동아리도 있습니다 — 연합 · 직장인 · 지역 밴드
-  { id: 'nowon-union', name: '노원 연합밴드', school: null, area: '노원 연합', members: 31, since: '2020' },
-  { id: 'after6', name: '애프터식스', school: null, area: '직장인 밴드 · 공릉', members: 8, since: '2022' },
+  { id: 'nowon-union', name: '노원 연합밴드', school: null, area: '노원 연합', members: 31, since: '2020' , code: 'NOWON26' },
+  { id: 'after6', name: '애프터식스', school: null, area: '직장인 밴드 · 공릉', members: 8, since: '2022' , code: 'AFTER626' },
 ]
 
 const normalize = (v: string) => v.replace(/\s+/g, '').toLowerCase()
@@ -232,11 +240,18 @@ export function clubPlace(c: KnownClub): string {
  * 없는 동아리(연합 · 직장인 · 지역)는 그렇게 좁히면 영영 안 나옵니다.
  * 그래서 학교를 골랐어도 **이름을 적으면 학교 밖 동아리까지 같이** 찾습니다.
  */
+/** 적은 것이 코드와 정확히 맞는가 — 화면에서 「코드로 찾았어요」 라고 말해 줍니다 */
+export function matchesCode(club: KnownClub, query: string): boolean {
+  const q = normalize(query)
+  return q.length > 0 && normalize(club.code) === q
+}
+
 export function findClubs(school: string, query: string): KnownClub[] {
   const s = normalize(school)
   const q = normalize(query)
   return knownClubs.filter((c) => {
-    if (q && !normalize(c.name).includes(q)) return false
+    // 이름으로도 코드로도 찾습니다 — 운영진이 단톡에 올리는 건 코드입니다
+    if (q && !normalize(c.name).includes(q) && !normalize(c.code).includes(q)) return false
     if (!s) return true
     // 이름으로 찾는 중이면 학교 밖 동아리도 보여 줍니다
     if (c.school === null) return Boolean(q)

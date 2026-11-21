@@ -175,7 +175,7 @@ const S14Me = () => {
               <ListRow
                 avatar="+"
                 title="동아리 만들기 · 참여하기"
-                sub="만들면 운영진, 참여 코드로 들어오면 부원이 됩니다"
+                sub="만들면 운영진, 코드로 찾아 신청하면 받아 준 뒤 부원이 됩니다"
                 chevron
                 onClick={() => navigate(P.clubPick())}
               />

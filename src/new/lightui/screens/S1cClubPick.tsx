@@ -5,7 +5,7 @@ import TopBar from '../components/TopBar'
 import Button from '../components/Button'
 import Icon from '../components/Icon'
 import { P } from '../paths'
-import { findClubs, clubPlace, type KnownClub } from '../../mocks/auth'
+import { findClubs, clubPlace, matchesCode, type KnownClub } from '../../mocks/auth'
 import { rememberClubJoin } from '../auth/clubJoin'
 import './S1cClubPick.css'
 
@@ -70,7 +70,7 @@ const S1cClubPick = () => {
             className="lui-input"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="동아리 이름 (예: 멜로딕)"
+            placeholder="동아리 이름 또는 참여 코드"
             maxLength={30}
             autoFocus
           />
@@ -91,7 +91,15 @@ const S1cClubPick = () => {
               {/* 학교를 안 묻는 사람(직장인·그 외)에게는 목록이 전국입니다 —
                   「이 학교의」 라고 하면 어느 학교를 말하는지 알 수 없습니다 */}
               <p className="s1c__label">
-                {typed ? '찾은 동아리' : school ? '이 학교의 동아리' : '등록된 동아리'}
+                {/* 코드로 맞춘 것이면 그렇다고 말해 줍니다 — 운영진에게 받은
+                    코드가 맞는지 적은 사람이 확인할 수 있어야 합니다 */}
+                {typed
+                  ? matches.some((c) => matchesCode(c, typed))
+                    ? '코드로 찾았어요'
+                    : '찾은 동아리'
+                  : school
+                    ? '이 학교의 동아리'
+                    : '등록된 동아리'}
               </p>
               <div className="lui-card s1c__list">
                 {matches.map((club) => (
@@ -123,6 +131,15 @@ const S1cClubPick = () => {
             <p className="s1c__empty">
               {school ? `${school}에 ` : ''}등록된 동아리가 아직 없어요. 동아리 이름을 적으면
               새로 만들 수 있습니다.
+            </p>
+          )}
+
+          {/* 코드처럼 생긴 것을 적었는데 아무것도 안 나오면, 그건 새 동아리를
+              만들려는 게 아니라 코드를 잘못 적은 것입니다. 「ZZZZ99 새로
+              만들기」 를 먼저 보여 주면 오타가 동아리 이름이 됩니다. */}
+          {typed && matches.length === 0 && /^[A-Za-z0-9-]{4,}$/.test(typed.trim()) && (
+            <p className="s1c__empty">
+              그 참여 코드를 가진 동아리가 없어요. 운영진에게 받은 코드를 다시 확인해 주세요.
             </p>
           )}
 
