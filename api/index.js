@@ -18,6 +18,7 @@ import { handleClubConnectionsRequest } from '../server/lib/clubConnectionsApi.j
 import { handleProfileCardsRequest } from '../server/lib/profileCardsApi.js'
 import { handleOgTicketRequest } from '../server/lib/ogTicketApi.js'
 import { handleKakaoAuthRequest } from '../server/lib/kakaoAuthApi.js'
+import { handleEmailAuthRequest } from '../server/lib/emailAuthApi.js'
 
 /**
  * Hobby 플랜 함수 개수 제한 대응 — /api/* → 이 단일 함수로 rewrite
@@ -46,6 +47,11 @@ export default async function handler(req, res) {
   // 공연별 OG 티켓 이미지 — /api/og/:eventId (아직 placeholder)
   if (segments[0] === 'og') {
     return handleOgTicketRequest(req, res, segments[1])
+  }
+
+  // 이메일 로그인 — auth/email/send · auth/email/verify
+  if (segments[0] === 'auth' && segments[1] === 'email') {
+    return handleEmailAuthRequest(req, res, segments[2])
   }
 
   switch (segments.join('/')) {

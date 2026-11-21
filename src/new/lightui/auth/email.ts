@@ -1,98 +1,141 @@
-import { mockKakaoUser, type BandyUser } from '../../mocks/auth.ts'
+import { mockKakaoUser, type BandyUser } from '../../mocks/auth'
 
 /**
  * 이메일 로그인.
  *
- * 카카오 말고 하나가 더 필요해서 만들었습니다. 이유가 둘입니다.
- *
+ * 카카오 말고 하나가 더 필요한 이유는 둘입니다.
  *  1. 애플 심사자는 카카오 계정이 없습니다. 카카오뿐이면 로그인 화면에서
- *     막혀서 "기능이 동작하지 않음" 으로 떨어집니다 (가이드라인 2.1).
- *  2. 소셜 로그인으로 계정을 만들게 하면 애플은 같은 수준의 다른 로그인을
- *     하나 더 두라고 요구합니다 (가이드라인 4.8). 이름과 이메일만 받고,
- *     광고용으로 행동을 모으지 않아야 합니다 — 이 로그인이 그 조건입니다.
+ *     막혀 「기능이 동작하지 않음」 으로 떨어집니다 (가이드라인 2.1).
+ *  2. 소셜 로그인으로 계정을 만들게 하면 같은 수준의 다른 로그인을 하나 더
+ *     두라고 요구합니다 (가이드라인 4.8).
  *
- * MOCK: 지금은 서버가 없어서 코드를 브라우저가 만들고 브라우저가 확인합니다.
- * 실제로는 서버가 메일을 보내고 서버가 맞춰 봐야 합니다. 지금 구조로는
- * 코드를 아는 척만 하면 누구나 들어올 수 있습니다.
+ * 코드는 **서버가 만들고 서버가 맞춰 봅니다** (`/api/auth/email/*`).
+ * 브라우저가 코드를 쥐고 있으면 아는 척만 하면 누구나 들어올 수 있습니다.
+ *
+ * 서버가 없을 때(로컬에서 API 를 안 띄웠을 때)는 예전처럼 흉내만 냅니다 —
+ * 화면 흐름은 끊기지 않아야 하니까요.
  */
-
-const PENDING_KEY = 'bandy.lightui.emailCode'
 
 export class EmailSignInError extends Error {}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
-
 export function isEmail(value: string): boolean {
   return EMAIL_RE.test(value.trim())
 }
 
-interface Pending {
-  email: string
-  code: string
-  at: number
+/** 서버가 없을 때만 쓰는 자리 */
+const FALLBACK_KEY = 'bandy.lightui.emailCode'
+
+interface SendResult {
+  /** 메일이 실제로 갔는지. false 면 화면이 코드를 보여 줘야 합니다 */
+  delivered: boolean
+  /** 메일을 못 보낼 때만 옵니다 */
+  code?: string
 }
 
-/** 코드가 유효한 시간 — 10분 */
-const TTL = 10 * 60 * 1000
+const MESSAGES: Record<string, string> = {
+  invalid_email: '이메일 주소를 다시 확인해 주세요.',
+  too_many_requests: '요청이 너무 잦습니다. 잠시 뒤에 다시 해 주세요.',
+  send_failed: '메일을 보내지 못했어요. 잠시 뒤에 다시 해 주세요.',
+  no_pending_code: '코드를 먼저 받아 주세요.',
+  expired: '코드가 만료됐어요. 다시 받아 주세요.',
+  too_many_attempts: '여러 번 틀렸습니다. 코드를 다시 받아 주세요.',
+  wrong_code: '코드가 맞지 않아요.',
+  invalid_input: '6자리 숫자를 넣어 주세요.',
+}
 
-function readPending(): Pending | null {
+async function callApi(path: string, body: unknown) {
+  const res = await fetch(`/api/auth/email/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  // API 가 아예 없으면 SPA 폴백이 HTML 을 돌려줍니다 — JSON 파싱이 터집니다
+  const text = await res.text()
+  let data: Record<string, unknown> = {}
   try {
-    const raw = sessionStorage.getItem(PENDING_KEY)
-    if (!raw) return null
-    const p = JSON.parse(raw) as Pending
-    if (Date.now() - p.at > TTL) return null
-    return p
+    data = JSON.parse(text)
   } catch {
-    return null
+    throw new NoServerError()
   }
+  return { ok: res.ok, status: res.status, data }
 }
 
-/**
- * 인증 코드를 보냅니다.
- *
- * MOCK 이라 메일이 실제로 가지 않습니다. 그래서 만든 코드를 그대로 돌려줘서
- * 화면에 띄웁니다 — 키 없이도 흐름을 끝까지 볼 수 있어야 하고, 심사자도
- * 이 화면만 보고 들어올 수 있어야 합니다.
- */
-export async function sendEmailCode(email: string): Promise<{ sent: true; mockCode: string }> {
-  const addr = email.trim().toLowerCase()
-  if (!isEmail(addr)) throw new EmailSignInError('이메일 주소를 다시 확인해 주세요.')
+class NoServerError extends Error {}
 
-  await new Promise((r) => setTimeout(r, 600))
-
+/** 서버 없이 돌 때 — 브라우저가 코드를 만들고 들고 있습니다 */
+function fallbackSend(email: string): SendResult {
   const code = String(Math.floor(100000 + Math.random() * 900000))
   try {
-    sessionStorage.setItem(PENDING_KEY, JSON.stringify({ email: addr, code, at: Date.now() }))
+    sessionStorage.setItem(FALLBACK_KEY, JSON.stringify({ email, code, at: Date.now() }))
   } catch {
-    /* 저장이 막혀도 아래에서 코드를 화면에 보여 주므로 흐름은 이어집니다 */
+    /* 저장이 막혀도 화면이 코드를 보여 주므로 흐름은 이어집니다 */
   }
+  return { delivered: false, code }
+}
 
-  // TODO: 서버가 메일을 보내고 코드를 들고 있어야 합니다.
-  // 지금처럼 브라우저가 코드를 쥐고 있으면 아무나 들어올 수 있습니다.
-  return { sent: true, mockCode: code }
+function fallbackVerify(email: string, code: string) {
+  let saved: { email?: string; code?: string; at?: number } = {}
+  try {
+    saved = JSON.parse(sessionStorage.getItem(FALLBACK_KEY) || '{}')
+  } catch {
+    /* 무시 */
+  }
+  const fresh = Date.now() - (saved.at ?? 0) < 10 * 60 * 1000
+  if (!fresh || saved.email !== email) throw new EmailSignInError(MESSAGES.expired)
+  if (saved.code !== code) throw new EmailSignInError(MESSAGES.wrong_code)
+  try {
+    sessionStorage.removeItem(FALLBACK_KEY)
+  } catch {
+    /* 무시 */
+  }
+}
+
+export async function sendEmailCode(email: string): Promise<SendResult> {
+  const addr = email.trim().toLowerCase()
+  if (!isEmail(addr)) throw new EmailSignInError(MESSAGES.invalid_email)
+
+  try {
+    const { ok, data } = await callApi('send', { email: addr })
+    if (!ok) {
+      const key = String(data.error ?? '')
+      if (key === 'server_not_configured') return fallbackSend(addr)
+      if (key === 'cooldown') {
+        const sec = Number(data.retryAfterSec ?? 60)
+        throw new EmailSignInError(`${sec}초 뒤에 다시 받을 수 있어요.`)
+      }
+      throw new EmailSignInError(MESSAGES[key] ?? '코드를 보내지 못했어요.')
+    }
+    return {
+      delivered: Boolean(data.delivered),
+      code: typeof data.devCode === 'string' ? data.devCode : undefined,
+    }
+  } catch (e) {
+    if (e instanceof NoServerError) return fallbackSend(addr)
+    throw e
+  }
 }
 
 export async function verifyEmailCode(email: string, code: string): Promise<BandyUser> {
   const addr = email.trim().toLowerCase()
   const entered = code.trim()
-  if (entered.length !== 6) throw new EmailSignInError('6자리 숫자를 넣어 주세요.')
-
-  await new Promise((r) => setTimeout(r, 500))
-
-  const pending = readPending()
-  if (!pending || pending.email !== addr) {
-    throw new EmailSignInError('코드가 만료됐어요. 다시 받아 주세요.')
-  }
-  if (pending.code !== entered) {
-    throw new EmailSignInError('코드가 맞지 않아요.')
-  }
+  if (!/^\d{6}$/.test(entered)) throw new EmailSignInError(MESSAGES.invalid_input)
 
   try {
-    sessionStorage.removeItem(PENDING_KEY)
-  } catch {
-    /* 지우지 못해도 TTL 이 지나면 무효가 됩니다 */
+    const { ok, data } = await callApi('verify', { email: addr, code: entered })
+    if (!ok) {
+      const key = String(data.error ?? '')
+      if (key === 'server_not_configured') {
+        fallbackVerify(addr, entered)
+      } else {
+        throw new EmailSignInError(MESSAGES[key] ?? '확인하지 못했어요.')
+      }
+    }
+  } catch (e) {
+    if (e instanceof NoServerError) fallbackVerify(addr, entered)
+    else throw e
   }
 
-  // 이름은 가입 다음 단계(온보딩)에서 받습니다 — 여기서는 이메일만 압니다
+  // 이름·학교는 다음 단계(온보딩)에서 받습니다
   return { ...mockKakaoUser, id: `email:${addr}`, provider: 'email', email: addr, nickname: '' }
 }

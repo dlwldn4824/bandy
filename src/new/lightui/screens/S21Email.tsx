@@ -37,7 +37,8 @@ const S21Email = () => {
     try {
       const res = await sendEmailCode(email)
       setSentTo(email.trim().toLowerCase())
-      setMockCode(res.mockCode)
+      // 메일이 실제로 갔으면 코드를 화면에 띄우지 않습니다 — 받은 사람만 알아야 합니다
+      setMockCode(res.delivered ? null : (res.code ?? null))
     } catch (e) {
       setError(e instanceof EmailSignInError ? e.message : '코드를 보내지 못했어요.')
     } finally {
@@ -68,7 +69,7 @@ const S21Email = () => {
           <p className="s21__lead">
             {sentTo ? (
               <>
-                <b>{sentTo}</b> 로 6자리 코드를 보냈어요.
+                <b>{sentTo}</b> 로 6자리 코드를 보냈어요. 메일함을 확인해 주세요.
               </>
             ) : (
               '쓰시는 이메일 주소를 넣어 주세요. 6자리 코드를 보내 드려요.'
@@ -108,7 +109,7 @@ const S21Email = () => {
               {/* MOCK: 메일이 실제로 가지 않으니 여기 띄웁니다. 서버가 붙으면 사라집니다. */}
               {mockCode && (
                 <p className="s21__mock">
-                  메일 발송은 아직 붙지 않았습니다. 이번 코드는 <b>{mockCode}</b> 입니다.
+                  메일 발송 설정이 아직 없습니다. 이번 코드는 <b>{mockCode}</b> 입니다.
                 </p>
               )}
             </>
