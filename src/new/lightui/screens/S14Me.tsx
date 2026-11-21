@@ -15,6 +15,7 @@ import { useBlocked } from '../safety/report.ts'
 import { useRole } from '../auth/role.ts'
 import { useMembership } from '../auth/membership.ts'
 import { useMembers } from '../auth/members.ts'
+import { useClubJoin } from '../auth/clubJoin.ts'
 import { membersCopy } from '../../mocks/bandyLight.ts'
 import { me } from '../../mocks/bandyLight.ts'
 import { THEME_LABELS, useTheme, type ThemeMode } from '../theme.ts'
@@ -49,6 +50,11 @@ const S14Me = () => {
   const [heir, setHeir] = useState<string | null>(null)
   const mustHandOver = isManager && alone
   const heirs = members.filter((m) => !m.me)
+  /**
+   * 보낸 신청 — 한 번 떠나면 돌아올 길이 없던 화면입니다.
+   * 확인 코드(`BANDY-xxxxxx`)도 그 화면에만 있어서, 뒤로 나가면 끝이었습니다.
+   */
+  const sent = useClubJoin()
   const [delOpen, setDelOpen] = useState(false)
   const { count: blockedCount } = useBlocked()
 
@@ -93,6 +99,26 @@ const S14Me = () => {
                   </span>
                 }
                 onClick={() => navigate(P.club(membership.clubId))}
+              />
+            )}
+            {sent && (
+              <ListRow
+                avatar="…"
+                title="보낸 신청"
+                sub={
+                  sent.state === 'pending'
+                    ? sent.code
+                      ? `확인 코드 ${sent.code}`
+                      : `${sent.clubName} · 답을 기다리는 중`
+                    : `${sent.clubName} · ${sent.state === 'approved' ? '받아 줬어요' : '거절됐어요'}`
+                }
+                slot={
+                  sent.state === 'pending' ? (
+                    <span className="lui-pill lui-pill--lg lui-pill--outline">기다리는 중</span>
+                  ) : undefined
+                }
+                chevron
+                onClick={() => navigate(P.clubJoinSent)}
               />
             )}
             {inClub ? (
