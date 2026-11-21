@@ -826,6 +826,8 @@ export const clubConsole = {
       thumb: posters.glowCard,
       title: '멜로딕 단독 공연',
       when: '11.22 (일) 19:00 · 라디오가가',
+      /** 단계를 시계로 판정하려면 글자 말고 날짜가 있어야 합니다 */
+      at: '2026-11-22T19:00',
       paid: 35,
       total: 42,
       /** 미입금이 있으면 빨강 (규칙 7) */
@@ -836,6 +838,7 @@ export const clubConsole = {
       thumb: posters.union,
       title: '렉사 X 멜로딕 연합',
       when: '11.29 (일) 18:00 · 몽향',
+      at: '2026-11-29T18:00',
       paid: 12,
       total: 20,
       urgent: false,
@@ -847,6 +850,7 @@ export const clubConsole = {
       thumb: posters.draft,
       title: '가을 연합 공연',
       when: '10.11 (토) · 라디오가가',
+      at: '2026-10-11T19:00',
       state: '정산 대기',
     },
   ],
@@ -862,6 +866,29 @@ export const clubConsole = {
     { key: 'entry' as const, title: '입장 관리', value: '공연 당일' },
     { key: 'settlement' as const, title: '정산', value: '1건 대기' },
   ],
+  stageCopy: {
+    title: '공연 상태',
+    now: '지금',
+    whoSees: '누가 보나요',
+    open: '예매 열기',
+    close: '예매 닫기',
+    reopen: '다시 열기',
+    openAsk: '예매를 열까요?',
+    openBody:
+      '이 공연이 둘러보기와 지도에 뜨고, 누구나 표를 살 수 있게 됩니다. 언제든 다시 닫을 수 있어요.',
+    closeAsk: '예매를 닫을까요?',
+    closeBody:
+      '더 이상 새로 살 수 없습니다. 이미 산 표는 그대로고, 자리가 남으면 다시 열 수 있어요.',
+    need: '열기 전에 갖춰야 할 것',
+    needNote: '하나라도 비어 있으면 예매를 열 수 없습니다.',
+    lockedToday: '오늘이 공연 날이라 단계를 바꿀 수 없습니다. 입장과 타임라인은 공연 당일 화면에서 봅니다.',
+    lockedDone: '끝난 공연이라 단계를 바꿀 수 없습니다. 남은 것은 정산입니다.',
+    back: '초안으로 되돌리기',
+    backAsk: '초안으로 되돌릴까요?',
+    backBody: '둘러보기에서 사라지고 우리만 보게 됩니다. 이미 산 표가 있으면 되돌릴 수 없어요.',
+    /** 산 사람은 total, 그중 돈이 들어온 것이 paid 입니다 — 뒤집으면 숫자가 거짓말을 합니다 */
+    sold: (paid: number, total: number) => `${total}명이 샀습니다 · 입금 확인 ${paid}/${total}`,
+  },
   note: '공연 만들기와 입금·정산은 동아리 운영진만 할 수 있습니다. 부원에게 권한을 주려면 위의 「부원」 에서 운영진으로 올려 주세요.',
 }
 
@@ -1296,7 +1323,13 @@ export const notifications = {
     { initial: '윤', title: '윤도현 님이 참여를 신청했어요', sub: '멜로딕 · 2시간 전', unread: true, to: 'joins', who: 'manager' as const },
     { initial: '렉', title: '렉사가 교류를 신청했어요', sub: '연합 공연 · 2시간 전', unread: true, to: 'proposal', who: 'manager' as const },
     { initial: '멜', title: '입금이 확인됐어요', sub: '멜로딕 단독 공연 · 4시간 전', unread: true, to: 'ticket', who: 'ticket' as const },
-    { initial: '라', title: '라디오가가가 3월 14일을 공개했어요', sub: '공연장 · 7시간 전', to: 'venue', who: 'all' as const },
+    // 공연장이 빈 날을 열었다는 소식입니다. 관객이 할 일은 없고 — 자리를
+    // 잡아야 하는 쪽은 공연을 올리는 운영진입니다. 전에는 who: 'all' 에
+    // to: 'venue' 라서, 관객이 이 한 줄로 남의 공연장 운영 화면을 열었습니다.
+    //
+    // 갈 곳은 아직 비워 둡니다. 운영진이 봐야 하는 건 그 공연장의 **빈 날
+    // 목록**인데 그 화면이 아직 없습니다. 없는 곳으로 보내느니 안 보냅니다.
+    { initial: '라', title: '라디오가가가 3월 14일을 공개했어요', sub: '공연장 · 7시간 전', who: 'manager' as const },
   ],
   thisWeek: [
     { initial: '손', title: '손아픔이 새 공연을 열었어요', sub: '12.06 홍대 · 2일 전', to: 'show', who: 'all' as const },

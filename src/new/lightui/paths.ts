@@ -53,6 +53,8 @@ export const P = {
   proposal: (id = '1') => `/ui/proposal/${id}`,         // S6
   chat: (id = '1') => `/ui/chat/${id}`,                 // S9
   showNew: '/ui/show/new',                              // S10
+  /** 공연이 지금 어디쯤인지 — 초안·팀 모으는 중·예매 중·마감 */
+  showStage: (id = 'glow') => `/ui/show/${id}/stage`,   // S28
   run: (id = 'glow') => `/ui/show/${id}/run`,            // S19 공연 당일 운영 (타임라인·공지)
   deposits: '/ui/deposits',                             // S11
   settlement: '/ui/settlement',                         // S13

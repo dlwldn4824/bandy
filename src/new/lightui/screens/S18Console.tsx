@@ -10,6 +10,7 @@ import MoreMenu from '../components/MoreMenu.tsx'
 import { P } from '../paths.ts'
 import { useMembers } from '../auth/members.ts'
 import { useJoinInbox } from '../auth/joinInbox.ts'
+import { STAGE, useStages } from '../shows/stage.ts'
 import { clubConsole as c } from '../../mocks/bandyLight.ts'
 import './S18Console.css'
 
@@ -52,6 +53,8 @@ const S18Console = () => {
   // 부원 수는 세어서 적습니다 — 목에 박아 두면 올리고 내려도 그대로입니다
   const { members, managers } = useMembers()
   const { pending } = useJoinInbox()
+  // 공연이 지금 어디쯤인지 — 「입금 35/42」 만 있으면 아직 안 연 공연도 같아 보입니다
+  const stageOf = useStages()
 
   return (
     <Phone>
@@ -80,7 +83,7 @@ const S18Console = () => {
                 key={show.id}
                 avatar={<img src={show.thumb} alt="" />}
                 title={show.title}
-                sub={show.when}
+                sub={`${STAGE[stageOf(show)].label} · ${show.when}`}
                 slot={
                   /* 규칙 7 — 미입금이 남은 공연만 빨강 */
                   <span className={`lui-pill lui-pill--lg${show.urgent ? '' : ' lui-pill--outline'}`}>
@@ -88,7 +91,7 @@ const S18Console = () => {
                   </span>
                 }
                 chevron
-                onClick={() => navigate(P.run(show.id))}
+                onClick={() => navigate(P.showStage(show.id))}
               />
             ))}
           </div>
@@ -104,7 +107,7 @@ const S18Console = () => {
                 sub={show.when}
                 slot={<span className="lui-pill lui-pill--lg lui-pill--outline">{show.state}</span>}
                 chevron
-                onClick={() => navigate(P.settlement)}
+                onClick={() => navigate(P.showStage(show.id))}
               />
             ))}
           </div>
