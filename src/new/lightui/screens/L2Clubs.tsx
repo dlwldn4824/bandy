@@ -110,6 +110,71 @@ const L2Clubs = () => {
           )}
 
           <div className="l2__gap-26" />
+          {/* 우리 동아리와 찜한 동아리에서 무슨 일이 있었나 — 이 탭에서 제일 자주 볼 것 */}
+          <SectionHeader title="소식" aside="우리 · 찜한 동아리" />
+          <div className="l2__gap-12" />
+          {/* 카드도 아바타도 없이 — 읽는 것이라 글이 앞에 섭니다 */}
+          <div className="l2__news">
+            {clubFeed.news.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                className="l2-news"
+                onClick={() =>
+                  navigate(n.to === 'show' ? P.show(showRun.showId) : P.club('melodic'))
+                }
+              >
+                <span className="l2-news__rail" aria-hidden />
+                <span className="l2-news__body">
+                  <span className="l2-news__text">{n.text}</span>
+                  <span className="l2-news__who">
+                    <span
+                      className={`l2-news__from${n.source === 'mine' ? ' l2-news__from--mine' : ''}`}
+                    >
+                      {n.source === 'mine' ? '우리 동아리' : '찜한 동아리'}
+                    </span>
+                    {n.club} · {n.at}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="l2__gap-26" />
+          <SectionHeader
+            title={clubFeed.suggestTitle}
+            aside="더보기"
+            onAside={() => navigate(P.search)}
+          />
+          <p className="l2__note">{clubFeed.suggestNote}</p>
+          <div className="l2__gap-12" />
+          <div className="l2__sug">
+            {suggestions.map(({ club, reasons, sub }) => (
+              <button
+                key={club.id}
+                type="button"
+                className="l2-sug"
+                onClick={() => navigate(P.club(club.id))}
+              >
+                <span className="l2-sug__head">
+                  <span className="l2-sug__avatar">{club.initial}</span>
+                  <span className="l2-sug__who">
+                    <span className="l2-sug__name">{club.name}</span>
+                    <span className="l2-sug__sub">{sub}</span>
+                  </span>
+                </span>
+                {/* 근거는 한 줄로 이어 붙이지 않고 하나씩 세웁니다 — 그래야 읽힙니다 */}
+                <span className="l2-sug__why">
+                  {reasons.map((r) => (
+                    <span key={r} className="l2-sug__reason">
+                      {r}
+                    </span>
+                  ))}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="l2__gap-26" />
           <SectionHeader
             title="찜한 동아리"
             aside={following.length > 0 ? String(following.length) : undefined}
@@ -150,54 +215,6 @@ const L2Clubs = () => {
             </div>
           )}
 
-          <div className="l2__gap-26" />
-          <SectionHeader title="소식" />
-          <div className="l2__gap-12" />
-          {/* 카드도 아바타도 없이 — 읽는 것이라 글이 앞에 섭니다 */}
-          <div className="l2__news">
-            {clubFeed.news.map((n) => (
-              <button
-                key={n.id}
-                type="button"
-                className="l2-news"
-                onClick={() =>
-                  navigate(n.to === 'show' ? P.show(showRun.showId) : P.club('melodic'))
-                }
-              >
-                <span className="l2-news__rail" aria-hidden />
-                <span className="l2-news__body">
-                  <span className="l2-news__text">{n.text}</span>
-                  <span className="l2-news__who">
-                    {n.club} · {n.at}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div className="l2__gap-26" />
-          <SectionHeader
-            title={clubFeed.suggestTitle}
-            aside="더보기"
-            onAside={() => navigate(P.search)}
-          />
-          <p className="l2__note">{clubFeed.suggestNote}</p>
-          <div className="l2__gap-12" />
-          <div className="l2__sug">
-            {suggestions.map(({ club, reason, sub }) => (
-              <button
-                key={club.id}
-                type="button"
-                className="l2-sug"
-                onClick={() => navigate(P.club(club.id))}
-              >
-                <span className="l2-sug__avatar">{club.initial}</span>
-                <span className="l2-sug__name">{club.name}</span>
-                <span className="l2-sug__why">{reason}</span>
-                <span className="l2-sug__sub">{sub}</span>
-              </button>
-            ))}
-          </div>
 
           <div className="l2__gap-26" />
         </div>

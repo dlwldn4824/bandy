@@ -5,7 +5,7 @@ import ShowMap from '../components/ShowMap.tsx'
 import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
 import { mapShows, mapHome, myLocation, mapFilters, type MapShow } from '../../mocks/bandyLight.ts'
-import '../screens/S2Map.css'
+import './MapPanel.css'
 
 /**
  * 둘러보기의 「지도」 칸 — Figma 205:2 (S2)

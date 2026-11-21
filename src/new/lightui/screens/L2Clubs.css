@@ -215,7 +215,17 @@
 .l2-news:not(:first-child) .l2-news__rail::before { background: var(--lui-track-2); }
 .l2-news__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-bottom: 18px; }
 .l2-news__text { font-size: 14px; font-weight: 600; line-height: 20px; color: var(--lui-ink); word-break: keep-all; }
-.l2-news__who { font-size: 11.5px; color: var(--lui-sub-2); }
+.l2-news__who { font-size: 11.5px; color: var(--lui-sub-2); display: flex; align-items: center; gap: 6px; }
+/* 우리 동아리 것인지 찜한 곳 것인지 — 글만 보면 구분이 안 됩니다 */
+.l2-news__from {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--lui-r-pill);
+  background: var(--lui-chip);
+  color: var(--lui-sub);
+}
+.l2-news__from--mine { background: var(--lui-tint); color: var(--lui-accent-soft); }
 
 /* ── 추천 — 작은 타일.
    격자로 두면 셋이 두 칸에 안 맞아 하나가 혼자 남습니다. 옆으로 흐르게 두면
@@ -230,7 +240,7 @@
 }
 .l2__sug::-webkit-scrollbar { display: none; }
 .l2-sug {
-  width: 146px;
+  width: 182px;
   flex: none;
   background: var(--lui-card);
   border: 1px solid var(--lui-line-2);
@@ -238,18 +248,38 @@
   padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 11px;
   text-align: left;
 }
+.l2-sug__head { display: flex; align-items: center; gap: 10px; }
+/* 글자 하나짜리 썸네일이라 작으면 아무것도 아닌 게 됩니다 */
 .l2-sug__avatar {
-  width: 34px; height: 34px;
+  width: 46px; height: 46px; flex: none;
   border-radius: var(--lui-r-pill);
-  background: var(--lui-chip);
+  background: var(--lui-tint);
   display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 700; color: var(--lui-ink);
+  font-size: 17px; font-weight: 800; color: var(--lui-accent);
 }
-.l2-sug__name { font-size: 14px; font-weight: 700; color: var(--lui-ink); }
-.l2-sug__why { font-size: 11.5px; line-height: 17px; color: var(--lui-sub); word-break: keep-all; }
-
-/* 추천 — 왜 나왔는지(reason)와 보조 정보(올해 공연)를 나눠 적습니다 */
-.l2-sug__sub { font-size: 10.5px; color: var(--lui-sub-2); }
+.l2-sug__who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.l2-sug__name { font-size: 14.5px; font-weight: 700; color: var(--lui-ink); letter-spacing: -0.1px; }
+.l2-sug__sub { font-size: 11px; color: var(--lui-sub-2); }
+/* 근거는 한 줄씩 — 앞에 점을 찍어 「왜 떴는지」 가 눈에 들어오게 */
+.l2-sug__why { display: flex; flex-direction: column; gap: 5px; }
+.l2-sug__reason {
+  position: relative;
+  padding-left: 11px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--lui-body);
+  word-break: keep-all;
+}
+.l2-sug__reason::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 4px;
+  height: 4px;
+  border-radius: var(--lui-r-pill);
+  background: var(--lui-accent);
+}

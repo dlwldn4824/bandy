@@ -18,7 +18,7 @@ import {
   ymOf,
   type YearMonth,
 } from '../calendar.ts'
-import '../screens/S23Calendar.css'
+import './CalendarPanel.css'
 
 /**
  * 둘러보기의 「달력」 칸 — Figma 프레임 없음.

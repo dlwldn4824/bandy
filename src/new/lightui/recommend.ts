@@ -41,8 +41,12 @@ export interface MyFacts {
 export interface Suggestion {
   club: ClubFacts
   score: number
-  /** 화면에 그대로 적는 한 줄 */
-  reason: string
+  /**
+   * 화면에 그대로 적는 근거들. 최대 둘입니다.
+   * 한 줄로 이어 붙여 주면 화면에서 다시 쪼갤 수가 없어 배열로 줍니다 —
+   * 근거 하나하나를 따로 세워야 읽힙니다.
+   */
+  reasons: string[]
   /** 보조 — 올해 공연 수 같은 것 */
   sub: string
 }
@@ -84,13 +88,11 @@ export function recommendClubs(all: ClubFacts[], me: MyFacts, limit = 3): Sugges
     const score = sig.reduce((n, s) => n + s.score, 0)
     // 제일 센 신호를 이유로 삼고, 두 번째가 있으면 한 번 더 붙입니다
     const sorted = [...sig].sort((a, b) => b.score - a.score)
-    const reason = sorted.length
-      ? sorted.slice(0, 2).map((s) => s.reason).join(' · ')
-      : ''
+    const reasons = sorted.slice(0, 2).map((s) => s.reason)
     return {
       club,
       score,
-      reason,
+      reasons,
       sub: club.thisYearShows > 0 ? `올해 공연 ${club.thisYearShows}회` : '올해 공연 없음',
     }
   })
@@ -106,7 +108,10 @@ export function recommendClubs(all: ClubFacts[], me: MyFacts, limit = 3): Sugges
   const rest = scored
     .filter((s) => s.score < ENOUGH)
     .sort(() => Math.random() - 0.5)
-    .map((s) => ({ ...s, reason: s.reason || '아직 아는 게 적어서 골라 봤어요' }))
+    .map((s) => ({
+      ...s,
+      reasons: s.reasons.length ? s.reasons : ['아직 아는 게 적어서 골라 봤어요'],
+    }))
 
   return [...solid.sort((a, b) => b.score - a.score), ...rest].slice(0, limit)
 }

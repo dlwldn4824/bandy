@@ -123,7 +123,7 @@ export default function Poster({ p }: { p: PosterData }) {
         <div className="b-po__sky-bar">
           <span>BANDY</span>
           <span>{p.venue}</span>
-          <span>예매 bandy.kr</span>
+          <span>예매 hibandy.com</span>
         </div>
       </div>
     )

@@ -391,8 +391,14 @@ export const clubDetail = {
   initial: '멜',
   name: '멜로딕',
   sub: '광운대학교 · 밴드 · 2008년 창단',
-  /** 인스타그램 계정 (@ 없이). 없는 동아리는 비워 둡니다 — 죽은 링크를 만들지 않습니다 */
-  instagram: 'melodic_kw',
+  /**
+   * 인스타그램 계정 (@ 없이).
+   *
+   * 비워 둡니다. 한동안 `melodic_kw` 같은 그럴듯한 값을 넣어 두었는데, 지어낸
+   * 계정이라 누르면 없는 페이지이거나 남의 계정으로 갑니다. 동아리가 직접
+   * 적어 넣기 전까지는 비어 있는 게 맞습니다 — 화면도 값이 없으면 안 그립니다.
+   */
+  instagram: '',
   stats: [
     { k: '부원', v: '18' },
     { k: '올해 공연', v: '2' },
@@ -434,7 +440,6 @@ export const clubsById: Record<string, ClubDetail> = {
     initial: '렉',
     name: '렉사',
     sub: '한양대학교 · 밴드 · 2011년 창단',
-    instagram: 'lexa_hyu',
     stats: [
       { k: '부원', v: '24' },
       { k: '올해 공연', v: '3' },
@@ -458,7 +463,6 @@ export const clubsById: Record<string, ClubDetail> = {
     initial: '하',
     name: '하모닉',
     sub: '삼육대학교 · 밴드 · 2015년 창단',
-    instagram: 'harmonic_syu',
     stats: [
       { k: '부원', v: '12' },
       { k: '올해 공연', v: '4' },
@@ -481,7 +485,6 @@ export const clubsById: Record<string, ClubDetail> = {
     initial: '아',
     name: '아카펠라',
     sub: '서울여자대학교 · 아카펠라 · 2013년 창단',
-    instagram: 'acappella_kw',
     stats: [
       { k: '부원', v: '9' },
       { k: '올해 공연', v: '2' },
@@ -501,7 +504,6 @@ export const clubsById: Record<string, ClubDetail> = {
     initial: '손',
     name: '손아픔',
     sub: '서울과학기술대학교 · 밴드 · 2018년 창단',
-    instagram: 'sonapeum_seoultech',
     stats: [
       { k: '부원', v: '11' },
       { k: '올해 공연', v: '2' },
@@ -521,7 +523,6 @@ export const clubsById: Record<string, ClubDetail> = {
     initial: '블',
     name: '블루노트',
     sub: '서울여자대학교 · 밴드 · 2010년 창단',
-    instagram: 'bluenote_swu',
     stats: [
       { k: '부원', v: '14' },
       { k: '올해 공연', v: '2' },
@@ -1129,22 +1130,41 @@ export const myTickets = {
 
 /* ── S8 알림 ────────────────────────────────────────── */
 export const notifications = {
+  /**
+   * 알림마다 「누구에게 갈 수 있는 알림인가」 를 적어 둡니다.
+   *
+   *   ticket   예매한 사람에게만 (입금 확인, 공연 하루 전)
+   *   manager  운영진에게만 (교류 제안, 지원 현황)
+   *   all      누구나 (찜한 동아리 소식, 주변 공연)
+   *
+   * 적어 두지 않으면 방금 관객으로 가입한 사람에게 「입금이 확인됐어요」 가
+   * 뜹니다. 데모를 채우려고 넣은 줄이 실제 상태를 덮는 것이라, membership 의
+   * 기본값에서 겪은 것과 같은 문제입니다.
+   */
   today: [
-    { initial: '렉', title: '렉사가 교류를 신청했어요', sub: '연합 공연 · 2시간 전', unread: true, to: 'proposal' },
-    { initial: '멜', title: '입금이 확인됐어요', sub: '멜로딕 단독 공연 · 4시간 전', unread: true, to: 'ticket' },
-    { initial: '라', title: '라디오가가가 3월 14일을 공개했어요', sub: '공연장 · 7시간 전', to: 'venue' },
+    { initial: '렉', title: '렉사가 교류를 신청했어요', sub: '연합 공연 · 2시간 전', unread: true, to: 'proposal', who: 'manager' as const },
+    { initial: '멜', title: '입금이 확인됐어요', sub: '멜로딕 단독 공연 · 4시간 전', unread: true, to: 'ticket', who: 'ticket' as const },
+    { initial: '라', title: '라디오가가가 3월 14일을 공개했어요', sub: '공연장 · 7시간 전', to: 'venue', who: 'all' as const },
   ],
   thisWeek: [
-    { initial: '손', title: '손아픔이 새 공연을 열었어요', sub: '12.06 홍대 · 2일 전', to: 'show' },
-    { initial: '아', title: '아카펠라 겨울 정기가 매진됐어요', sub: '12.06 · 3일 전', to: 'show' },
-    { initial: '하', title: '하모닉이 제안을 수락했어요', sub: '연합 공연 · 4일 전', to: 'proposal' },
+    { initial: '손', title: '손아픔이 새 공연을 열었어요', sub: '12.06 홍대 · 2일 전', to: 'show', who: 'all' as const },
+    { initial: '아', title: '아카펠라 겨울 정기가 매진됐어요', sub: '12.06 · 3일 전', to: 'show', who: 'all' as const },
+    { initial: '하', title: '하모닉이 제안을 수락했어요', sub: '연합 공연 · 4일 전', to: 'proposal', who: 'manager' as const },
   ],
+  /** 받을 게 없을 때 — 제목만 덩그러니 남지 않게 */
+  empty: {
+    today: '오늘 온 알림이 없어요.',
+    week: '이번 주에 온 알림이 없어요.',
+    all: '아직 받은 알림이 없어요.',
+    allBody: '공연을 예매하거나 동아리를 찜해 두면 여기로 소식이 옵니다.',
+  },
   settings: [
-    { id: 'before', title: '공연 하루 전 알림', sub: '예매한 공연만', on: true },
-    { id: 'proposal', title: '교류 제안 알림', sub: '운영진만 받아요', on: true },
-    { id: 'nearby', title: '주변 공연 소식', sub: '반경 3km', on: false },
+    { id: 'before', title: '공연 하루 전 알림', sub: '예매한 공연만', on: true, who: 'all' as const },
+    { id: 'proposal', title: '교류 제안 알림', sub: '운영진만 받아요', on: true, who: 'manager' as const },
+    { id: 'nearby', title: '주변 공연 소식', sub: '반경 3km', on: false, who: 'all' as const },
   ],
 }
+
 
 /* ── S14 마이 ───────────────────────────────────────── */
 export const me = {
@@ -1175,9 +1195,10 @@ export const me = {
 export const invite = {
   eventId: 'glow',
   code: 'ab12cd',
-  link: 'bandy.kr/i/ab12cd',
-  // MOCK: 실제 배포 주소가 정해지면 여기만 바꾸면 됩니다
-  fullLink: 'https://bandy.kr/i/ab12cd',
+  // bandy.kr 은 남이 등록해 둔 도메인입니다 (docs/store/출시-준비.md).
+  // 문자로 실제로 나가는 링크라 쓰는 주소와 같아야 합니다.
+  link: 'hibandy.com/ui/i/ab12cd',
+  fullLink: 'https://hibandy.com/ui/i/ab12cd',
   venue: '라디오가가 · 노원구 월계동',
   /** 티켓 이미지에는 장소를 따로 쓰므로 날짜·시각만 */
   ticketWhen: '11.22 (일) 19:00',
@@ -1206,7 +1227,7 @@ export const inviteSms = {
   card: {
     title: '멜로딕 단독 공연 〈겨울의 소리〉',
     when: '11.22 (일) 19:00 · 라디오가가',
-    host: 'bandy.kr',
+    host: 'hibandy.com',
   },
   text: '이번 주 토요일에 우리 공연해. 자리 하나 맡아 뒀으니까 와 줘!',
   sender: '이지우',
@@ -1704,7 +1725,7 @@ export const clubFeed = {
     },
   ],
 
-  /** 활동 소식 — 찜한 동아리가 뭘 했는지 */
+  /** 활동 소식 — 우리 동아리와 찜한 동아리에서 */
   news: [
     {
       id: 'n1',
@@ -1713,6 +1734,7 @@ export const clubFeed = {
       text: '겨울의 소리 셋리스트를 올렸어요',
       at: '2시간 전',
       to: 'show' as const,
+      source: 'mine' as const,
     },
     {
       id: 'n2',
@@ -1721,6 +1743,7 @@ export const clubFeed = {
       text: '하모닉과 합동 공연이 잡혔어요',
       at: '어제',
       to: 'club' as const,
+      source: 'following' as const,
     },
     {
       id: 'n3',
@@ -1729,6 +1752,7 @@ export const clubFeed = {
       text: '신입 부원을 모집하고 있어요',
       at: '3일 전',
       to: 'club' as const,
+      source: 'following' as const,
     },
   ],
 

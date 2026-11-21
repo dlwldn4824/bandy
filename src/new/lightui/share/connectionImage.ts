@@ -143,7 +143,7 @@ export async function renderConnectionImage(input: ConnectionImageInput): Promis
   ctx.fillText(input.caption, 112, boxY + 56)
   ctx.fillStyle = INK
   ctx.font = '700 26px system-ui, -apple-system, sans-serif'
-  ctx.fillText('bandy.kr', 112, boxY + 96)
+  ctx.fillText('hibandy.com', 112, boxY + 96)
 
   return await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('이미지를 만들지 못했습니다'))), 'image/png')
