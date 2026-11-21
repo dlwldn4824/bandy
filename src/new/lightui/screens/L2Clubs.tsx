@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import TabBar from '../components/TabBar.tsx'
@@ -7,7 +8,9 @@ import Button from '../components/Button.tsx'
 import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
 import { useMembership } from '../auth/membership.ts'
-import { clubFeed, suggestedClubs, showRun } from '../../mocks/bandyLight.ts'
+import { clubFeed, showRun } from '../../mocks/bandyLight.ts'
+import { clubFacts, myFacts } from '../../mocks/auth.ts'
+import { recommendClubs } from '../recommend.ts'
 import './L2Clubs.css'
 
 /**
@@ -26,6 +29,9 @@ const L2Clubs = () => {
   const { membership, inClub, isManager } = useMembership()
 
   const following = clubFeed.following
+  // 「같은 장르 · 3km」 를 목에 적어 두는 대신 사실에서 계산합니다.
+  // 근거가 모자라면 이유를 지어내지 않고 「아직 아는 게 적어서」 라고 말합니다.
+  const suggestions = useMemo(() => recommendClubs(clubFacts, myFacts), [])
 
   return (
     <Phone>
@@ -178,16 +184,17 @@ const L2Clubs = () => {
           <p className="l2__note">{clubFeed.suggestNote}</p>
           <div className="l2__gap-12" />
           <div className="l2__sug">
-            {suggestedClubs.map((club) => (
+            {suggestions.map(({ club, reason, sub }) => (
               <button
-                key={club.name}
+                key={club.id}
                 type="button"
                 className="l2-sug"
-                onClick={() => navigate(P.club(club.name))}
+                onClick={() => navigate(P.club(club.id))}
               >
                 <span className="l2-sug__avatar">{club.initial}</span>
                 <span className="l2-sug__name">{club.name}</span>
-                <span className="l2-sug__why">{club.lines.join(' · ')}</span>
+                <span className="l2-sug__why">{reason}</span>
+                <span className="l2-sug__sub">{sub}</span>
               </button>
             ))}
           </div>

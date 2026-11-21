@@ -1,11 +1,15 @@
+.l2__gap-12 { height: 12px; }
+.l2__gap-14 { height: 14px; }
+.l2__gap-18 { height: 18px; }
+.l2__gap-26 { height: 26px; }
+.l2__gap-28 { height: 28px; }
+
 /* L2 동아리 교류 — Figma 174:2 */
 .l2 { display: flex; flex-direction: column; padding: 0 20px; }
 
 .l2__head { display: flex; align-items: center; justify-content: space-between; padding-top: 6px; }
 .l2__title { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; color: var(--lui-ink); }
 
-.l2__gap-18 { height: 18px; }
-.l2__gap-28 { height: 28px; }
 
 .l2__posts { display: flex; flex-direction: column; gap: 12px; }
 
@@ -76,7 +80,6 @@
 
 .l2__write { width: 100%; height: auto; padding: 12px 0; border-radius: 12px; font-size: 13px; }
 
-.l2__gap-12 { height: 12px; }
 .l2__note { padding: 0 2px; }
 
 /* 제안 카드의 본문은 통째로 상세로 가는 버튼입니다 (액션 줄만 따로) */
@@ -135,7 +138,6 @@
 .l2-switch__sub { font-size: 11.5px; color: var(--lui-sub); }
 
 /* ── 관객용으로 바뀐 동아리 탭 ─────────────────────── */
-.l2__gap-14 { height: 14px; }
 .l2__more {
   display: flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; border-radius: var(--lui-r-pill);
@@ -149,3 +151,131 @@
 .l2-empty { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 20px 16px; }
 .l2-empty__title { font-size: 14px; font-weight: 700; color: var(--lui-ink); }
 .l2-empty__body { font-size: 12.5px; line-height: 1.75; color: var(--lui-sub); }
+
+
+/* ── 찜한 동아리 — 다음 공연 포스터가 주인공 (홈의 공연 줄과 같은 가로 흐름) ── */
+.l2__fav {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -20px;
+  padding: 0 20px;
+}
+.l2__fav::-webkit-scrollbar { display: none; }
+.l2-fav {
+  width: 132px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+.l2-fav__poster {
+  position: relative;
+  display: block;
+  width: 132px;
+  height: 168px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--lui-soft);
+}
+.l2-fav__poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 다음 공연이 없는 동아리 — 빈 포스터 자리에 까닭을 적습니다 */
+.l2-fav__poster--none {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--lui-field-line);
+  background: transparent;
+}
+.l2-fav__soon { font-size: 11.5px; color: var(--lui-sub-2); }
+/* 포스터 위 동아리 글자 — 어느 동아리 것인지 */
+.l2-fav__badge {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--lui-r-pill);
+  background: var(--lui-inverse-bg);
+  color: var(--lui-inverse-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.l2-fav__name { font-size: 13.5px; font-weight: 700; color: var(--lui-ink); }
+.l2-fav__when { font-size: 11.5px; color: var(--lui-sub); }
+
+/* ── 소식 — 카드 없이 왼쪽 선과 점만 ── */
+.l2__news { display: flex; flex-direction: column; }
+.l2-news {
+  display: flex;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 0;
+}
+.l2-news__rail {
+  position: relative;
+  width: 9px;
+  flex: none;
+  /* 항목 사이를 잇는 세로선 */
+  background: linear-gradient(var(--lui-line-2), var(--lui-line-2)) 4px 0 / 1px 100% no-repeat;
+}
+.l2-news:first-child .l2-news__rail { background-position-y: 7px; background-size: 1px calc(100% - 7px); }
+.l2-news:last-child .l2-news__rail { background-size: 1px 7px; }
+.l2-news__rail::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--lui-r-pill);
+  background: var(--lui-accent);
+}
+/* 오래된 소식일수록 조용하게 */
+.l2-news:not(:first-child) .l2-news__rail::before { background: var(--lui-track-2); }
+.l2-news__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-bottom: 18px; }
+.l2-news__text { font-size: 14px; font-weight: 600; line-height: 20px; color: var(--lui-ink); word-break: keep-all; }
+.l2-news__who { font-size: 11.5px; color: var(--lui-sub-2); }
+
+/* ── 추천 — 작은 타일.
+   격자로 두면 셋이 두 칸에 안 맞아 하나가 혼자 남습니다. 옆으로 흐르게 두면
+   몇 개가 오든 줄이 비지 않습니다. 위의 포스터 줄과는 높이와 테두리로 갈립니다. ── */
+.l2__sug {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -20px;
+  padding: 0 20px;
+}
+.l2__sug::-webkit-scrollbar { display: none; }
+.l2-sug {
+  width: 146px;
+  flex: none;
+  background: var(--lui-card);
+  border: 1px solid var(--lui-line-2);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  text-align: left;
+}
+.l2-sug__avatar {
+  width: 34px; height: 34px;
+  border-radius: var(--lui-r-pill);
+  background: var(--lui-chip);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: var(--lui-ink);
+}
+.l2-sug__name { font-size: 14px; font-weight: 700; color: var(--lui-ink); }
+.l2-sug__why { font-size: 11.5px; line-height: 17px; color: var(--lui-sub); word-break: keep-all; }
+
+/* 추천 — 왜 나왔는지(reason)와 보조 정보(올해 공연)를 나눠 적습니다 */
+.l2-sug__sub { font-size: 10.5px; color: var(--lui-sub-2); }

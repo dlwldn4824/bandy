@@ -236,3 +236,36 @@ export function findClubs(school: string, query: string): KnownClub[] {
     return cs.includes(s) || s.includes(cs)
   })
 }
+
+/* ── 추천에 쓰는 사실들 ──────────────────────────────── */
+
+/**
+ * 「이런 동아리는 어때요」 에 쓰는 값.
+ *
+ * 전에는 「같은 장르 · 3km」 같은 문구를 목에 적어 뒀습니다. 그건 계산한 게
+ * 아니라 적어 둔 것이라 동아리가 늘면 손으로 고쳐야 했습니다. 이제 사실만
+ * 두고 문구는 recommend.ts 가 만듭니다.
+ *
+ * MOCK: 실제로는 공연 기록에서 together · cameToOurs · sharedSongs 가
+ * 나옵니다.
+ */
+import type { ClubFacts, MyFacts } from '../lightui/recommend.ts'
+
+export const myFacts: MyFacts = { school: '광운대학교', genre: '밴드' }
+
+export const clubFacts: ClubFacts[] = [
+  { id: 'harmonic', name: '하모닉', initial: '하', school: '삼육대학교', genre: '밴드',
+    km: 3, together: 1, cameToOurs: 2, sharedSongs: 3, thisYearShows: 4 },
+  { id: 'bluenote', name: '블루노트', initial: '블', school: '광운대학교', genre: '밴드',
+    km: 0.4, together: 2, cameToOurs: 1, sharedSongs: 1, thisYearShows: 2 },
+  { id: 'soriul', name: '소리울', initial: '소', school: '서울여자대학교', genre: '아카펠라',
+    km: 5, together: 0, cameToOurs: 0, sharedSongs: 0, thisYearShows: 1 },
+  { id: 'lexa', name: '렉사', initial: '렉', school: '한양대학교', genre: '밴드',
+    km: 9, together: 3, cameToOurs: 1, sharedSongs: 2, thisYearShows: 3 },
+  { id: 'nowon-union', name: '노원 연합밴드', initial: '노', school: null, genre: '밴드',
+    km: 2, together: 0, cameToOurs: 1, sharedSongs: 0, thisYearShows: 6 },
+  { id: 'after6', name: '애프터식스', initial: '애', school: null, genre: '밴드',
+    km: 1.5, together: 0, cameToOurs: 0, sharedSongs: 0, thisYearShows: 2 },
+  { id: 'acappella', name: '아카펠라', initial: '아', school: '서울여자대학교', genre: '아카펠라',
+    km: 5, together: 1, cameToOurs: 0, sharedSongs: 0, thisYearShows: 2 },
+]
