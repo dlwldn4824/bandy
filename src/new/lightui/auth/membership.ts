@@ -58,11 +58,18 @@ function read(): Membership | null {
   try {
     const raw = localStorage.getItem(KEY)
     if (raw === 'none') return null
-    if (raw) return JSON.parse(raw) as Membership
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<Membership>
+      // kind 가 생기기 전에 저장된 기기 — 그때는 동아리밖에 없었습니다
+      return { kind: 'club', ...saved } as Membership
+    }
     // 가입은 했는데 동아리에 든 적이 없다 = 관객. 데모를 끼워 넣지 않습니다.
     if (localStorage.getItem(SESSION_KEY)) return null
   } catch {
-    /* 사생활 보호 모드 등 */
+    // 사생활 보호 모드처럼 저장소를 못 읽는 경우입니다. 여기서 데모를 내주면
+    // **읽을 수 없다는 이유로 누구나 운영진이 됩니다.** 틀리더라도 관객 쪽으로
+    // 틀리는 게 맞습니다 — 운영 화면은 돈과 남의 공연을 건드립니다.
+    return null
   }
   return DEMO_MEMBERSHIP
 }
@@ -95,8 +102,11 @@ export function useMembership() {
   return {
     membership: m,
     /** 동아리에 들어 있는가 — 아니면 관객입니다 */
-    inClub: m !== null,
-    isManager: m?.role === 'manager',
+    inClub: m?.kind === 'club',
+    /** 공연장으로 들어와 있는가 */
+    isVenue: m?.kind === 'venue',
+    /** 동아리 운영진인가. 공연장 운영자는 여기 들지 않습니다 */
+    isManager: m?.kind === 'club' && m.role === 'manager',
     setMembership,
   }
 }

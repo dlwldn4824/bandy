@@ -39,6 +39,58 @@ const S1dClubSent = () => {
 
   const creating = req.kind === 'create'
 
+  // 받아 줬거나 거절당했으면 「확인 중」 을 계속 보여 줄 수 없습니다.
+  // 거절은 특히 말해 줘야 합니다 — 조용하면 고장 난 줄 알고 다시 신청합니다.
+  if (req.state !== 'pending') {
+    const ok = req.state === 'approved'
+    return (
+      <Phone>
+        <TopBar title={creating ? '동아리 만들기' : '참여 신청'} />
+        <div className="lui-body">
+          <div className="s1d">
+            <span className={`s1d__badge${ok ? '' : ' s1d__badge--off'}`}>
+              {ok ? '받아 줬어요' : '거절됐어요'}
+            </span>
+            <h1 className="s1d__title">
+              <b>{req.clubName}</b>
+              {ok ? (
+                <>
+                  <br />
+                  {creating ? '등록이 끝났습니다' : '부원이 되었습니다'}
+                </>
+              ) : (
+                <>
+                  {' '}
+                  신청이
+                  <br />
+                  받아들여지지 않았습니다
+                </>
+              )}
+            </h1>
+            <p className="s1d__lead">
+              {ok
+                ? creating
+                  ? '이제 공연을 올리고 입금·정산까지 할 수 있어요.'
+                  : '동아리 탭에서 우리 동아리가 보이고, 공연 소식이 알림으로 옵니다.'
+                : req.reason ||
+                  '까닭은 적혀 있지 않습니다. 동아리 운영진에게 물어보거나 다시 신청해 주세요.'}
+            </p>
+          </div>
+        </div>
+        <div className="lui-bottombar lui-bottombar--stack">
+          <Button block onClick={() => navigate(ok ? P.home : P.clubPick())}>
+            {ok ? '둘러보러 가기' : '다시 고르기'}
+          </Button>
+          {ok && (
+            <button type="button" className="s1d__cancel" onClick={() => forgetClubJoin()}>
+              이 안내 닫기
+            </button>
+          )}
+        </div>
+      </Phone>
+    )
+  }
+
   return (
     <Phone>
       <TopBar title={creating ? '동아리 만들기' : '참여 신청'} />

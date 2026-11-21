@@ -46,3 +46,6 @@
   font-size: 12px; font-weight: 600; color: var(--lui-sub);
 }
 
+
+/* 거절 — 빨간 점 대신 회색으로. 나쁜 소식을 경고로 키우지 않습니다 */
+.s1d__badge--off { background: var(--lui-soft); color: var(--lui-sub); }
