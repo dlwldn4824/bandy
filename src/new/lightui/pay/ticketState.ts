@@ -61,9 +61,12 @@ function subscribe(fn: () => void) {
 
 const get = () => snapshot
 
-/** 목에 적힌 글자에서 처음 상태를 읽습니다 — 바꾼 적이 없는 티켓용 */
+/**
+ * 목에 적힌 글자에서 처음 상태를 읽습니다 — 바꾼 적이 없는 티켓용.
+ * 없는 공연이면 기다림으로 둡니다. 어차피 그릴 티켓이 없습니다.
+ */
 function seed(showId: string): PayState {
-  return ticketFor(showId).status === '입금 확인됨' ? 'confirmed' : 'waiting'
+  return ticketFor(showId)?.status === '입금 확인됨' ? 'confirmed' : 'waiting'
 }
 
 export function set(showId: string, next: PayState) {

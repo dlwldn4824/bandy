@@ -91,3 +91,9 @@
 /* 티켓 안은 라이트·다크 상관없이 검정이라 글자색을 고정합니다 */
 .d4__locked-title { font-size: 13.5px; font-weight: 700; color: #fff; }
 .d4__locked-body { font-size: 11.5px; line-height: 17px; color: #9ba0a8; word-break: keep-all; }
+
+/* 없는 티켓 */
+.d4-missing { padding: 20px 16px; display: flex; flex-direction: column; gap: 9px; align-items: flex-start; }
+.d4-missing__title { font-size: 15px; font-weight: 700; color: var(--lui-ink); }
+.d4-missing__body { font-size: 12.5px; line-height: 1.75; color: var(--lui-sub); word-break: keep-all; }
+.d4-missing .lui-btn { margin-top: 4px; height: 42px; padding: 0 16px; border-radius: 12px; font-size: 13px; }

@@ -253,8 +253,20 @@ export const ticketsByShow: Record<string, MyTicket> = {
   },
 }
 
-/** 모르는 id 면 기본 티켓 — 화면이 비는 것보다 낫습니다 */
-export const ticketFor = (id: string): MyTicket => ticketsByShow[id] ?? myTicket
+/**
+ * 모르는 id 면 **없다고 말합니다.**
+ *
+ * 전에는 기본 티켓(멜로딕 11.22, 예매번호 B-2611-0482)을 내줬습니다. 화면이
+ * 비는 것보다 낫다고 본 건데, 사지도 않은 공연에서 **남의 예매번호와 QR 이
+ * 보이는** 쪽이 훨씬 나쁩니다. 입구에서 그 QR 을 내밀게 됩니다.
+ */
+export const ticketFor = (id: string): MyTicket | null => ticketsByShow[id] ?? null
+
+export const ticketMissing = {
+  title: '이 공연의 티켓이 없어요',
+  body: '예매한 적이 없거나, 주소가 잘못됐을 수 있습니다. 내 티켓에서 다시 찾아보세요.',
+  cta: '내 티켓 보기',
+}
 
 /* ──────────────────────────────────────────────────────────────
  * S2 탐색 · 지도

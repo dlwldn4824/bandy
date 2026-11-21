@@ -12,7 +12,7 @@ import Icon from '../components/Icon.tsx'
 import Sheet from '../components/Sheet.tsx'
 import DirectionsSheet from '../components/DirectionsSheet.tsx'
 import { P } from '../paths.ts'
-import { ticketFor, showLive } from '../../mocks/bandyLight.ts'
+import { ticketFor, ticketMissing, showLive } from '../../mocks/bandyLight.ts'
 import { useTicketState } from '../pay/ticketState.ts'
 import qr from '../assets/ticket-qr.svg'
 import './D4Ticket.css'
@@ -34,6 +34,28 @@ const D4Ticket = () => {
   const { state, canEnter, copy } = useTicketState(showId)
   const [refund, setRefund] = useState(false)
   const [dirs, setDirs] = useState(false)
+
+  // 없는 티켓이면 없다고 말합니다 — 남의 티켓을 보여 주지 않습니다
+  if (!t) {
+    return (
+      <Phone>
+        <TopBar title="내 티켓" />
+        <div className="lui-body">
+          <div className="d4">
+            <div className="d4__gap-26" />
+            <div className="lui-card d4-missing">
+              <p className="d4-missing__title">{ticketMissing.title}</p>
+              <p className="d4-missing__body">{ticketMissing.body}</p>
+              <Button variant="ghost" onClick={() => navigate(P.tickets)}>
+                {ticketMissing.cta}
+              </Button>
+            </div>
+          </div>
+        </div>
+        <TabBar active="ticket" />
+      </Phone>
+    )
+  }
 
   return (
     <Phone>
