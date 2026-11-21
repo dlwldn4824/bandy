@@ -12,6 +12,7 @@ import { P } from '../paths.ts'
 import { useRole } from '../auth/role.ts'
 import { getSession } from '../auth/kakao.ts'
 import PushRow from '../push/PushRow.tsx'
+import { usePushPrefs } from '../push/prefs.ts'
 import { notifications as n } from '../../mocks/bandyLight.ts'
 import './S8Notifications.css'
 
@@ -37,7 +38,10 @@ const dest: Record<string, string> = {
 const S8Notifications = () => {
   const navigate = useNavigate()
   const { isManager } = useRole()
-  const [settings, setSettings] = useState(n.settings)
+  // 켜고 끈 것은 기기에 남습니다. 화면 상태로만 들고 있을 때는 「주변 공연
+  // 소식」 을 꺼도 나갔다 오면 다시 켜져 있었습니다 — 끈 사람은 껐다고
+  // 알고 있는데요.
+  const prefs = usePushPrefs(n.settings)
 
   // 가입 전이면 데모, 가입했으면 내 상태에 맞는 것만
   const signedUp = getSession() !== null
@@ -51,7 +55,7 @@ const S8Notifications = () => {
 
   const today = n.today.filter((i) => canSee(i.who))
   const thisWeek = n.thisWeek.filter((i) => canSee(i.who))
-  const rows = settings.filter((r) => canSee(r.who))
+  const rows = n.settings.filter((r) => canSee(r.who))
   const nothing = today.length === 0 && thisWeek.length === 0
   // 「모두 읽음으로」 를 누르면 안 읽음 점을 전부 지웁니다
   const [allRead, setAllRead] = useState(false)
@@ -131,13 +135,9 @@ const S8Notifications = () => {
                 sub={row.sub}
                 slot={
                   <Toggle
-                    on={row.on}
+                    on={prefs.isOn(row.id)}
                     label={row.title}
-                    onChange={(next) =>
-                      setSettings((prev) =>
-                        prev.map((it) => (it.id === row.id ? { ...it, on: next } : it)),
-                      )
-                    }
+                    onChange={(next) => prefs.set(row.id, next)}
                   />
                 }
               />
