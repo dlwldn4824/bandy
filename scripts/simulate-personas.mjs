@@ -286,6 +286,8 @@ const DIMENSIONS = {
   envKakaoJsKey: [false, true],
   envKakaoServer: [false, true],
   envPay: [false, true],
+  /** .env 에 계좌가 박혀 있는 배포인가 — 없으면 운영진이 화면에서 등록합니다 */
+  envBank: [false, true],
   envPush: [false, true],
 }
 
@@ -341,6 +343,8 @@ function makePersona(r, i) {
     envKakaoJsKey: chance(r, 0.5),
     envKakaoServer: chance(r, 0.5),
     envPay: chance(r, 0.5),
+    // 대부분의 배포에는 아직 안 박혀 있습니다
+    envBank: chance(r, 0.2),
     envPush: chance(r, 0.5),
   }
 }
@@ -565,6 +569,22 @@ const ISSUES = {
     title: '입장 관리의 「이름으로 찾기」가 눌리지 않는다',
     where: 'S12Entry.tsx:81',
   },
+  'open-needs-bank': {
+    fixed: 'bd11146 · 91583fb — 계좌를 등록하는 자리가 생겼고, 체크리스트에서 바로 갑니다',
+    kind: 'deadend', sev: 'blocker',
+    title: '계좌가 없으면 예매를 열 수 없는데 계좌를 등록할 자리가 없었다',
+    where: 'shows/stage.ts openChecklist → 갈 곳 없음',
+  },
+  'shownew-goes-to-demo-show': {
+    kind: 'premise', sev: 'blocker',
+    title: '공연을 만들면 내 공연이 아니라 멜로딕 단독 공연으로 간다',
+    where: "S10ShowNew.tsx:112 — navigate(P.show('glow')) 가 박혀 있습니다",
+  },
+  'settle-request-silent': {
+    kind: 'deadend', sev: 'major',
+    title: '「정산 요청」 을 누르면 마이로 떨어지고 아무 말이 없다',
+    where: 'S13Settlement.tsx:131 — navigate(P.me) 뿐입니다',
+  },
   's5-draft-dead': {
     fixed: 'ec8950f — sessionStorage 에 적어 둡니다',
     kind: 'deadend', sev: 'minor',
@@ -714,6 +734,35 @@ function walk(p) {
   hit('me-dead-rows')
   if (p.side !== 'venue') hit('venue-no-entry-later')
 
+  /* ── 8b. 운영진의 하루 ──────────────────────────────
+   *
+   * 여기까지는 아무도 안 걸어 본 길입니다. 소속을 주는 길(B1)이 생기기
+   * 전에는 운영 화면에 들어갈 수가 없어서 모델도 거기서 끝났습니다.
+   * 이제 들어갈 수 있으니 그 안을 걸어 봅니다.
+   */
+  if (p.side === 'club' && p.clubPath && session) {
+    go('S18 공연 관리')
+
+    // 새로 만든 동아리는 콘솔이 비어 있습니다 (b8b1472 로 그게 맞게 됐습니다)
+    const freshClub = p.clubPath === 'create-new'
+
+    if (freshClub) {
+      go('S10 공연 만들기')
+      // 만들고 나면 P.show('glow') 로 갑니다 — 남의 공연입니다
+      hit('shownew-goes-to-demo-show')
+    }
+
+    go('S28 공연 상태')
+    // 계좌가 없으면 예매를 못 엽니다. 등록하러 갈 자리는 이제 있습니다.
+    if (!p.envBank) hit('open-needs-bank')
+
+    go('S27 들어온 신청')
+    go('S26 부원')
+    go('S11 입금 관리')
+    go('S13 정산')
+    hit('settle-request-silent')
+  }
+
   /* ── 9. 알림 ────────────────────────────────────────── */
   // 알림 목록의 「라디오가가가 …을 공개했어요」 줄은 공연장 운영 화면으로 갑니다
   go('S8 알림')
@@ -789,7 +838,7 @@ const SEED = Number(arg('seed', 20261122))
 const ENV_MODE = arg('env', 'mix')
 const FIXED_ENV =
   ENV_MODE === 'prod'
-    ? { envKakaoJsKey: false, envKakaoServer: false, envPay: false, envPush: false }
+    ? { envKakaoJsKey: false, envKakaoServer: false, envPay: false, envPush: false, envBank: false }
     : null
 
 const source = checkSource()
