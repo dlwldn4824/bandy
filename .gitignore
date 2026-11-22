@@ -47,3 +47,8 @@ public/terms.html
 public/privacy.html
 public/refund.html
 public/account-deletion.html
+.vercel
+.env*
+
+# Vercel CLI 가 만드는 링크 정보
+.vercel
