@@ -237,6 +237,66 @@ function checkSource() {
   check('MANAGER_ONLY_ENOUGH', gated >= MANAGER_ONLY_ROUTES.length,
     `routes.tsx 의 ManagerOnly ${gated}개 — 모델이 아는 ${MANAGER_ONLY_ROUTES.length}개보다 적습니다`)
 
+  /* ── 두 번째 훑기(고친 뒤)에서 새로 찾은 자리 ──────────
+   *
+   * 아래 검사는 「이 버그가 아직 있는가」 를 묻습니다. 고치면 어긋났다고
+   * 알려 주므로, 고친 뒤에는 묻는 방향을 뒤집어 주세요(위 블록처럼).
+   */
+  const admin = read('src/new/lightui/screens/S32Admin.tsx')
+  const bank = read('src/new/lightui/pay/bankAccount.ts')
+  const apps = read('src/new/lightui/shows/applications.ts')
+  const inbox = read('src/new/lightui/auth/joinInbox.ts')
+
+  // 참여 신청(join)을 받아 주는 길 — 받는 화면은 운영진 전용이고,
+  // 운영자 화면은 생성 신청만 다룹니다. 그래서 신청자는 부원이 못 됩니다.
+  check('JOIN_APPROVE_ONLY_OWN_DEVICE',
+    /current\.id !== requestId/.test(clubJoin) &&
+      /path="\/ui\/console\/joins"[\s\S]{0,120}ManagerOnly/.test(routes) &&
+      /localReq\.kind === 'create'/.test(admin),
+    'approveJoin 은 이 기기가 보낸 신청만, S27 은 운영진 전용, S32 는 생성 신청만')
+
+  // 밴디 운영자 화면에 게이트가 없습니다 (주석에 일부러 그랬다고 적혀 있습니다)
+  check('ADMIN_UNGATED',
+    /path="\/ui\/admin" element=\{<S32Admin \/>\}/.test(routes) &&
+      /approveClubJoin\(\)/.test(admin))
+
+  // 입금 계좌를 공연 주최자가 아니라 **보는 사람**의 소속으로 찾습니다
+  check('BANK_LOOKED_UP_BY_VIEWER',
+    /useBankAccount\(\)/.test(deposit) &&
+      /getMembership\(\)\?\.clubId \?\? DEMO_CLUB_ID/.test(bank),
+    'D3Deposit 이 clubId 없이 useBankAccount() 를 부릅니다')
+
+  // 공연장 빈 날 지원은 보내는 쪽만 있습니다 (받는 목록은 적어 둔 값)
+  check('VENUE_APPLY_LOCAL_ONLY',
+    /KEY = 'bandy\.lightui\.venueApplications'/.test(apps) &&
+      !/fetch\(/.test(apps) &&
+      /수락하면 알림이 와요/.test(mocks))
+
+  // 마이의 「계좌 · 환불 정보」 가 운영진 전용 화면으로 갑니다
+  check('REFUND_ROW_TO_MANAGER_SCREEN',
+    /'계좌 · 환불 정보': P\.bankAccount/.test(me) &&
+      /path="\/ui\/console\/account"[\s\S]{0,120}ManagerOnly/.test(routes))
+
+  // 입금 확인은 운영진 기기의 저장소에 남습니다 — 예매자 기기에서는 안 열립니다
+  check('CONFIRM_LIVES_ON_MANAGER_DEVICE',
+    /confirm: \(showId: string\) => set\(showId, 'confirmed'\)/.test(read('src/new/lightui/pay/ticketState.ts')) &&
+      /KEY = 'bandy\.lightui\.ticketState'/.test(read('src/new/lightui/pay/ticketState.ts')))
+
+  // 받은 신청함이 비면 적어 둔 세 줄로 떨어집니다 — 주인을 보고 걸러야 합니다
+  check('JOIN_INBOX_FALLS_BACK_TO_MOCK', /return joinRequests/.test(inbox))
+
+  // 끝난 공연을 D1 은 막는데 예매·입금 화면은 단계를 보지 않습니다
+  check('BOOK_IGNORES_STAGE',
+    /useStage/.test(read('src/new/lightui/screens/D1Show.tsx')) &&
+      !/useStage/.test(read('src/new/lightui/screens/D2Book.tsx')) &&
+      !/useStage/.test(deposit))
+
+  // SDK 가 걸리면 onload 도 onerror 도 안 옵니다 — 시간 제한이 필요합니다
+  // (파일 아래쪽 목 경로에도 setTimeout 이 있어서 loadSdk 안만 봅니다)
+  const loadSdkBody = kakao.slice(kakao.indexOf('function loadSdk'), kakao.indexOf('export type KakaoFailure'))
+  check('KAKAO_SDK_NO_TIMEOUT',
+    /onerror = \(\) => reject/.test(loadSdkBody) && !/setTimeout/.test(loadSdkBody))
+
   return { ok, warn }
 }
 
@@ -605,6 +665,49 @@ const ISSUES = {
     title: '모집 글의 「임시 저장」이 눌리지 않는다',
     where: 'S5Recruit.tsx:95',
   },
+
+  /* ── 두 번째 훑기 — 고친 뒤에 생기거나 남아 있는 자리 ──────────── */
+
+  'join-never-approved': {
+    kind: 'deadend', sev: 'blocker',
+    title: '있는 동아리에 참여 신청한 사람은 아직 부원이 되지 못한다',
+    where: 'clubJoin.ts approveJoin · routes.tsx /ui/console/joins (운영진 전용) · S32Admin (생성 신청만)',
+  },
+  'admin-ungated': {
+    kind: 'blocked', sev: 'blocker',
+    title: '동아리 생성을 승인하는 화면(/ui/admin)에 게이트가 없어 신청자가 스스로 승인한다',
+    where: 'routes.tsx:165 · S32Admin.tsx:179',
+  },
+  'bank-by-viewer': {
+    kind: 'premise', sev: 'blocker',
+    title: '입금 계좌를 공연 주최자가 아니라 화면을 보는 사람의 소속에서 찾는다',
+    where: 'D3Deposit.tsx:36 useBankAccount() · pay/bankAccount.ts keyOf',
+  },
+  'ticket-never-confirmed': {
+    kind: 'premise', sev: 'major',
+    title: '진짜 계정으로 예매하면 「입금 확인 중」에서 더 나아가지 못한다',
+    where: 'pay/ticketState.ts (확인은 운영진 기기의 저장소에 남습니다)',
+  },
+  'venue-apply-not-received': {
+    kind: 'deadend', sev: 'major',
+    title: '공연장 빈 날에 지원해도 받는 쪽에 닿지 않는데 「수락하면 알림이 와요」 라고 말한다',
+    where: 'shows/applications.ts · openDaysCopy.sent · L3Venue 의 지원 목록은 목',
+  },
+  'refund-row-manager-gate': {
+    kind: 'blocked', sev: 'major',
+    title: '마이의 「계좌 · 환불 정보」가 관객에게도 보이는데 운영진 전용 화면으로 간다',
+    where: 'S14Me.tsx:61 → /ui/console/account (ManagerOnly)',
+  },
+  'past-show-still-sells': {
+    kind: 'premise', sev: 'blocker',
+    title: '끝난 공연인데 예매·입금 화면은 그대로 열려 돈을 받는다',
+    where: 'D1Show 는 단계를 보는데 D2Book · D3Deposit 은 보지 않습니다',
+  },
+  'kakao-sdk-no-timeout': {
+    kind: 'config', sev: 'major',
+    title: '카카오 SDK 가 안 떠도 「카카오 연결 중…」 에서 끝나지 않는다 (타임아웃 없음)',
+    where: 'auth/kakao.ts loadSdk — onerror 는 있지만 시간 제한이 없습니다',
+  },
 }
 
 /* ────────────────────────────────────────────────────────────────
@@ -642,6 +745,9 @@ function walk(p) {
       return { hits, trail, finished: false, stoppedAt: 'S1c 카카오 돌아오는 자리' }
     }
     if (!p.envKakaoJsKey) hit('kakao-mock-anyone')
+    // 키가 있으면 CDN 에서 SDK 를 받아옵니다. 차단되거나 느리면 onload 도
+    // onerror 도 오지 않아 버튼이 「연결 중…」 에서 멈춥니다.
+    if (p.envKakaoJsKey) hit('kakao-sdk-no-timeout')
     session = { school: '', department: '', provider: 'kakao' }
   } else if (p.login === 'email') {
     go('S21 이메일')
@@ -690,6 +796,15 @@ function walk(p) {
       hit('pending-no-return')
       // 신청은 기기에만 남고 소속은 주지 않습니다 (clubJoin.ts TODO)
       hit('membership-never-granted')
+
+      /* 두 번째 훑기 — 소속을 주는 길이 생겼지만 한쪽만 이어졌습니다.
+       *
+       *   생성 신청 → /ui/admin 에서 승인 → 운영진 (게이트가 없어 본인이 누릅니다)
+       *   참여 신청 → 받는 화면(S27)이 운영진 전용이라 신청자는 들어가지 못하고,
+       *               운영자 화면(S32)은 생성 신청만 다룹니다 → 영영 대기
+       */
+      if (p.clubPath === 'join-existing') hit('join-never-approved')
+      if (p.clubPath === 'create-new') hit('admin-ungated')
     }
   }
 
@@ -724,12 +839,26 @@ function walk(p) {
     if (!session) hit('guest-no-login-gate')
     go('D3 입금 안내')
     hit('deposit-cancel-dead')
+    // 적어 둔 날짜가 지나면 D1 은 「끝난 공연이에요」 로 막는데, 주소로 들어간
+    // 예매·입금 화면은 단계를 보지 않아 그대로 팝니다 (오늘 glow 가 그렇습니다)
+    if (p.ticket === 'today') hit('past-show-still-sells')
     if (!p.envPay) hit('pay-card-hidden')
     go('D4 내 티켓')
     // 운영진이 아직 확인하지 않았는데 티켓이 「입금 확인됨」 으로 나옵니다
     hit('deposit-instant-confirmed')
     if (p.ticket === 'unknown-id') hit('ticket-fallback-wrong')
     if (!p.envPush) hit('push-unconfigured')
+
+    /* 두 번째 훑기 — 돈 쪽에서 새로 보이는 둘.
+     *
+     * 계좌를 보는 사람 기준으로 찾습니다(`useBankAccount()` 에 공연 주최자를
+     * 넘기지 않습니다). 그래서 소속이 있는 사람이 남의 공연을 예매하면 **자기
+     * 동아리 계좌**가 입금 안내에 뜹니다 — 자기에게 돈을 보내게 됩니다.
+     */
+    if (p.side === 'club' && p.clubPath === 'create-new') hit('bank-by-viewer')
+    // 입금 확인은 운영진 기기에 남습니다. 진짜 계정으로 예매한 사람의 티켓은
+    // 「입금 확인 중」 에서 멈추고 QR 이 열리지 않습니다.
+    if (session) hit('ticket-never-confirmed')
   }
 
   /* ── 7. 공연 당일 ───────────────────────────────────── */
@@ -747,6 +876,9 @@ function walk(p) {
   hit('me-profile-mock')
   hit('me-dead-rows')
   if (p.side !== 'venue') hit('venue-no-entry-later')
+  // 두 번째 훑기 — 설정의 「계좌 · 환불 정보」 는 모두에게 보이는데 운영진
+  // 전용 화면으로 갑니다. 관객이 자기 환불 계좌를 찾아 누르면 게이트입니다.
+  if (!(p.side === 'club' && p.clubPath === 'create-new')) hit('refund-row-manager-gate')
 
   /* ── 8b. 운영진의 하루 ──────────────────────────────
    *
@@ -775,6 +907,11 @@ function walk(p) {
     go('S11 입금 관리')
     go('S13 정산')
     hit('settle-request-silent')
+
+    // 설 자리 찾기 — 보내는 쪽만 있습니다. 받는 목록은 적어 둔 값이라
+    // 내 지원이 거기 서지 않고, 「수락하면 알림이 와요」 는 지킬 수 없는 말입니다.
+    go('S30 설 자리 찾기')
+    hit('venue-apply-not-received')
   }
 
   /* ── 9. 알림 ────────────────────────────────────────── */
