@@ -238,6 +238,8 @@ export async function completeKakaoSignIn(code: string, state?: string | null): 
     school: saved?.school ?? '',
     department: saved?.department ?? '',
     initial: data.user.nickname.slice(0, 1),
+    // 서버는 처음부터 사진 주소를 돌려주고 있었는데 여기서 버리고 있었습니다.
+    profileImage: data.user.profileImage ?? null,
     role: saved?.role ?? 'member',
   }
   saveSession(user)

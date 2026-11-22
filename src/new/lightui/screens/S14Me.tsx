@@ -4,6 +4,7 @@ import Phone from '../components/Phone.tsx'
 import TabBar from '../components/TabBar.tsx'
 import SectionHeader from '../components/SectionHeader.tsx'
 import ListRow from '../components/ListRow.tsx'
+import Face from '../components/Face.tsx'
 import Icon from '../components/Icon.tsx'
 import MoreMenu from '../components/MoreMenu.tsx'
 import Sheet from '../components/Sheet.tsx'
@@ -120,7 +121,12 @@ const S14Me = () => {
               // 로그인은 했는데 이름을 아직 안 적은 사람이 있습니다 (이메일로
               // 막 들어와 온보딩을 건너뛴 경우). 그 사람에게 「로그인하기」 를
               // 보여 주면 이미 한 일을 또 하라는 말이 됩니다.
-              avatar={session?.initial || (session ? '·' : '?')}
+              avatar={
+                <Face
+                  initial={session?.initial || (session ? '·' : '?')}
+                  src={session?.profileImage}
+                />
+              }
               title={session ? session.nickname || '이름을 적어 주세요' : '로그인하기'}
               sub={profileSub}
               chevron

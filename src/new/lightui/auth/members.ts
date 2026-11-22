@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { clubMembers, me, type ClubMember } from '../../mocks/bandyLight.ts'
+import { getSession } from './kakao.ts'
 import { useIsDemoClub } from '../clubs/owner.ts'
 
 /**
@@ -50,10 +51,27 @@ function subscribe(fn: () => void) {
 
 const get = () => snapshot
 
-/** 오늘 만든 동아리의 부원 목록 — 나 하나입니다 */
-const alone: ClubMember[] = [
-  { id: 'me', initial: me.initial, name: me.name, sub: '동아리를 만든 사람', role: 'manager', joined: '방금', me: true },
-]
+/**
+ * 오늘 만든 동아리의 부원 목록 — 나 하나입니다.
+ *
+ * 이름은 **로그인한 사람**에게서 읽습니다. 목의 「이지우」 를 쓰면 진짜
+ * 계정으로 동아리를 만든 사람이 자기 명단에서 남의 이름을 봅니다 —
+ * 티켓에서 고친 것과 같은 자리입니다 (clubs/owner.ts).
+ */
+function aloneRow(): ClubMember[] {
+  const who = getSession()
+  return [
+    {
+      id: 'me',
+      initial: who?.initial ?? me.initial,
+      name: who?.nickname ?? me.name,
+      sub: '동아리를 만든 사람',
+      role: 'manager',
+      joined: '방금',
+      me: true,
+    },
+  ]
+}
 
 export function useMembers() {
   const stored = useSyncExternalStore(subscribe, get, get)
@@ -62,7 +80,7 @@ export function useMembers() {
    * 남의 부원을 보여 주면 거기서 운영진을 올릴 수도 있게 됩니다.
    */
   const demo = useIsDemoClub()
-  const members = demo || stored !== clubMembers ? stored : alone
+  const members = demo || stored !== clubMembers ? stored : aloneRow()
   const managers = members.filter((m) => m.role === 'manager')
 
   return {

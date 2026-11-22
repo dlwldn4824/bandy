@@ -5,12 +5,14 @@ import TopBar from '../components/TopBar.tsx'
 import TabBar from '../components/TabBar.tsx'
 import SectionHeader from '../components/SectionHeader.tsx'
 import ListRow from '../components/ListRow.tsx'
+import Face from '../components/Face.tsx'
 import Button from '../components/Button.tsx'
 import Sheet from '../components/Sheet.tsx'
 import { P } from '../paths.ts'
 import { useJoinInbox } from '../auth/joinInbox.ts'
 import { useMembers } from '../auth/members.ts'
 import { useMembership } from '../auth/membership.ts'
+import { getSession } from '../auth/kakao.ts'
 import { membersCopy as t, type ClubMember } from '../../mocks/bandyLight.ts'
 import './S26Members.css'
 
@@ -42,7 +44,8 @@ const S26Members = () => {
     return (
       <ListRow
         key={m.id}
-        avatar={m.initial}
+        // 명단에서 사진이 있는 건 나뿐입니다 — 남의 사진은 받아 둔 적이 없습니다
+        avatar={m.me ? <Face initial={m.initial} src={getSession()?.profileImage} /> : m.initial}
         title={
           <>
             {m.name}
@@ -81,7 +84,7 @@ const S26Members = () => {
             <>
               <div className="lui-card s26-alone">
                 <p className="s26-alone__title">{t.aloneTitle}</p>
-                <p className="s26-alone__body">{t.aloneBody}</p>
+                <p className="s26-alone__body">{t.aloneBody(managers[0]?.name ?? '운영진')}</p>
               </div>
               <div className="s26__gap-26" />
             </>
