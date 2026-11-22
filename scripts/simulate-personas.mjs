@@ -911,6 +911,8 @@ const out = {
   },
   findings: rows.map((x) => ({
     latent: x.latent ?? null,
+    // 고친 건지 아닌지가 JSON 에 없으면, 읽는 쪽은 수를 보고 아직 그렇다고 믿습니다
+    fixed: x.fixed ?? null,
     id: x.id,
     kind: KINDS[x.kind],
     severity: x.sev,
@@ -978,7 +980,9 @@ if (done.length) {
   }
 }
 
-const latent = rows.filter((x) => x.latent)
+// 이미 고친 것은 「고친 것」 칸에서 이미 말했습니다 — 잠재 칸에 또 적으면
+// 같은 건이 고쳐짐과 잠재로 두 번 나와서 어느 쪽인지 알 수 없습니다
+const latent = rows.filter((x) => x.latent && !x.fixed)
 if (latent.length) {
   console.log('\n◻ 잠재 — 지금은 닿는 사람이 없거나 주소로만 닿습니다 (위 순위에서 뺐습니다)')
   for (const x of latent) {
