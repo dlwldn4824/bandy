@@ -987,17 +987,60 @@ const N = Number(arg('n', 5000))
 const SEED = Number(arg('seed', 20261122))
 /**
  * 환경 변수를 어떻게 둘지.
- *   mix  — 네 키를 각각 50% 로 섞습니다. 「키가 이쪽이면 어떤 일이 생기나」 를 다 보려는 것.
- *   prod — 2026-11-22 운영 주소(hibandy.com)에서 확인한 그대로: 네 키 모두 없음.
- *          (번들에 카카오 SDK 주소가 없고 목 사용자·목 취소 문구가 들어 있음,
- *           POST /api/auth/kakao → kakao_not_configured, 알림 줄이 「준비 중이에요」,
- *           입금 화면에 카드 결제 탭이 없음)
+ *
+ *   mix   키를 섞습니다. 「키가 이쪽이면 어떤 일이 생기나」 를 다 보려는 것.
+ *   local 이 저장소의 `.env` 를 읽습니다. 읽어서 정하니 늘 맞습니다.
+ *   prod  운영 주소(hibandy.com)에서 **확인한** 값입니다. 아래 표를 보세요.
+ *
+ * prod 가 적어 둔 값인 이유는 버셀의 환경 변수를 스크립트가 볼 수 없어서입니다.
+ * 그래서 **키마다 어떻게 확인했는지**를 같이 적어 둡니다. 확인한 날짜가 지나면
+ * 다시 확인해서 고쳐야 하는 값이고, 실행할 때마다 날짜를 찍어 줍니다.
+ *
+ * 처음에는 「네 키 모두 없음」 으로 박아 두었는데, 그 사이 카카오 키가 들어왔는데도
+ * 「누구나 목 계정으로 들어온다」 가 계속 2,969명으로 떴습니다. 적어 둔 값은 반드시
+ * 어긋납니다 — 그래서 `.env` 를 읽는 local 을 두고, prod 는 확인 방법을 남깁니다.
  */
+const MEASURED_PROD = {
+  /** 2026-11-23 확인 */
+  at: '2026-11-23',
+  env: {
+    // 번들에 카카오 SDK 주소(kakao.min.js)가 들어 있습니다 — 키가 없으면
+    // `if (key)` 가 접혀서 그 문자열째 사라집니다 (11-22 에는 없었습니다)
+    envKakaoJsKey: true,
+    // POST /api/auth/kakao 에 쓸 수 없는 코드를 보내면 kakao_not_configured 가
+    // 아니라 token_failed 가 옵니다 — 서버가 카카오에 물어봤다는 뜻입니다
+    envKakaoServer: true,
+    // 팔고 있는 공연의 입금 화면에 카드 결제 탭이 없습니다 (PAY_CONFIGURED false)
+    envPay: false,
+    // 알림 화면의 「이 기기에서 알림 받기」 가 「준비 중이에요」 입니다
+    envPush: false,
+    // 입금 화면이 「입금 계좌가 아직 등록되지 않았어요」 입니다
+    envBank: false,
+  },
+}
+
+/** `.env` 를 읽어 VITE_ 키가 채워져 있는지 봅니다 (local 모드) */
+function readDotEnv() {
+  let text = ''
+  try {
+    text = read('.env')
+  } catch {
+    return null // .env 가 없는 체크아웃
+  }
+  const has = (k) => new RegExp(`^${k}=.+$`, 'm').test(text)
+  return {
+    envKakaoJsKey: has('VITE_KAKAO_JS_KEY'),
+    // 서버 쪽 키는 VITE_ 가 아닙니다 — 둘 다 있어야 로그인이 끝까지 갑니다
+    envKakaoServer: has('KAKAO_REST_API_KEY'),
+    envPay: has('VITE_PORTONE_STORE_ID') && has('VITE_PORTONE_CHANNEL_KEY'),
+    envPush: has('VITE_FIREBASE_VAPID_KEY'),
+    envBank: has('VITE_BANK_NAME') && has('VITE_BANK_ACCOUNT') && has('VITE_BANK_HOLDER'),
+  }
+}
+
 const ENV_MODE = arg('env', 'mix')
 const FIXED_ENV =
-  ENV_MODE === 'prod'
-    ? { envKakaoJsKey: false, envKakaoServer: false, envPay: false, envPush: false, envBank: false }
-    : null
+  ENV_MODE === 'prod' ? MEASURED_PROD.env : ENV_MODE === 'local' ? readDotEnv() : null
 
 const source = checkSource()
 
@@ -1077,9 +1120,23 @@ if (jsonPath) {
   writeFileSync(jsonPath, JSON.stringify(out, null, 2))
 }
 
+/** 「카카오 ○ · 결제 × · 푸시 × · 계좌 ×」 처럼 한 줄로 */
+function envLine(e) {
+  const mark = (v) => (v ? '○' : '×')
+  return `카카오 ${mark(e.envKakaoJsKey && e.envKakaoServer)} · 결제 ${mark(e.envPay)} · 푸시 ${mark(e.envPush)} · 계좌 ${mark(e.envBank)}`
+}
+
 const pc = (n, d) => `${n}명 (${((n / d) * 100).toFixed(1)}%)`
 
-console.log(`BANDY 페르소나 시뮬레이션 — ${N}명 · seed ${SEED} · 환경변수 ${ENV_MODE}`)
+const envNote =
+  ENV_MODE === 'prod'
+    ? `운영에서 확인한 값 (${MEASURED_PROD.at}) — ${envLine(MEASURED_PROD.env)}`
+    : ENV_MODE === 'local'
+      ? FIXED_ENV
+        ? `.env 를 읽음 — ${envLine(FIXED_ENV)}`
+        : '.env 가 없어 섞어서 돌립니다'
+      : '키를 섞어서'
+console.log(`BANDY 페르소나 시뮬레이션 — ${N}명 · seed ${SEED} · 환경변수 ${ENV_MODE} (${envNote})`)
 console.log(`차원 ${Object.keys(DIMENSIONS).length}개 · 조합 ${combinationCount().toLocaleString('en-US')}가지`)
 console.log(`입구: ${Object.entries(groupTotals.side).map(([k, v]) => `${k} ${v}`).join(' · ')}`)
 console.log(`신분: ${Object.entries(groupTotals.who).map(([k, v]) => `${k} ${v}`).join(' · ')}`)
