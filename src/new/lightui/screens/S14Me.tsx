@@ -16,6 +16,8 @@ import { useRole } from '../auth/role.ts'
 import { useMembership } from '../auth/membership.ts'
 import { useMembers } from '../auth/members.ts'
 import { useClubJoin } from '../auth/clubJoin.ts'
+import { isDemoUser } from '../clubs/owner.ts'
+import { myTickets } from '../../mocks/bandyLight.ts'
 import { membersCopy } from '../../mocks/bandyLight.ts'
 import { me } from '../../mocks/bandyLight.ts'
 import { THEME_LABELS, useTheme, type ThemeMode } from '../theme.ts'
@@ -78,6 +80,8 @@ const S14Me = () => {
    * 확인 코드(`BANDY-xxxxxx`)도 그 화면에만 있어서, 뒤로 나가면 끝이었습니다.
    */
   const sent = useClubJoin()
+  /** 예매·찜·팔로우는 사람에게 붙습니다 — 적어 둔 수는 데모 계정 것입니다 */
+  const mine = isDemoUser()
   const [delOpen, setDelOpen] = useState(false)
   const { count: blockedCount } = useBlocked()
   const [soon, setSoon] = useState<{ title: string; text: string } | null>(null)
@@ -203,11 +207,19 @@ const S14Me = () => {
           <div className="s14__gap-26" />
           <SectionHeader title="예매" />
           <div className="lui-card s14__menu">
+            {/* 「예매 내역 12건」 도 적어 둔 값이라, 티켓이 없는 사람에게도
+                12건이라고 말했습니다. 목록에서 셉니다 (clubs/owner.ts) */}
             {me.booking.map((row) => (
               <MenuRow
                 key={row.title}
                 title={row.title}
-                value={row.value}
+                value={
+                  row.title === '예매 내역'
+                    ? `${mine ? myTickets.items.length : 0}건`
+                    : mine
+                      ? row.value
+                      : '0'
+                }
                 onClick={() => navigate(P.tickets)}
               />
             ))}

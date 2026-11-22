@@ -6,6 +6,7 @@ import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
 import { myTickets as t } from '../../mocks/bandyLight.ts'
 import { useTicketStates } from '../pay/ticketState.ts'
+import { isDemoUser } from '../clubs/owner.ts'
 import './S7Tickets.css'
 
 type TabKey = 'upcoming' | 'past' | 'cancelled'
@@ -27,7 +28,13 @@ const S7Tickets = () => {
    * 그렇게 말해 놓고 목록이 그대로면 취소가 안 된 것으로 보입니다.
    */
   const { stateOf } = useTicketStates()
-  const all = t.items.map((item) =>
+  /**
+   * 적어 둔 다섯 장은 **데모 계정의 티켓**입니다. 진짜 카카오로 들어온
+   * 사람에게 보여 주면 남의 예매번호와 QR 을 보여 주는 것이고, 공연 당일
+   * 입구에서 그 화면을 내밀게 됩니다 (clubs/owner.ts).
+   */
+  const demo = isDemoUser()
+  const all = (demo ? t.items : []).map((item) =>
     stateOf(item.id) === 'cancelled'
       ? // 취소한 예매에 「오늘」 빨강 배지가 그대로 붙어 있으면 아직 가는 줄 압니다
         { ...item, tab: 'cancelled', badge: '취소함', urgent: false, today: false }
@@ -61,7 +68,10 @@ const S7Tickets = () => {
           <div className="s7__gap-14" />
           <div className="s7__head">
             <h1 className="s7__title">내 티켓</h1>
-            <span className="lui-pill lui-pill--lg lui-pill--outline">{t.count}</span>
+            {/* 「전체 5장」 도 적어 둔 값이었습니다 — 셉니다 */}
+            <span className="lui-pill lui-pill--lg lui-pill--outline">
+              {all.length === 0 ? '없음' : `전체 ${all.length}장`}
+            </span>
           </div>
 
           <div className="s7__gap-14" />
@@ -123,6 +133,9 @@ const S7Tickets = () => {
             ))}
           </div>
 
+          {/* 셀 것이 없으면 제목만 남습니다 */}
+          {counts.length > 0 && (
+            <>
           <div className="s7__gap-26" />
           <SectionHeader title="다가오는 공연 예매 수" />
           <div className="lui-meters">
@@ -140,6 +153,8 @@ const S7Tickets = () => {
               </div>
             ))}
           </div>
+            </>
+          )}
         </div>
       </div>
       <TabBar active="ticket" />

@@ -1,4 +1,6 @@
 import { useMembership } from '../auth/membership.ts'
+import { getSession } from '../auth/kakao.ts'
+import { mockKakaoUser } from '../../mocks/auth.ts'
 
 /**
  * 목 데이터에는 주인이 없습니다.
@@ -52,4 +54,23 @@ export const freshClub = {
 export const freshVenue = {
   title: '아직 올린 날이 없어요',
   body: '비어 있는 날을 공개하면 동아리가 지원할 수 있습니다. 지원이 들어오면 여기서 수락합니다.',
+}
+
+/**
+ * 티켓은 **사람** 것입니다.
+ *
+ * 동아리 목은 `clubId` 로 주인을 잡았는데, 티켓·예매는 동아리가 아니라
+ * 사람에게 붙습니다. 그래서 주인이 다릅니다 — 적어 둔 티켓 다섯 장은
+ * 데모 계정(이지우) 것입니다.
+ *
+ *   세션 없음        둘러보는 사람 → 데모 그대로 (지금 데모의 기본 경로)
+ *   데모 계정        → 데모 그대로
+ *   진짜 카카오 계정 → 자기 것, 즉 빈 「내 티켓」
+ *
+ * 어제 가입한 사람에게 티켓이 없는 건 사실입니다. 남의 티켓을 보여 주면
+ * 그 QR 을 입구에서 내밀게 됩니다.
+ */
+export function isDemoUser() {
+  const me = getSession()
+  return me === null || me.id === mockKakaoUser.id
 }

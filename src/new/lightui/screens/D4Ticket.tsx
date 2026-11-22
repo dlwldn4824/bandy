@@ -14,6 +14,7 @@ import DirectionsSheet from '../components/DirectionsSheet.tsx'
 import { P } from '../paths.ts'
 import { ticketFor, ticketMissing, showLiveFor } from '../../mocks/bandyLight.ts'
 import { useTicketState } from '../pay/ticketState.ts'
+import { isDemoUser } from '../clubs/owner.ts'
 import qr from '../assets/ticket-qr.svg'
 import './D4Ticket.css'
 
@@ -25,7 +26,8 @@ const D4Ticket = () => {
   const navigate = useNavigate()
   const { showId = 'glow' } = useParams()
   // 공연마다 다른 티켓입니다 — 예전에는 어느 티켓을 눌러도 같은 화면이 나왔습니다
-  const t = ticketFor(showId)
+  // 적어 둔 티켓은 데모 계정 것입니다 — 진짜 계정에는 없는 티켓입니다
+  const t = isDemoUser() ? ticketFor(showId) : null
   /**
    * QR 과 입장 번호는 **돈이 확인된 뒤에만** 엽니다.
    * 예전에는 입금 대기인 티켓에서도 열려서, 입금 안 한 사람이 입구까지
