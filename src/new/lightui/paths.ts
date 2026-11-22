@@ -69,6 +69,12 @@ export const P = {
   /** 공연장 정산 — 동아리 정산과 계산이 다릅니다 */
   venuePayout: '/ui/venue/payout',                      // S31
 
+  /**
+   * 밴디 운영자 — 동아리 생성 확인.
+   * 탭에도 메뉴에도 없습니다. 주소를 아는 사람만 엽니다 (S32).
+   */
+  admin: '/ui/admin',
+
   // 초대
   invite: '/ui/invite',                                 // S15
   inviteSms: '/ui/invite/sms',                          // S16

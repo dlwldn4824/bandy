@@ -15,6 +15,7 @@ import S27JoinRequests from './screens/S27JoinRequests.tsx'
 import S28ShowStage from './screens/S28ShowStage.tsx'
 import S30OpenDays from './screens/S30OpenDays.tsx'
 import S31VenuePayout from './screens/S31VenuePayout.tsx'
+import S32Admin from './screens/S32Admin.tsx'
 import S19Run from './screens/S19Run.tsx'
 import S4Club from './screens/S4Club.tsx'
 import S5Recruit from './screens/S5Recruit.tsx'
@@ -159,6 +160,9 @@ export const lightUiRoutes = [
       </AllowedOnly>
     }
   />,
+  // 밴디 운영자용 — 게이트를 달지 않았습니다. 가짜 자물쇠를 달면 막아 둔
+  // 줄 알게 되고, 진짜로 막는 것은 서버가 붙을 때입니다
+  <Route key="ui-admin" path="/ui/admin" element={<S32Admin />} />,
   <Route key="ui-entry" path="/ui/entry" element={
       <ManagerOnly title="입장 관리" what="입장 관리">
         <S12Entry />

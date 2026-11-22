@@ -1,0 +1,58 @@
+.s32__gap-12 { height: 12px; }
+.s32__gap-14 { height: 14px; }
+.s32__gap-22 { height: 22px; }
+.s32__gap-26 { height: 26px; }
+
+/* S32 밴디 운영자 */
+.s32 { display: flex; flex-direction: column; padding: 0 20px; }
+.s32__lead { font-size: 14px; font-weight: 600; line-height: 21px; color: var(--lui-ink); word-break: keep-all; }
+.s32__why {
+  font-size: 12px; line-height: 19px; color: var(--lui-sub);
+  background: var(--lui-box); border-radius: 12px; padding: 12px 13px; word-break: keep-all;
+}
+.s32__list { display: flex; flex-direction: column; gap: 10px; }
+
+.s32-req { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.s32-req__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.s32-req__club { font-size: 16px; font-weight: 800; letter-spacing: -0.2px; color: var(--lui-ink); }
+.s32-req__sub { font-size: 11.5px; color: var(--lui-sub); }
+.s32-req__mine {
+  font-size: 11.5px; line-height: 17px; color: var(--lui-accent-soft);
+  background: var(--lui-tint); border-radius: 10px; padding: 9px 11px; word-break: keep-all;
+}
+/* 눈으로 맞춰 볼 값이라 크게 */
+.s32-req__code {
+  font-size: 17px; font-weight: 800; letter-spacing: 0.5px;
+  color: var(--lui-ink); background: var(--lui-box);
+  border-radius: 12px; padding: 13px; text-align: center;
+}
+.s32-req__hint { font-size: 11.5px; line-height: 17px; color: var(--lui-sub-2); word-break: keep-all; }
+.s32-req__acts { display: flex; gap: 8px; }
+.s32-req__acts .lui-btn { flex: 1; min-width: 0; height: 42px; border-radius: 12px; font-size: 13.5px; }
+
+.s32-empty { padding: 20px 16px; display: flex; flex-direction: column; gap: 8px; }
+.s32-empty__title { font-size: 14px; font-weight: 700; color: var(--lui-ink); }
+.s32-empty__body { font-size: 12.5px; line-height: 1.75; color: var(--lui-sub); }
+
+.s32__done { padding: 4px 16px; }
+.s32-done { display: flex; flex-direction: column; gap: 3px; padding: 13px 0; }
+.s32-done + .s32-done { border-top: 1px solid var(--lui-line-2); }
+.s32-done__club { font-size: 14px; font-weight: 700; color: var(--lui-ink); }
+.s32-done__state { font-size: 11.5px; color: var(--lui-sub); word-break: keep-all; }
+
+.s32__note { font-size: 11.5px; line-height: 18px; color: var(--lui-sub-2); padding: 0 2px; word-break: keep-all; }
+
+.s32__reasons { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 16px; }
+.s32-reason {
+  text-align: left; font-size: 13px; line-height: 19px; padding: 12px 14px;
+  border: 1px solid var(--lui-line-2); border-radius: 13px;
+  background: var(--lui-card); color: var(--lui-body); word-break: keep-all;
+}
+.s32-reason--on { border-color: var(--lui-ink); color: var(--lui-ink); font-weight: 600; }
+.s32__own {
+  width: 100%; font: inherit; font-size: 13px; line-height: 20px;
+  padding: 12px 14px; border: 1px solid var(--lui-field-line);
+  border-radius: 13px; background: var(--lui-field); color: var(--lui-ink); resize: none;
+}
+.s32__pair { display: flex; gap: 8px; }
+.s32__pair .lui-btn { flex: 1; min-width: 0; height: 46px; border-radius: 13px; font-size: 14px; }
