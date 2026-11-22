@@ -34,6 +34,15 @@
         "/Users/LEEJIWOO/Desktop/대학교폴더/대외활동/bandy-case-study"
       ],
       "port": 4173
+    },
+    {
+      "name": "bandy-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:server"
+      ],
+      "port": 3001
     }
   ]
 }

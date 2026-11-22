@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Phone from '../components/Phone.tsx'
 import TabBar from '../components/TabBar.tsx'
@@ -8,6 +8,7 @@ import Button from '../components/Button.tsx'
 import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
 import { useMembership } from '../auth/membership.ts'
+import { agoText, useClubNews, WORD_MAX } from '../clubs/news.ts'
 import { clubFeed, showRun } from '../../mocks/bandyLight.ts'
 import { clubFacts, myFacts } from '../../mocks/auth.ts'
 import { recommendClubs } from '../recommend.ts'
@@ -27,6 +28,12 @@ import './L2Clubs.css'
 const L2Clubs = () => {
   const navigate = useNavigate()
   const { membership, inClub, isManager } = useMembership()
+  /**
+   * 한마디 — 소식은 읽기만 할 수 있었습니다.
+   * 글쓰기 화면을 따로 만들면 아무도 안 쓰니 목록 바로 위에 한 줄 칸을 둡니다.
+   */
+  const { mine: myWords, post, remove } = useClubNews()
+  const [word, setWord] = useState('')
 
   const following = clubFeed.following
   // 「같은 장르 · 3km」 를 목에 적어 두는 대신 사실에서 계산합니다.
@@ -116,11 +123,63 @@ const L2Clubs = () => {
 
           <div className="l2__gap-26" />
           {/* 우리 동아리와 찜한 동아리에서 무슨 일이 있었나 — 이 탭에서 제일 자주 볼 것 */}
-          <SectionHeader title="소식" aside="우리 · 찜한 동아리" />
+          <SectionHeader title="소식" aside={inClub ? '우리 · 찜한 동아리' : '찜한 동아리'} />
           <div className="l2__gap-12" />
+          {/* 동아리 사람만 올립니다. 관객에게는 칸 자체가 없습니다 */}
+          {inClub && (
+            <div className="l2-say">
+              <span className="l2-say__avatar">{membership?.clubName.slice(0, 1)}</span>
+              <input
+                className="l2-say__input"
+                value={word}
+                onChange={(e) => setWord(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && word.trim()) {
+                    post(word)
+                    setWord('')
+                  }
+                }}
+                placeholder="한마디 — 오늘 합주 끝, 셋리스트 올림…"
+                maxLength={WORD_MAX}
+              />
+              {word.trim() !== '' && (
+                <button
+                  type="button"
+                  className="l2-say__go"
+                  onClick={() => {
+                    post(word)
+                    setWord('')
+                  }}
+                >
+                  올리기
+                </button>
+              )}
+            </div>
+          )}
+
           {/* 카드도 아바타도 없이 — 읽는 것이라 글이 앞에 섭니다 */}
           <div className="l2__news">
-            {clubFeed.news.map((n) => (
+            {/* 방금 올린 한마디가 맨 위에 — 올렸는데 안 보이면 안 올라간 줄 압니다 */}
+            {myWords.map((w) => (
+              <div key={w.id} className="l2-news l2-news--mine">
+                <span className="l2-news__rail" aria-hidden />
+                <span className="l2-news__body">
+                  <span className="l2-news__text">{w.text}</span>
+                  <span className="l2-news__who">
+                    <span className="l2-news__from l2-news__from--mine">우리 동아리</span>
+                    {w.club} · {agoText(w.at)}
+                    {/* 잘못 올린 한 줄을 지울 길 — 올리기만 되고 못 지우면 못 올립니다 */}
+                    <button type="button" className="l2-news__del" onClick={() => remove(w.id)}>
+                      지우기
+                    </button>
+                  </span>
+                </span>
+              </div>
+            ))}
+            {/* 동아리에 없는 사람에게 「우리 동아리」 소식은 남의 것입니다 */}
+            {clubFeed.news
+              .filter((n) => inClub || n.source !== 'mine')
+              .map((n) => (
               <button
                 key={n.id}
                 type="button"
