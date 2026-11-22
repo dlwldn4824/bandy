@@ -57,8 +57,18 @@ const MODES: ThemeMode[] = ['system', 'light', 'dark']
 const SETTING_TO: Record<string, string> = {
   '알림 설정': P.notifications,
   '공연장으로 등록하기': P.onboarding('venue'),
-  // 「준비 중」 이던 자리입니다. 등록할 데가 없어서 운영진이 예매를 못 열었습니다.
-  '계좌 · 환불 정보': P.bankAccount,
+  /**
+   * 한 줄이 두 사람 것이었습니다.
+   *
+   * 「계좌 · 환불 정보」 는 누구에게나 보이는데 누르면 운영진 전용 화면으로
+   * 갔습니다. 관객이 누르면 「계좌 등록은 동아리 운영진만 할 수 있습니다」.
+   * 이름은 **환불**이라고 해 놓고 화면은 동아리 **입금** 계좌라, 환불받을
+   * 내 계좌를 찾던 사람은 두 번 틀립니다 — 막히고, 엉뚱한 데 왔고.
+   *
+   * 그래서 보는 사람에 따라 다른 줄을 둡니다.
+   */
+  '동아리 입금 계좌': P.bankAccount,
+  '환불 안내': P.legal('refund'),
 }
 
 const SETTING_SOON: Record<string, string> = {
@@ -275,7 +285,12 @@ const S14Me = () => {
                 </span>
               </div>
             </div>
-            {me.settings.map((row) => (
+            {me.settings.map((raw) => {
+              const row =
+                raw.title === '계좌 · 환불 정보'
+                  ? { ...raw, title: isManager ? '동아리 입금 계좌' : '환불 안내' }
+                  : raw
+              return (
               <MenuRow
                 key={row.title}
                 title={row.title}
@@ -287,7 +302,8 @@ const S14Me = () => {
                   if (text) setSoon({ title: row.title, text })
                 }}
               />
-            ))}
+              )
+            })}
           </div>
 
           <div className="s14__gap-26" />

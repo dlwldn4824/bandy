@@ -14,6 +14,9 @@ import { PAY_CONFIGURED } from '../pay/portone.ts'
 import { useTicketState } from '../pay/ticketState.ts'
 import { BANK_UNSET, deadlineFrom, dueText, remainText } from '../pay/deposit.ts'
 import { useBankAccount } from '../pay/bankAccount.ts'
+import { useStage } from '../shows/stage.ts'
+import { showFacts } from '../shows/showFacts.ts'
+import NotSelling from '../shows/NotSelling.tsx'
 import glossSoft from '../assets/gloss-soft-accent.svg'
 import glossSpec from '../assets/gloss-spec-accent.svg'
 import './D3Deposit.css'
@@ -32,8 +35,19 @@ const D3Deposit = () => {
   // 결제 수단 탭. 카드가 준비되기 전에는 탭 자체를 그리지 않습니다 —
   // 고를 게 하나뿐인데 탭을 보여 주면 고를 수 있는 것처럼 보입니다.
   const [pay, setPay] = useState<'transfer' | 'card'>('transfer')
+  /**
+   * 이 공연이 누구 것이고 언제인지 — 둘 다 여기서 갈립니다.
+   *
+   * 계좌는 **공연을 연 동아리**의 것이어야 합니다. 인자 없이 부르면 보는
+   * 사람의 소속으로 떨어지는데, 입금 안내를 보는 사람은 예매자입니다.
+   * 그래서 테스트밴드 운영진이 멜로딕 공연을 예매하면 테스트밴드 계좌가
+   * 떴습니다 — **남의 공연 티켓값이 내 계좌로 들어옵니다.**
+   */
+  const { at, clubId: ownerClubId } = showFacts(showId)
+  const { stage } = useStage(showId, at)
+
   // 운영진이 계좌를 적으면 그 자리에서 바뀝니다
-  const { bank, ready: BANK_READY } = useBankAccount()
+  const { bank, ready: BANK_READY } = useBankAccount(ownerClubId)
   const [cancelling, setCancelling] = useState(false)
   /**
    * 「입금했어요」 는 **보냈다고 알리는 것**이지 확인이 아닙니다.
@@ -61,6 +75,9 @@ const D3Deposit = () => {
       /* 클립보드를 못 쓰는 환경에서는 조용히 넘어갑니다 */
     }
   }
+
+  // 파는 중이 아니면 돈 받는 화면을 열지 않습니다 (D2Book 과 같은 까닭)
+  if (stage !== 'selling') return <NotSelling showId={showId} stage={stage} />
 
   return (
     <Phone>

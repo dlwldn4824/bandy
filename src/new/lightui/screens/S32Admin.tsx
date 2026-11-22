@@ -5,6 +5,7 @@ import SectionHeader from '../components/SectionHeader.tsx'
 import Button from '../components/Button.tsx'
 import Sheet from '../components/Sheet.tsx'
 import { approveClubJoin, rejectClubJoin, useClubJoin } from '../auth/clubJoin.ts'
+import { useAdminGate, type AdminGateResult } from '../auth/adminGate.ts'
 import { adminCopy as t, clubRequests, type ClubRequest } from '../../mocks/bandyLight.ts'
 
 /** 이 기기에서 보낸 신청은 눌러서 진짜로 승인됩니다 */
@@ -20,11 +21,19 @@ import './S32Admin.css'
  * 왔는지.
  *
  * **앱 안에 있을 필요가 없는 화면입니다.** 운영자는 몇 명이고 하루 몇
- * 건이라 탭에도 메뉴에도 두지 않았습니다. 주소를 아는 사람만 엽니다 —
- * 로그인으로 막는 것은 서버가 붙을 때 할 일이고, 지금 가짜 자물쇠를
- * 달아 두면 막아 둔 줄 알게 됩니다.
+ * 건이라 탭에도 메뉴에도 두지 않았습니다.
+ *
+ * 한동안 주소만 알면 열렸습니다. 「가짜 자물쇠를 달면 막아 둔 줄 알게
+ * 된다」 고 생각해서 비워 뒀는데, **주소를 아는 것은 비밀이 아니었습니다.**
+ * 막 가입한 계정으로 열면 자기가 보낸 생성 신청이 승인 버튼과 함께 떠
+ * 있었고, 누르면 그 자리에서 운영진 소속이 생겼습니다 — 이 화면이 막으려던
+ * 바로 그 일입니다.
+ *
+ * 지금은 서버에 물어서 엽니다(`auth/adminGate.ts`). 가짜 자물쇠가 아니라
+ * `ADMIN_LOGIN_CODE` 를 서버가 맞춰 보는 진짜 자물쇠입니다.
  */
 const S32Admin = () => {
+  const { ok: unlocked, verifyAdminCode } = useAdminGate()
   /** 이 기기에서 보낸 생성 신청 — 눌러서 실제로 승인되는 유일한 줄입니다 */
   const localReq = useClubJoin()
   const [handled, setHandled] = useState<Record<string, 'approved' | 'rejected'>>({})
@@ -87,6 +96,8 @@ const S32Admin = () => {
       </div>
     </div>
   )
+
+  if (!unlocked) return <AdminLock verify={verifyAdminCode} />
 
   return (
     <Phone>
@@ -199,6 +210,70 @@ const S32Admin = () => {
           )}
         </div>
       </Sheet>
+    </Phone>
+  )
+}
+
+/**
+ * 운영자 코드를 묻는 자리.
+ *
+ * 틀린 까닭을 구분해 말합니다 — 코드가 틀린 것과 서버에 못 닿은 것과
+ * 아직 코드를 안 넣어 둔 것은 할 일이 전혀 다릅니다. 「열 수 없습니다」
+ * 한 줄로 뭉치면 운영자가 어디를 봐야 할지 모릅니다.
+ */
+const LOCK_SAYS: Record<Exclude<AdminGateResult, 'ok'>, string> = {
+  wrong: '코드가 다릅니다.',
+  too_many: '여러 번 틀렸습니다. 잠시 뒤에 다시 해 주세요.',
+  not_configured: '서버에 운영자 코드(ADMIN_LOGIN_CODE)가 아직 없습니다.',
+  unreachable: '서버에 닿지 못했습니다. 잠시 뒤에 다시 해 주세요.',
+}
+
+const AdminLock = ({ verify }: { verify: (code: string) => Promise<AdminGateResult> }) => {
+  const [code, setCode] = useState('')
+  const [says, setSays] = useState<string | null>(null)
+  const [asking, setAsking] = useState(false)
+
+  const submit = async () => {
+    if (!code.trim() || asking) return
+    setAsking(true)
+    setSays(null)
+    const r = await verify(code)
+    setAsking(false)
+    if (r === 'ok') return
+    setCode('')
+    setSays(LOCK_SAYS[r])
+  }
+
+  return (
+    <Phone>
+      <TopBar title={t.title} back={false} />
+      <div className="lui-body">
+        <div className="s32-lock">
+          <div className="lui-card s32-lock__card">
+            <p className="s32-lock__title">운영자 코드를 넣어 주세요</p>
+            <p className="s32-lock__sub">
+              동아리 생성 신청을 확인하는 자리입니다. 밴디 운영자만 엽니다.
+            </p>
+            <input
+              className="lui-input s32-lock__input"
+              type="password"
+              value={code}
+              autoComplete="off"
+              placeholder="운영자 코드"
+              onChange={(e) => setCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void submit()
+              }}
+            />
+            {says && <p className="s32-lock__says">{says}</p>}
+          </div>
+        </div>
+      </div>
+      <div className="lui-bottombar lui-bottombar--stack">
+        <Button block disabled={!code.trim() || asking} onClick={() => void submit()}>
+          {asking ? '확인하는 중…' : '열기'}
+        </Button>
+      </div>
     </Phone>
   )
 }

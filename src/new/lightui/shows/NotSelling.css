@@ -1,0 +1,4 @@
+.notsell { padding: 26px 20px 0; }
+.notsell__card { padding: 22px 18px; display: flex; flex-direction: column; gap: 8px; }
+.notsell__title { font-size: 15px; font-weight: 700; color: var(--lui-ink); }
+.notsell__sub { font-size: 12.5px; line-height: 1.6; color: var(--lui-sub); }

@@ -10,6 +10,9 @@ import Button from '../components/Button.tsx'
 import { P } from '../paths.ts'
 import { getSession, saveSession } from '../auth/kakao.ts'
 import { booking } from '../../mocks/bandyLight.ts'
+import { useStage } from '../shows/stage.ts'
+import { showFacts } from '../shows/showFacts.ts'
+import NotSelling from '../shows/NotSelling.tsx'
 import './D2Book.css'
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
@@ -18,6 +21,15 @@ const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
 const D2Book = () => {
   const navigate = useNavigate()
   const { showId = 'glow' } = useParams()
+
+  /**
+   * 파는 중인 공연만 예매를 받습니다.
+   *
+   * D1 의 아래 버튼은 단계를 보고 잠기는데, 여기는 보지 않았습니다. 버튼을
+   * 잠그는 것으로는 모자랍니다 — 링크·초대장·북마크는 버튼을 거치지 않고
+   * 이 주소로 바로 들어옵니다. 어제 끝난 공연이 끝까지 팔리고 있었습니다.
+   */
+  const { stage } = useStage(showId, showFacts(showId).at)
 
   // 공연을 만든 쪽이 연 것만 팝니다
   const offered = booking.addons.filter((a) => a.open)
@@ -41,6 +53,8 @@ const D2Book = () => {
   const addonTotal = offered.reduce((sum, a) => sum + a.price * (addons[a.id] ?? 0), 0)
   const fee = tickets * booking.feePerTicket
   const total = ticketTotal + addonTotal + fee
+
+  if (stage !== 'selling') return <NotSelling showId={showId} stage={stage} />
 
   return (
     <Phone>

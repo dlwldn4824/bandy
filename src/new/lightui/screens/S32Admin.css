@@ -56,3 +56,11 @@
 }
 .s32__pair { display: flex; gap: 8px; }
 .s32__pair .lui-btn { flex: 1; min-width: 0; height: 46px; border-radius: 13px; font-size: 14px; }
+
+/* 운영자 코드 자물쇠 */
+.s32-lock { padding: 26px 20px 0; }
+.s32-lock__card { padding: 22px 18px; display: flex; flex-direction: column; gap: 10px; }
+.s32-lock__title { font-size: 15px; font-weight: 700; color: var(--lui-ink); }
+.s32-lock__sub { font-size: 12.5px; line-height: 1.6; color: var(--lui-sub); }
+.s32-lock__input { margin-top: 4px; }
+.s32-lock__says { font-size: 12.5px; color: var(--lui-accent); }

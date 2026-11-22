@@ -40,14 +40,41 @@ export function kakaoRedirectUri() {
   return `${window.location.origin}/ui/auth/kakao`
 }
 
+/**
+ * 스크립트가 **차단되면 onload 도 onerror 도 오지 않습니다.**
+ *
+ * 사내망·광고 차단기·인앱 브라우저에서 그렇습니다. 그러면 약속이 영원히
+ * 끝나지 않고 버튼은 「카카오 연결 중…」 인 채로 멈춥니다 — 눌린 것도
+ * 아니고 실패한 것도 아닌 상태라 사용자는 계속 누릅니다.
+ *
+ * 기다리다 포기하는 쪽이 낫습니다. 포기하면 S1Start 가 「이메일로 시작해
+ * 보세요」 를 띄웁니다.
+ */
+const SDK_WAIT_MS = 8000
+
 function loadSdk(): Promise<KakaoSdk> {
   if (window.Kakao) return Promise.resolve(window.Kakao)
   return new Promise((resolve, reject) => {
+    let done = false
+    const finish = (fn: () => void) => {
+      if (done) return
+      done = true
+      window.clearTimeout(timer)
+      fn()
+    }
+    const timer = window.setTimeout(
+      () => finish(() => reject(new Error('sdk_timeout'))),
+      SDK_WAIT_MS,
+    )
+
     const el = document.createElement('script')
     el.src = SDK_SRC
     el.crossOrigin = 'anonymous'
-    el.onload = () => (window.Kakao ? resolve(window.Kakao) : reject(new Error('sdk_missing')))
-    el.onerror = () => reject(new Error('sdk_load_failed'))
+    el.onload = () =>
+      finish(() =>
+        window.Kakao ? resolve(window.Kakao) : reject(new Error('sdk_missing')),
+      )
+    el.onerror = () => finish(() => reject(new Error('sdk_load_failed')))
     document.head.appendChild(el)
   })
 }
@@ -160,7 +187,16 @@ export function needsOnboarding(user: BandyUser) {
 export async function signInWithKakao(): Promise<BandyUser> {
   const key = kakaoJsKey()
   if (key) {
-    const Kakao = await loadSdk()
+    let Kakao: KakaoSdk
+    try {
+      Kakao = await loadSdk()
+    } catch {
+      // 차단·시간 초과 — 어느 쪽이든 사용자가 할 수 있는 일은 같습니다
+      throw new KakaoSignInError(
+        'failed',
+        '카카오가 열리지 않아요. 이메일로 시작해 보세요.',
+      )
+    }
     if (!Kakao.isInitialized()) Kakao.init(key)
 
     // 돌아왔을 때 우리가 보낸 요청이 맞는지 확인할 값

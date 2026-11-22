@@ -255,16 +255,16 @@ function checkSource() {
       /localReq\.kind === 'create'/.test(admin),
     'approveJoin 은 이 기기가 보낸 신청만, S27 은 운영진 전용, S32 는 생성 신청만')
 
-  // 밴디 운영자 화면에 게이트가 없습니다 (주석에 일부러 그랬다고 적혀 있습니다)
-  check('ADMIN_UNGATED',
-    /path="\/ui\/admin" element=\{<S32Admin \/>\}/.test(routes) &&
-      /approveClubJoin\(\)/.test(admin))
+  // 고쳐짐: /ui/admin 이 운영자 코드를 서버에 물어서 열립니다
+  check('ADMIN_GATED',
+    /useAdminGate/.test(admin) && /AdminLock/.test(admin) &&
+      /verify-admin-code/.test(read('src/new/lightui/auth/adminGate.ts')),
+    '되돌아오면: 주소만 알면 신청자가 스스로 운영진이 됩니다')
 
-  // 입금 계좌를 공연 주최자가 아니라 **보는 사람**의 소속으로 찾습니다
-  check('BANK_LOOKED_UP_BY_VIEWER',
-    /useBankAccount\(\)/.test(deposit) &&
-      /getMembership\(\)\?\.clubId \?\? DEMO_CLUB_ID/.test(bank),
-    'D3Deposit 이 clubId 없이 useBankAccount() 를 부릅니다')
+  // 고쳐짐: 입금 계좌를 **공연을 연 동아리**에서 찾습니다
+  check('BANK_LOOKED_UP_BY_HOST',
+    /useBankAccount\(ownerClubId\)/.test(deposit) && /showFacts/.test(deposit),
+    '되돌아오면: 남의 공연 티켓값이 내 계좌로 들어옵니다')
 
   // 공연장 빈 날 지원은 보내는 쪽만 있습니다 (받는 목록은 적어 둔 값)
   check('VENUE_APPLY_LOCAL_ONLY',
@@ -272,10 +272,10 @@ function checkSource() {
       !/fetch\(/.test(apps) &&
       /수락하면 알림이 와요/.test(mocks))
 
-  // 마이의 「계좌 · 환불 정보」 가 운영진 전용 화면으로 갑니다
-  check('REFUND_ROW_TO_MANAGER_SCREEN',
-    /'계좌 · 환불 정보': P\.bankAccount/.test(me) &&
-      /path="\/ui\/console\/account"[\s\S]{0,120}ManagerOnly/.test(routes))
+  // 고쳐짐: 그 줄이 보는 사람에 따라 갈립니다 (운영진=입금 계좌, 관객=환불 안내)
+  check('REFUND_ROW_SPLIT_BY_ROLE',
+    /'동아리 입금 계좌': P\.bankAccount/.test(me) && /'환불 안내': P\.legal\('refund'\)/.test(me),
+    '되돌아오면: 관객 열에 아홉이 눌러서 운영진 전용 벽을 봅니다')
 
   // 입금 확인은 운영진 기기의 저장소에 남습니다 — 예매자 기기에서는 안 열립니다
   check('CONFIRM_LIVES_ON_MANAGER_DEVICE',
@@ -285,17 +285,19 @@ function checkSource() {
   // 받은 신청함이 비면 적어 둔 세 줄로 떨어집니다 — 주인을 보고 걸러야 합니다
   check('JOIN_INBOX_FALLS_BACK_TO_MOCK', /return joinRequests/.test(inbox))
 
-  // 끝난 공연을 D1 은 막는데 예매·입금 화면은 단계를 보지 않습니다
-  check('BOOK_IGNORES_STAGE',
-    /useStage/.test(read('src/new/lightui/screens/D1Show.tsx')) &&
-      !/useStage/.test(read('src/new/lightui/screens/D2Book.tsx')) &&
-      !/useStage/.test(deposit))
+  // 고쳐짐: 예매·입금 화면도 단계를 보고 파는 중이 아니면 막습니다
+  check('BOOK_READS_STAGE',
+    /useStage/.test(read('src/new/lightui/screens/D2Book.tsx')) && /useStage/.test(deposit) &&
+      /stage !== 'selling'/.test(read('src/new/lightui/screens/D2Book.tsx')) &&
+      /stage !== 'selling'/.test(deposit),
+    '되돌아오면: 어제 끝난 공연이 링크로 들어와 끝까지 팔립니다')
 
   // SDK 가 걸리면 onload 도 onerror 도 안 옵니다 — 시간 제한이 필요합니다
   // (파일 아래쪽 목 경로에도 setTimeout 이 있어서 loadSdk 안만 봅니다)
   const loadSdkBody = kakao.slice(kakao.indexOf('function loadSdk'), kakao.indexOf('export type KakaoFailure'))
-  check('KAKAO_SDK_NO_TIMEOUT',
-    /onerror = \(\) => reject/.test(loadSdkBody) && !/setTimeout/.test(loadSdkBody))
+  check('KAKAO_SDK_HAS_TIMEOUT',
+    /setTimeout/.test(loadSdkBody) && /sdk_timeout/.test(loadSdkBody),
+    '되돌아오면: 차단된 브라우저에서 버튼이 「카카오 연결 중…」 으로 멈춥니다')
 
   return { ok, warn }
 }
@@ -677,11 +679,13 @@ const ISSUES = {
     kind: 'blocked', sev: 'blocker',
     title: '동아리 생성을 승인하는 화면(/ui/admin)에 게이트가 없어 신청자가 스스로 승인한다',
     where: 'routes.tsx:165 · S32Admin.tsx:179',
+    fixed: '운영자 코드를 서버가 확인합니다 — auth/adminGate.ts',
   },
   'bank-by-viewer': {
     kind: 'premise', sev: 'blocker',
     title: '입금 계좌를 공연 주최자가 아니라 화면을 보는 사람의 소속에서 찾는다',
     where: 'D3Deposit.tsx:36 useBankAccount() · pay/bankAccount.ts keyOf',
+    fixed: '공연을 연 동아리에서 찾습니다 — shows/showFacts.ts',
   },
   'ticket-never-confirmed': {
     kind: 'premise', sev: 'major',
@@ -697,16 +701,19 @@ const ISSUES = {
     kind: 'blocked', sev: 'major',
     title: '마이의 「계좌 · 환불 정보」가 관객에게도 보이는데 운영진 전용 화면으로 간다',
     where: 'S14Me.tsx:61 → /ui/console/account (ManagerOnly)',
+    fixed: '운영진은 「동아리 입금 계좌」, 관객은 「환불 안내」 로 갈립니다',
   },
   'past-show-still-sells': {
     kind: 'premise', sev: 'blocker',
     title: '끝난 공연인데 예매·입금 화면은 그대로 열려 돈을 받는다',
     where: 'D1Show 는 단계를 보는데 D2Book · D3Deposit 은 보지 않습니다',
+    fixed: '두 화면도 단계를 읽습니다 — shows/NotSelling.tsx',
   },
   'kakao-sdk-no-timeout': {
     kind: 'config', sev: 'major',
     title: '카카오 SDK 가 안 떠도 「카카오 연결 중…」 에서 끝나지 않는다 (타임아웃 없음)',
     where: 'auth/kakao.ts loadSdk — onerror 는 있지만 시간 제한이 없습니다',
+    fixed: '8초 넘으면 「이메일로 시작해 보세요」 로 떨어집니다',
   },
 }
 
