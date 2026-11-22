@@ -7,7 +7,8 @@
  *
  * 필요한 환경 변수 (Vercel > Settings > Environment Variables):
  *   KAKAO_REST_API_KEY   앱 > 플랫폼 키 > REST API 키
- *   KAKAO_CLIENT_SECRET  앱 > 플랫폼 키 > REST API 키 > 클라이언트 시크릿
+ *   KAKAO_CLIENT_SECRET  앱 > 플랫폼 키 > REST API 키 > 클라이언트 시크릿 >
+ *                        카카오 로그인 (비즈니스 인증 쪽 아님 — 그건 본인확인 상품)
  *                        (새 키는 켜진 채로 만들어집니다 — 켜져 있으면 필수)
  */
 
