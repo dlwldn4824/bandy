@@ -14,6 +14,7 @@ import S26Members from './screens/S26Members.tsx'
 import S27JoinRequests from './screens/S27JoinRequests.tsx'
 import S28ShowStage from './screens/S28ShowStage.tsx'
 import S30OpenDays from './screens/S30OpenDays.tsx'
+import S31VenuePayout from './screens/S31VenuePayout.tsx'
 import S19Run from './screens/S19Run.tsx'
 import S4Club from './screens/S4Club.tsx'
 import S5Recruit from './screens/S5Recruit.tsx'
@@ -146,6 +147,15 @@ export const lightUiRoutes = [
       // 거절하기·공개 내리기·조건 수정이 다 있는 화면입니다
       <AllowedOnly need="venue" title="공연장" what="공연장 운영">
         <L3Venue />
+      </AllowedOnly>
+    }
+  />,
+  <Route
+    key="ui-venue-payout"
+    path="/ui/venue/payout"
+    element={
+      <AllowedOnly need="venue" title="정산" what="공연장 정산">
+        <S31VenuePayout />
       </AllowedOnly>
     }
   />,

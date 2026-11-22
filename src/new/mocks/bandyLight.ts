@@ -1196,6 +1196,75 @@ export const entryDesk = {
   onsite: { title: '현장에서 티켓 팔기', sub: '잔여 12석 · 현금 · 계좌' },
 }
 
+/* ── 공연장 정산 (S31) ───────────────────────────────
+ * 공연장은 **대관료가 아니라 티켓 매출에서** 받습니다. 그래서 동아리
+ * 정산과 계산이 다릅니다 — 동아리는 매출에서 수수료·공연장 몫·참가비를
+ * 빼고 남는 것이고, 공연장은 매출에 비율을 곱한 것입니다.
+ * ────────────────────────────────────────────────── */
+
+export interface VenuePayout {
+  id: string
+  /** 선 동아리 */
+  club: string
+  show: string
+  at: string
+  /** 판 표 수 */
+  tickets: number
+  /** 티켓 매출 (사전 구매는 뺍니다 — 음료·굿즈는 공연장 몫이 아닙니다) */
+  sales: number
+  /** 협의한 비율 (%) */
+  cut: number
+  state: 'waiting' | 'paid'
+  /** 받은 날 */
+  paidAt?: string
+}
+
+/** MOCK: 실제로는 끝난 공연의 정산 문서를 읽습니다 */
+export const venuePayouts: VenuePayout[] = [
+  {
+    id: 'glow',
+    club: '멜로딕 · 광운대',
+    show: '멜로딕 단독 공연',
+    at: '2026-11-22T19:00',
+    tickets: 40,
+    sales: 640000,
+    cut: 20,
+    state: 'waiting',
+  },
+  {
+    id: 'autumn-union',
+    club: '멜로딕 · 광운대',
+    show: '가을 연합 공연',
+    at: '2026-10-11T19:00',
+    tickets: 52,
+    sales: 780000,
+    cut: 20,
+    state: 'paid',
+    paidAt: '10.15',
+  },
+]
+
+export const venuePayoutCopy = {
+  title: '정산',
+  /** 공연장이 제일 먼저 보는 것 — 받을 돈이 얼마인가 */
+  waitingLabel: '받을 돈',
+  paidLabel: '받은 돈',
+  how: '대관료 대신 티켓 매출의 협의 비율을 받습니다. 사전 구매(음료·굿즈)는 공연장 몫이 아닙니다.',
+  empty: '정산할 공연이 아직 없어요.',
+  emptyBody: '비어 있는 날을 공개하고 동아리를 받으면, 공연이 끝난 뒤 여기에 뜹니다.',
+  waiting: '받을 예정',
+  paid: '받음',
+  rows: {
+    tickets: '판 표',
+    sales: '티켓 매출',
+    cut: '우리 몫',
+  },
+  notice: '공연이 끝나고 입금이 모두 확인되면 영업일 기준 3일 안에 보내 드립니다.',
+  /** 계좌는 지어내지 않습니다 — 등록한 것이 없으면 등록하라고 말합니다 */
+  noAccount: '받을 계좌가 아직 등록되지 않았어요',
+  noAccountBody: '계좌를 등록해야 정산을 보낼 수 있습니다.',
+}
+
 /* ── 공연장 빈 날 둘러보기 (S30) ─────────────────────
  * 사업 모델의 절반입니다. 지금까지는 **공연장이 날을 올리는 쪽**(L3)만
  * 있었습니다. 설 자리를 찾는 동아리 쪽이 없으면 올려 둔 날은 아무도 못 봅니다.

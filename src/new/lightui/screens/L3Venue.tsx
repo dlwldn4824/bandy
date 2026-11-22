@@ -319,13 +319,9 @@ const L3Venue = () => {
             if (tab.key === 'apps') appsRef.current?.scrollIntoView({ behavior: 'smooth' })
             // 전에는 동아리 정산 화면으로 보냈습니다. 그 화면은 동아리 운영진
             // 게이트라 공연장은 「운영진만 할 수 있어요」 를 만났습니다 — 자기
-            // 돈을 보러 갔는데요. 공연장 정산은 받는 쪽이 달라서 화면이 따로
-            // 필요합니다. 없는 동안 틀린 곳으로 보내느니 없다고 말합니다.
-            if (tab.key === 'settlement')
-              setNote({
-                title: '공연장 정산',
-                text: '아직 준비 중입니다. 공연장은 대관료 대신 티켓 매출에서 받기 때문에 동아리 정산과 계산이 달라, 화면을 따로 만들고 있습니다. 그때까지는 공연이 끝난 뒤 밴디가 정산 내역을 보내 드립니다.',
-              })
+            // 돈을 보러 갔는데요. 공연장은 대관료가 아니라 티켓 매출에서
+            // 받아 계산이 달라서, 화면을 따로 만들었습니다 (S31).
+            if (tab.key === 'settlement') navigate(P.venuePayout)
             if (tab.key === 'me') navigate(P.me)
           }
           return (

@@ -66,6 +66,8 @@ export const P = {
   // 공연장
   venue: '/ui/venue',                                   // L3
   entry: '/ui/entry',                                   // S12
+  /** 공연장 정산 — 동아리 정산과 계산이 다릅니다 */
+  venuePayout: '/ui/venue/payout',                      // S31
 
   // 초대
   invite: '/ui/invite',                                 // S15
