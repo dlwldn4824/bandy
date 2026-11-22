@@ -21,6 +21,8 @@ import { handleClubsRequest } from './lib/clubsApi.js'
 import { handleClubEventsRequest } from './lib/clubEventsApi.js'
 import { handleClubConnectionsRequest } from './lib/clubConnectionsApi.js'
 import { handleProfileCardsRequest } from './lib/profileCardsApi.js'
+import { handleKakaoAuthRequest } from './lib/kakaoAuthApi.js'
+import { handleEmailAuthRequest } from './lib/emailAuthApi.js'
 
 dotenv.config()
 
@@ -56,6 +58,15 @@ app.post('/api/clubs', handleClubsRequest)
 app.post('/api/club-events', handleClubEventsRequest)
 app.post('/api/club-connections', handleClubConnectionsRequest)
 app.post('/api/profile-cards', handleProfileCardsRequest)
+/**
+ * 로그인 — 배포(api/index.js)에는 있는데 여기에는 없었습니다.
+ *
+ * 그래서 카카오 키를 넣고도 로컬에서는 「Cannot POST /api/auth/kakao」 였습니다.
+ * 배포에서만 되는 로그인은 고치기 어려운 로그인입니다 — 한 번 돌 때마다
+ * 사람들이 보는 사이트에 올려야 하니까요.
+ */
+app.post('/api/auth/kakao', handleKakaoAuthRequest)
+app.post('/api/auth/email/:step', (req, res) => handleEmailAuthRequest(req, res, req.params.step))
 
 const httpServer = createServer(app)
 const io = new Server(httpServer, {
