@@ -45,6 +45,7 @@ const MenuRow = ({
 const TO: Record<(typeof c.menu)[number]['key'], string> = {
   joins: P.joinRequests,
   members: P.clubMembers,
+  venues: P.openDays,
   teams: P.clubOps,
   // 「공연 당일」 은 다가오는 첫 공연을 엽니다. 전에는 인자가 없어
   // 기본값(멜로딕 glow)으로 갔습니다 — 다른 동아리도 거기로 갔습니다.

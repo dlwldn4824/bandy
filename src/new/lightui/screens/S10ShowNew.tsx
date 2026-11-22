@@ -5,6 +5,7 @@ import TopBar from '../components/TopBar.tsx'
 import Steps from '../components/Steps.tsx'
 import ListRow from '../components/ListRow.tsx'
 import Button from '../components/Button.tsx'
+import Icon from '../components/Icon.tsx'
 import { P } from '../paths.ts'
 import { showForm as f } from '../../mocks/bandyLight.ts'
 import { useMembership } from '../auth/membership.ts'
@@ -136,6 +137,15 @@ const S10ShowNew = () => {
             <p className="s10__pending">
               빈 날이 맞춰지면 알려 드려요. 자리가 잡히기 전에는 예매를 열 수 없습니다.
             </p>
+          )}
+
+          {/* 「밴디 연결」 을 골라 놓고 어떤 날이 비어 있는지 볼 데가 없으면
+              고른 적이 없는 것과 같습니다 */}
+          {venue === 'bandy' && (
+            <button type="button" className="s10__tovenues" onClick={() => navigate(P.openDays)}>
+              공연장 빈 날 둘러보기
+              <Icon name="chevron-right" size={15} />
+            </button>
           )}
 
           <div className="s10__gap-14" />

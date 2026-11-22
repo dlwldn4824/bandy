@@ -43,6 +43,8 @@ export const P = {
   clubs: '/ui/clubs',                                   // L2
   /** 모집 글 · 받은 제안 · 보낸 제안 — 동아리 탭에 있던 걸 운영 아래로 옮겼습니다 */
   clubOps: '/ui/console/teams',                         // S25
+  /** 공연장이 비워 둔 날 — 설 자리를 찾는 쪽 */
+  openDays: '/ui/console/venues',                       // S30
   /** 들어온 참여 신청 — 받아 줘야 부원이 생깁니다 */
   joinRequests: '/ui/console/joins',                    // S27
   /** 부원 목록과 운영진 권한 — 운영진은 둘 이상을 권합니다 */

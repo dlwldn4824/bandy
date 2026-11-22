@@ -1,0 +1,69 @@
+.s30__gap-12 { height: 12px; }
+.s30__gap-14 { height: 14px; }
+.s30__gap-18 { height: 18px; }
+
+/* S30 설 자리 찾기 */
+.s30 { display: flex; flex-direction: column; padding: 0 20px; }
+.s30__lead { font-size: 13px; line-height: 20px; color: var(--lui-sub); word-break: keep-all; }
+.s30__list { display: flex; flex-direction: column; gap: 10px; }
+
+.s30-day { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.s30-day__head { display: flex; align-items: center; gap: 8px; }
+.s30-day__when { font-size: 15px; font-weight: 800; letter-spacing: -0.2px; color: var(--lui-ink); }
+/* 선 적 있는 곳은 먼저 눈에 들어와야 합니다 — 아는 자리가 제일 안전합니다 */
+.s30-day__been {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: var(--lui-r-pill);
+  background: var(--lui-tint); color: var(--lui-accent-soft);
+}
+.s30-day__venue { font-size: 13.5px; font-weight: 700; color: var(--lui-ink); }
+.s30-day__region { font-weight: 500; color: var(--lui-sub); }
+
+.s30-day__facts { display: flex; gap: 10px; }
+.s30-day__fact {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 3px;
+  background: var(--lui-box); border-radius: 12px; padding: 11px 12px;
+}
+.s30-day__k { font-size: 10.5px; color: var(--lui-sub-2); }
+.s30-day__v { font-size: 13px; font-weight: 700; color: var(--lui-ink); }
+/* 규칙 7 — 돈이 갈리는 숫자라 빨강 */
+.s30-day__v--accent { color: var(--lui-accent); }
+.s30-day__gear { font-size: 11.5px; color: var(--lui-sub); word-break: keep-all; }
+.s30-day__btn { height: 44px; border-radius: 12px; font-size: 13.5px; }
+
+.s30-empty { padding: 20px 16px; display: flex; flex-direction: column; gap: 8px; }
+.s30-empty__title { font-size: 14.5px; font-weight: 700; color: var(--lui-ink); }
+.s30-empty__body { font-size: 12.5px; line-height: 1.75; color: var(--lui-sub); word-break: keep-all; }
+
+.s30__note { font-size: 11.5px; line-height: 18px; color: var(--lui-sub-2); padding: 0 2px; word-break: keep-all; }
+
+/* 어느 공연으로 설까요 */
+.s30__picks { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 16px; }
+.s30-pick {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--lui-line-2); border-radius: 13px;
+  background: var(--lui-card); text-align: left; width: 100%;
+}
+.s30-pick--on { border-color: var(--lui-ink); }
+.s30-pick__title { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--lui-ink); }
+.s30-pick__dot {
+  width: 18px; height: 18px; flex: none;
+  border-radius: var(--lui-r-pill);
+  border: 1.5px solid var(--lui-field-line);
+}
+.s30-pick--on .s30-pick__dot {
+  border-color: var(--lui-ink); background: var(--lui-ink);
+  box-shadow: inset 0 0 0 4px var(--lui-card);
+}
+
+.s30__pair { display: flex; gap: 8px; }
+.s30__pair .lui-btn { flex: 1; min-width: 0; height: 46px; border-radius: 13px; font-size: 14px; }
+
+/* 보낸 지원 */
+.s30__sent { padding: 4px 16px; }
+.s30-sent { display: flex; flex-direction: column; gap: 3px; padding: 13px 0; }
+.s30-sent + .s30-sent { border-top: 1px solid var(--lui-line-2); }
+.s30-sent__where { font-size: 13.5px; font-weight: 700; color: var(--lui-ink); }
+.s30-sent__what { font-size: 11.5px; color: var(--lui-sub); }

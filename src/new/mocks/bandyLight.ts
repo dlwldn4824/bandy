@@ -979,6 +979,7 @@ export const clubConsole = {
     // 기다리는 사람이 있는 줄을 제일 위에 둡니다
     { key: 'joins' as const, title: '들어온 신청', value: '기다리는 사람' },
     { key: 'members' as const, title: '부원', value: '운영진 권한 주기' },
+    { key: 'venues' as const, title: '설 자리 찾기', value: '공연장 빈 날' },
     { key: 'teams' as const, title: '함께 설 팀', value: '모집 · 제안 2건' },
     { key: 'run' as const, title: '공연 당일', value: '타임라인 · 공지' },
     { key: 'deposits' as const, title: '입금 관리', value: '확인 2건' },
@@ -1193,6 +1194,58 @@ export const entryDesk = {
     { initial: '박', name: '박서준', sub: '일반 1매 · 18:58' },
   ],
   onsite: { title: '현장에서 티켓 팔기', sub: '잔여 12석 · 현금 · 계좌' },
+}
+
+/* ── 공연장 빈 날 둘러보기 (S30) ─────────────────────
+ * 사업 모델의 절반입니다. 지금까지는 **공연장이 날을 올리는 쪽**(L3)만
+ * 있었습니다. 설 자리를 찾는 동아리 쪽이 없으면 올려 둔 날은 아무도 못 봅니다.
+ * ────────────────────────────────────────────────── */
+
+export interface OpenDay {
+  id: string
+  venue: string
+  region: string
+  /** `YYYY-MM-DDTHH:mm` — 화면 글자는 여기서 만듭니다 */
+  at: string
+  /** 수용 인원 */
+  cap: number
+  /** 공연장이 가져가는 티켓 매출 비율 (%) */
+  cut: number
+  /** 무대·음향 한 줄 */
+  gear: string
+  /** 이미 선 적이 있는 곳인지 — 아는 자리가 먼저입니다 */
+  beenHere?: boolean
+}
+
+/**
+ * MOCK: 실제로는 공연장들이 공개한 날을 모아 읽습니다.
+ * 대관료 대신 티켓 매출의 협의 비율을 가져갑니다 — 밴디의 전제입니다.
+ */
+export const openDays: OpenDay[] = [
+  { id: 'rg-1213', venue: '라디오가가', region: '서울 노원', at: '2026-12-13T19:00', cap: 80, cut: 20, gear: '드럼·앰프 있음 · 음향 1명', beenHere: true },
+  { id: 'mh-1219', venue: '몽향', region: '서울 서대문', at: '2026-12-19T19:00', cap: 60, cut: 20, gear: '드럼 있음 · 앰프 직접' },
+  { id: 'rg-1227', venue: '라디오가가', region: '서울 노원', at: '2026-12-27T18:00', cap: 80, cut: 20, gear: '드럼·앰프 있음 · 음향 1명', beenHere: true },
+  { id: 'mn-0110', venue: '홍대 미드나잇', region: '서울 홍대', at: '2027-01-10T19:00', cap: 120, cut: 25, gear: '풀백라인 · 음향 2명' },
+  { id: 'av-0117', venue: '얼라이브홀', region: '서울 홍대', at: '2027-01-17T18:30', cap: 150, cut: 25, gear: '풀백라인 · 조명 포함' },
+]
+
+export const openDaysCopy = {
+  title: '설 자리 찾기',
+  lead: '공연장이 비워 둔 날입니다. 대관료 대신 티켓 매출의 일부를 가져갑니다.',
+  empty: '지금 공개된 날이 없어요.',
+  emptyBody: '공연장이 날을 올리면 여기에 뜹니다. 며칠 뒤에 다시 봐 주세요.',
+  been: '선 적 있음',
+  apply: '지원하기',
+  applied: '지원함',
+  applyAsk: (venue: string) => `${venue}에 지원할까요?`,
+  /** 어느 공연으로 설 것인지가 있어야 공연장이 판단합니다 */
+  pick: '어느 공연으로 설까요',
+  noShow: '아직 만든 공연이 없어요',
+  noShowBody: '공연장은 어떤 공연이 서는지를 보고 정합니다. 먼저 공연을 만들어 주세요.',
+  noShowCta: '공연 만들기',
+  sent: '공연장이 수락하면 알림이 와요. 그 전에는 다른 날에도 지원할 수 있습니다.',
+  sentTitle: '보낸 지원',
+  note: '수락되면 그 날짜로 공연이 확정되고, 정산에서 공연장 몫이 빠집니다.',
 }
 
 /* ── S3 검색 ────────────────────────────────────────── */

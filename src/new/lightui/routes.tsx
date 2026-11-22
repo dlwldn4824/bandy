@@ -13,6 +13,7 @@ import S29BankAccount from './screens/S29BankAccount.tsx'
 import S26Members from './screens/S26Members.tsx'
 import S27JoinRequests from './screens/S27JoinRequests.tsx'
 import S28ShowStage from './screens/S28ShowStage.tsx'
+import S30OpenDays from './screens/S30OpenDays.tsx'
 import S19Run from './screens/S19Run.tsx'
 import S4Club from './screens/S4Club.tsx'
 import S5Recruit from './screens/S5Recruit.tsx'
@@ -87,6 +88,11 @@ export const lightUiRoutes = [
   <Route key="ui-show-stage" path="/ui/show/:showId/stage" element={
       <ManagerOnly title="공연 상태" what="공연 상태 바꾸기">
         <S28ShowStage />
+      </ManagerOnly>
+    } />,
+  <Route key="ui-opendays" path="/ui/console/venues" element={
+      <ManagerOnly title="설 자리 찾기" what="공연장에 지원하기">
+        <S30OpenDays />
       </ManagerOnly>
     } />,
   <Route key="ui-joins" path="/ui/console/joins" element={
