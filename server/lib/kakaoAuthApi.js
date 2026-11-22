@@ -6,8 +6,9 @@
  * 그래서 이 함수가 대신 받아 오고, 액세스 토큰은 서버 밖으로 내보내지 않습니다.
  *
  * 필요한 환경 변수 (Vercel > Settings > Environment Variables):
- *   KAKAO_REST_API_KEY   앱 > 앱 키 > REST API 키
- *   KAKAO_CLIENT_SECRET  앱 > 카카오 로그인 > 보안 > Client Secret (ON 이면 필수)
+ *   KAKAO_REST_API_KEY   앱 > 플랫폼 키 > REST API 키
+ *   KAKAO_CLIENT_SECRET  앱 > 플랫폼 키 > REST API 키 > 클라이언트 시크릿
+ *                        (새 키는 켜진 채로 만들어집니다 — 켜져 있으면 필수)
  */
 
 const TOKEN_URL = 'https://kauth.kakao.com/oauth/token'
