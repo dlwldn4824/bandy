@@ -60,6 +60,7 @@
 /* 초안으로 되돌리기 — 글자 링크 (규칙 1) */
 .s28__back { font-size: 12.5px; color: var(--lui-sub); text-decoration: underline; align-self: flex-start; }
 
-.s28__bottom .lui-btn { width: 100%; }
+.s28__bottom > .lui-btn { width: 100%; }
+.s28__bottom .s28__pair { width: 100%; }
 .s28__pair { display: flex; gap: 8px; }
 .s28__pair .lui-btn { flex: 1; min-width: 0; height: 46px; border-radius: 13px; font-size: 14px; }

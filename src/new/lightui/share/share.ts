@@ -1,4 +1,5 @@
 import { renderTicketImage, type TicketImageInput } from './ticketImage.ts'
+import { kakaoJsKey } from '../auth/kakao.ts'
 import { renderConnectionImage, type ConnectionImageInput } from './connectionImage.ts'
 
 /**
@@ -34,11 +35,49 @@ export async function copyLink(link: string): Promise<ShareResult> {
 
 /**
  * 카카오톡 공유.
- * TODO: Kakao JavaScript SDK(`Kakao.Share.sendDefault`) 로 교체. JS 앱 키가 필요합니다.
- * 지금은 문자와 같은 경로로 보냅니다.
+ *
+ * 전에는 **말없이 문자 앱을 열었습니다.** 카카오 아이콘을 눌렀는데 문자가
+ * 열리면 잘못 눌렀다고 생각합니다. 키가 없으면 없다고 말합니다.
+ *
+ * TODO: `VITE_KAKAO_JS_KEY` 가 들어오면 `Kakao.Share.sendDefault` 로 보냅니다.
+ *       키 없이 미리 짜 두면 시험할 수 없어서 그때 붙입니다.
  */
-export function shareByKakao(text: string, link: string): ShareResult {
-  return shareBySms(text, link)
+export function shareByKakao(): ShareResult {
+  return 'unsupported'
+}
+
+/**
+ * 카카오 공유를 띄울 수 있는지.
+ *
+ * 키가 있어도 아직 아닙니다 — SDK 공유를 안 붙였습니다. 붙이면 이 값이
+ * `kakaoJsKey() !== undefined` 가 됩니다. 그 전까지는 기기 공유 시트
+ * (`shareHere`)로 보냅니다. 휴대폰에서는 거기 카카오톡이 들어 있습니다.
+ */
+export const KAKAO_SHARE_READY = false
+
+/** 키는 들어와 있는지 — 「무엇이 없어서 안 되는지」 를 말할 때 씁니다 */
+export function hasKakaoKey() {
+  return kakaoJsKey() !== undefined
+}
+
+/**
+ * 기기가 가진 공유 시트 — 휴대폰에서는 여기에 카카오톡이 들어 있습니다.
+ * 키 없이 카카오로 보낼 수 있는 유일한 길이라 기본으로 둡니다.
+ */
+export function canShareHere() {
+  return typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+}
+
+export async function shareHere(title: string, text: string, link: string): Promise<ShareResult> {
+  if (!canShareHere()) return 'unsupported'
+  try {
+    await navigator.share({ title, text, url: link })
+    return 'done'
+  } catch (e) {
+    // 사용자가 시트를 닫은 것은 실패가 아닙니다
+    if (e instanceof DOMException && e.name === 'AbortError') return 'done'
+    return 'failed'
+  }
 }
 
 function download(blob: Blob, filename: string) {

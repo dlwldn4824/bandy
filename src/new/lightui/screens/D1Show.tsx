@@ -15,6 +15,7 @@ import { showDetailFor, showMissing, mapShows } from '../../mocks/bandyLight.ts'
 import { useStage } from '../shows/stage.ts'
 import { getMyShow } from '../shows/myShows.ts'
 import { showWhen } from '../calendar.ts'
+import ShareShowSheet from '../share/ShareShowSheet.tsx'
 import mapVenue from '../assets/map-venue.svg'
 import './D1Show.css'
 
@@ -34,6 +35,7 @@ const D1Show = () => {
   const { showId = 'glow' } = useParams()
   const { isLiked, toggleLike } = useLikes()
   const [dirs, setDirs] = useState(false)
+  const [share, setShare] = useState(false)
   /**
    * 우리가 만든 공연도 상세가 있어야 합니다. 예매를 열어 놓고 관객이
    * 눌렀더니 「그 공연을 찾을 수 없어요」 면 연 적이 없는 것과 같습니다.
@@ -123,8 +125,9 @@ const D1Show = () => {
             <button
               type="button"
               className="d1__round"
-              onClick={() => navigate(P.invite)}
-              aria-label="공유하기"
+              /* 초대하기(내 표에 친구 부르기)가 아니라 이 공연 알리기입니다 */
+              onClick={() => setShare(true)}
+              aria-label="이 공연 알리기"
             >
               <Icon name="share" size={18} />
             </button>
@@ -215,6 +218,7 @@ const D1Show = () => {
       </div>
 
       <DirectionsSheet venue={s.venue} open={dirs} onClose={() => setDirs(false)} />
+      <ShareShowSheet showId={showId} open={share} onClose={() => setShare(false)} />
 
       <div className="lui-bottombar">
         <div className="lui-bottombar__info">

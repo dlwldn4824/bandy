@@ -81,7 +81,13 @@ const S15Invite = () => {
 
   const onChannel = async (id: string) => {
     if (id === 'sms') return void shareBySms(message, iv.fullLink)
-    if (id === 'kakao') return void shareByKakao(message, iv.fullLink)
+    if (id === 'kakao') {
+      // 말없이 문자 앱을 열지 않습니다 — 카카오를 눌렀는데 문자가 열리면 잘못 누른 줄 압니다
+      if (shareByKakao() === 'unsupported') {
+        return say('카카오톡 공유는 아직이에요. 링크를 복사해 보내 주세요')
+      }
+      return
+    }
     if (id === 'link') {
       const r = await copyLink(iv.fullLink)
       return say(r === 'copied' ? '링크를 복사했어요' : '복사가 막혀 있어요. 주소를 길게 눌러 복사해 주세요')

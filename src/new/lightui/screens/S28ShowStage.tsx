@@ -12,6 +12,7 @@ import { STAGES, openChecklist, useStage, type SetStage } from '../shows/stage.t
 import { useBankAccount } from '../pay/bankAccount.ts'
 import { getMyShow } from '../shows/myShows.ts'
 import { showWhen } from '../calendar.ts'
+import ShareShowSheet from '../share/ShareShowSheet.tsx'
 import { clubConsole as c, showMissing } from '../../mocks/bandyLight.ts'
 import './S28ShowStage.css'
 
@@ -39,6 +40,7 @@ const S28ShowStage = () => {
   // 계좌를 등록하고 돌아오면 체크리스트가 그 자리에서 바뀌어야 합니다
   useBankAccount()
   const [ask, setAsk] = useState<'open' | 'close' | 'back' | null>(null)
+  const [share, setShare] = useState(false)
 
   const need = openChecklist(show ?? {})
   /**
@@ -185,9 +187,13 @@ const S28ShowStage = () => {
       {!locked && (
         <div className="lui-bottombar s28__bottom">
           {stage === 'selling' ? (
-            <Button variant="ghost" block onClick={() => setAsk('close')}>
-              {t.close}
-            </Button>
+            /* 열었으면 다음에 할 일은 알리는 것입니다 — 열어 두고 아무도 모르면 안 팝니다 */
+            <div className="s28__pair">
+              <Button variant="ghost" onClick={() => setAsk('close')}>
+                {t.close}
+              </Button>
+              <Button onClick={() => setShare(true)}>알리기</Button>
+            </div>
           ) : (
             <Button block disabled={!ready} onClick={() => setAsk('open')}>
               {stage === 'closed' ? t.reopen : t.open}
@@ -195,6 +201,8 @@ const S28ShowStage = () => {
           )}
         </div>
       )}
+
+      <ShareShowSheet showId={show.id} open={share} onClose={() => setShare(false)} />
 
       <Sheet
         open={ask !== null}

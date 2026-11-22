@@ -11,6 +11,7 @@ import DirectionsSheet from '../components/DirectionsSheet.tsx'
 import { P } from '../paths.ts'
 import { useGoBack } from '../useGoBack.ts'
 import { showLiveFor, showMissing } from '../../mocks/bandyLight.ts'
+import ShareShowSheet from '../share/ShareShowSheet.tsx'
 import './P1ShowLive.css'
 
 /**
@@ -25,6 +26,7 @@ const P1ShowLive = () => {
   const goBack = useGoBack()
   const [liked, setLiked] = useState(false)
   const [dirs, setDirs] = useState(false)
+  const [share, setShare] = useState(false)
   const { showId = 'glow' } = useParams()
   const s = showLiveFor(showId)
 
@@ -76,8 +78,8 @@ const P1ShowLive = () => {
             <button
               type="button"
               className="p1__round"
-              onClick={() => navigate(P.invite)}
-              aria-label="공유하기"
+              onClick={() => setShare(true)}
+              aria-label="이 공연 알리기"
             >
               <Icon name="share" size={18} />
             </button>
@@ -201,6 +203,7 @@ const P1ShowLive = () => {
       </div>
 
       <DirectionsSheet venue={s.venue} open={dirs} onClose={() => setDirs(false)} />
+      <ShareShowSheet showId={showId} open={share} onClose={() => setShare(false)} />
 
       <div className="lui-bottombar">
         <Button block onClick={() => navigate(P.ticket(showId))}>
