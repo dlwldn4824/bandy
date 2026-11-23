@@ -1034,3 +1034,28 @@ textarea.lui-input {
 
 /* 비워 두면 안 되는 칸 */
 .lui-input--bad { border-color: var(--lui-accent); }
+
+/**
+ * 폰에서 칸을 누르면 화면이 확대되던 것.
+ *
+ * iOS 는 — 사파리든 iOS 크롬이든 속은 둘 다 WebKit 입니다 — 글자가 16px
+ * 보다 작은 입력 칸에 커서가 들어가면 읽으라고 화면을 당겨 줍니다. 한 번
+ * 당겨지면 저절로 안 돌아와서, 칠 때마다 화면이 커지는 것처럼 보입니다.
+ * 우리 칸은 13.5px 이었습니다.
+ *
+ * `user-scalable=no` 로 막는 길도 있지만 그건 **손가락으로 키우는 것까지**
+ * 막습니다. 작은 글씨가 안 보이는 사람에게서 수단을 뺏는 셈입니다.
+ * 칸의 글자를 키우는 쪽이 맞습니다 — 어차피 사람이 직접 치는 글자라
+ * 작을 이유가 없습니다.
+ *
+ * 손가락으로 쓰는 기기에서만 바꿉니다. 마우스가 있는 화면은 확대가
+ * 일어나지 않아 그대로 둬도 됩니다.
+ */
+@media (pointer: coarse) {
+  .lui-input,
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
